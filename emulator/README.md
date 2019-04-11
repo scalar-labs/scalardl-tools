@@ -4,11 +4,12 @@ Scalar DL Emulator is an interactive command line interface to run Scalar DL on 
 
 ## Generate an executable
 
+Execute 
 ```bash
 ./gradlew installDist
 ```
 
-The executable may be found in `build/install/emulator/bin`.
+After a successful run the `emulator` executable may be found in `/build/install/emulator/bin`.
 
 ## Run
 
@@ -105,7 +106,7 @@ A history of executed commands is saved to `.scalardl_emulator_history` in your 
 
 ## Any questions?
 
-Please [contact us](https://scalar-labs.com/contact_us/).
+If you have any questions please [contact us](https://scalar-labs.com/contact_us/).
 
 ## License
 
