@@ -26,8 +26,7 @@ public class Scan implements Runnable {
 
   @CommandLine.Option(
       names = {"-a", "--ascending"},
-      description =
-          "Return assets in ascending order%n(default: descending)")
+      description = "Return assets in ascending order%n(default: descending)")
   private boolean ascendingOrder;
 
   @CommandLine.Option(
@@ -37,7 +36,8 @@ public class Scan implements Runnable {
 
   @CommandLine.Option(
       names = {"-f", "--file"},
-      description = "Specify an alternative client.properties file%n(default: conf/client.properties)",
+      description =
+          "Specify an alternative client.properties file%n(default: conf/client.properties)",
       defaultValue = "conf/client.properties")
   private String file;
 
@@ -49,8 +49,7 @@ public class Scan implements Runnable {
 
   @CommandLine.Option(
       names = {"-l", "--limit"},
-      description =
-          "The maximum number of assets to return%n(default: no limit)")
+      description = "The maximum number of assets to return%n(default: no limit)")
   private int limit;
 
   @CommandLine.Option(

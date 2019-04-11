@@ -14,7 +14,8 @@ public class Validate implements Runnable {
 
   @CommandLine.Option(
       names = {"-f", "--file"},
-      description = "Specify an alternative client.properties file%n(default: conf/client.properties)",
+      description =
+          "Specify an alternative client.properties file%n(default: conf/client.properties)",
       defaultValue = "conf/client.properties")
   private String file;
 
