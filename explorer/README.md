@@ -27,7 +27,9 @@ Scalar DL Explorer has four commands:
 - `explorer validate`: used to validate if the value of the specified asset id has been tampered or not
 - `explorer list-contracts`: used to list all the registered contracts for given holder id
 
-To get help with any of the commands simple pass the the `-h` option to `explorer` or any of the commands, e.g. `explorer get -h`.
+### Help
+
+To get help with any of the commands pass the `-h` option to the command, e.g. `explorer get -h`. To get help with explorer in general pass the `-h` option as in `explorer -h`. 
 
 ## Any questions?
 

@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'application'
-    // TODO: uncomment out before release
+    id 'idea'
     // id 'com.github.sherter.google-java-format' version '0.8'
 }
 
