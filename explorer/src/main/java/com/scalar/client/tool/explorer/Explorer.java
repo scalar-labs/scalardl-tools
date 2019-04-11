@@ -88,7 +88,7 @@ public class Explorer {
     fallback(requester);
   }
 
-  public JsonObject contracts() {
+  public JsonObject listContracts() {
     ClientServiceRequester requester =
         () -> new ClientServiceResponse(clientService.listContracts(null));
     ClientServiceResponse response = fallback(requester);

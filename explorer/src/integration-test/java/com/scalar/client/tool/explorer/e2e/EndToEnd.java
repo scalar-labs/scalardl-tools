@@ -285,7 +285,7 @@ public class EndToEnd {
   @Test
   public void T3_runContractsEndToEnd() throws Exception {
     // act
-    JsonStructure result = parse(getOutput("contracts", "-f", propertiesFile));
+    JsonStructure result = parse(getOutput("list-contracts", "-f", propertiesFile));
     JsonObject expected = contractsExpected(result);
     // assert
     assertThat(expected).isEqualTo(result);
