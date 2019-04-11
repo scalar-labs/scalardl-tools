@@ -1,4 +1,4 @@
- version: "3.6"
+version: "3.6"
 services:
   explorer-e2e:
     image: cassandra:3.11
