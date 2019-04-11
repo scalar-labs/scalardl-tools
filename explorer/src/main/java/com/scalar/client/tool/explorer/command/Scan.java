@@ -10,7 +10,7 @@ import javax.json.JsonValue;
 import picocli.CommandLine;
 import picocli.CommandLine.ParentCommand;
 
-@CommandLine.Command(name = "scan", description = "Display the history of the specified asset")
+@CommandLine.Command(name = "scan", description = "Get the history of the specified asset")
 public class Scan implements Runnable {
   @CommandLine.Parameters(
       index = "0",
