@@ -10,53 +10,53 @@ import javax.json.JsonValue;
 import picocli.CommandLine;
 import picocli.CommandLine.ParentCommand;
 
-@CommandLine.Command(name = "scan", description = "To display the history of the specified asset")
+@CommandLine.Command(name = "scan", description = "Display the history of the specified asset")
 public class Scan implements Runnable {
-  @CommandLine.Option(
-      names = {"-h", "--help"},
-      usageHelp = true,
-      description = "Display this help and exit")
-  boolean help;
-
   @CommandLine.Parameters(
       index = "0",
       paramLabel = "assetId",
-      description = "the id of the asset to scan")
+      description = "The id of the asset to scan")
   private String assetId;
 
   @CommandLine.Option(
-      names = {"-s", "--start"},
-      description = "return only assets with age >= start")
-  private int start;
-
-  @CommandLine.Option(
-      names = {"-e", "--end"},
-      description = "return only assets with age < end")
-  private int end;
+      names = {"--format"},
+      description = "Select the output format: json or yaml%n(default: json)",
+      defaultValue = "json")
+  private String format;
 
   @CommandLine.Option(
       names = {"-a", "--ascending"},
       description =
-          "add this flag to return assets in ascending order. The default order is descending")
+          "Return assets in ascending order%n(default: descending)")
   private boolean ascendingOrder;
+
+  @CommandLine.Option(
+      names = {"-e", "--end"},
+      description = "Return only assets with age < end")
+  private int end;
+
+  @CommandLine.Option(
+      names = {"-f", "--file"},
+      description = "Specify an alternative client.properties file%n(default: conf/client.properties)",
+      defaultValue = "conf/client.properties")
+  private String file;
+
+  @CommandLine.Option(
+      names = {"-h", "--help"},
+      usageHelp = true,
+      description = "Display this help and exit")
+  private boolean help;
 
   @CommandLine.Option(
       names = {"-l", "--limit"},
       description =
-          "an integer > 0 which is the maximum number of assets returned. By default there is no limit")
+          "The maximum number of assets to return%n(default: no limit)")
   private int limit;
 
   @CommandLine.Option(
-      names = {"-fm", "--format"},
-      description = "Select the output format: json (default) or yaml",
-      defaultValue = "json")
-  private String outputFormat;
-
-  @CommandLine.Option(
-      names = {"-f", "--file"},
-      description = "The path to scalar's 'client.properties' file",
-      defaultValue = "client.properties")
-  private String file;
+      names = {"-s", "--start"},
+      description = "Return only assets with age >= start")
+  private int start;
 
   @CommandLine.Option(
       names = {"-v", "--verbose"},
@@ -86,7 +86,7 @@ public class Scan implements Runnable {
         explorer -> {
           try {
             JsonArray history = explorer.scan(assetId, conditionBuilder.build());
-            parent.output(trim(history), outputFormat);
+            parent.output(trim(history), format);
           } catch (Exception e) {
             System.err.println(e.getMessage());
           }

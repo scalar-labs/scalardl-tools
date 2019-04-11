@@ -6,12 +6,6 @@ import picocli.CommandLine.ParentCommand;
 
 @CommandLine.Command(name = "validate", description = "Validate the specified asset")
 public class Validate implements Runnable {
-  @CommandLine.Option(
-      names = {"-h", "--help"},
-      usageHelp = true,
-      description = "Display this help and exit")
-  boolean help;
-
   @CommandLine.Parameters(
       paramLabel = "asset_id",
       description = "The id of the asset to validate",
@@ -20,9 +14,15 @@ public class Validate implements Runnable {
 
   @CommandLine.Option(
       names = {"-f", "--file"},
-      description = "The path to scalar's 'client.properties' file",
-      defaultValue = "client.properties")
+      description = "Specify an alternative client.properties file%n(default: conf/client.properties)",
+      defaultValue = "conf/client.properties")
   private String file;
+
+  @CommandLine.Option(
+      names = {"-h", "--help"},
+      usageHelp = true,
+      description = "Display this help and exit")
+  private boolean help;
 
   @ParentCommand private Explorer parent;
 

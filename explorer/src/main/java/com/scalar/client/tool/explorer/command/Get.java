@@ -6,14 +6,8 @@ import javax.json.JsonObject;
 import picocli.CommandLine;
 import picocli.CommandLine.ParentCommand;
 
-@CommandLine.Command(name = "get", description = "To get the current value of the specified asset")
+@CommandLine.Command(name = "get", description = "Get the current value of the specified asset")
 public class Get implements Runnable {
-  @CommandLine.Option(
-      names = {"-h", "--help"},
-      usageHelp = true,
-      description = "Display this help and exit")
-  boolean help;
-
   @CommandLine.Parameters(
       index = "0",
       paramLabel = "asset_id",
@@ -21,16 +15,22 @@ public class Get implements Runnable {
   private String assetId;
 
   @CommandLine.Option(
-      names = {"-fm", "--format"},
-      description = "Select the output format: json (default) or yaml",
+      names = {"--format"},
+      description = "Select the output format: json or yaml%n(default: json)",
       defaultValue = "json")
-  private String outputFormat;
+  private String format;
 
   @CommandLine.Option(
       names = {"-f", "--file"},
-      description = "The path to scalar's 'client.properties' file",
-      defaultValue = "client.properties")
+      description = "Specify an alternative client.properties file%n(default: conf/client.properties)",
+      defaultValue = "conf/client.properties")
   private String file;
+
+  @CommandLine.Option(
+      names = {"-h", "--help"},
+      usageHelp = true,
+      description = "Display this help and exit")
+  private boolean help;
 
   @CommandLine.Option(
       names = {"-v", "--verbose"},
@@ -45,7 +45,7 @@ public class Get implements Runnable {
         explorer -> {
           try {
             JsonObject asset = explorer.get(assetId);
-            parent.output(trim(asset), outputFormat);
+            parent.output(trim(asset), format);
           } catch (Exception e) {
             System.err.println(e.getMessage());
           }
