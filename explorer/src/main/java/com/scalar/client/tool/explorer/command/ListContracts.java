@@ -4,8 +4,8 @@ import com.scalar.client.tool.explorer.command.Explorer.ExplorerExecutor;
 import picocli.CommandLine;
 import picocli.CommandLine.ParentCommand;
 
-@CommandLine.Command(name = "contracts", description = "To list all registered contracts")
-public class Contracts implements Runnable {
+@CommandLine.Command(name = "list-contracts", description = "To list all registered listContracts")
+public class ListContracts implements Runnable {
   @CommandLine.Option(
       names = {"-h", "--help"},
       usageHelp = true,
@@ -30,7 +30,7 @@ public class Contracts implements Runnable {
     ExplorerExecutor executor =
         explorer -> {
           try {
-            parent.output(explorer.contracts(), outputFormat);
+            parent.output(explorer.listContracts(), outputFormat);
           } catch (Exception e) {
             System.err.println(e.getMessage());
           }

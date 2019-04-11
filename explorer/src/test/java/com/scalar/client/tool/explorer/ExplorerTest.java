@@ -211,7 +211,7 @@ public class ExplorerTest {
     when(clientService.listContracts(null)).thenReturn(responseListContract);
 
     // Act-assert
-    assertThatThrownBy(() -> explorer.contracts())
+    assertThatThrownBy(() -> explorer.listContracts())
         .isInstanceOf(ExplorerException.class)
         .hasMessage("501 message");
   }
