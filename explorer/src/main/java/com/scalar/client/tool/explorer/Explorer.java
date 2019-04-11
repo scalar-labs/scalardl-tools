@@ -1,0 +1,166 @@
+package com.scalar.client.tool.explorer;
+
+import com.scalar.client.config.ClientConfig;
+import com.scalar.client.service.ClientService;
+import com.scalar.client.service.StatusCode;
+import com.scalar.rpc.ledger.ContractExecutionResponse;
+import com.scalar.rpc.ledger.LedgerServiceResponse;
+import com.scalar.rpc.ledger.LedgerValidationResponse;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.util.Optional;
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonReader;
+
+public class Explorer {
+  private final ClientService clientService;
+  private final ClientConfig clientConfig;
+
+  public Explorer(ClientService clientService, ClientConfig clientConfig) {
+    this.clientService = clientService;
+    this.clientConfig = clientConfig;
+  }
+
+  private ClientServiceResponse fallback(ClientServiceRequester requester) {
+    ClientServiceResponse response = requester.request();
+    if (response.getStatus() == StatusCode.CERTIFICATE_NOT_FOUND.get()) {
+      registerCertificate();
+      response = requester.request();
+    }
+    if (response.getStatus() == StatusCode.CONTRACT_NOT_FOUND.get()) {
+      registerGetContract();
+      registerScanContract();
+      response = requester.request();
+    }
+    if (response.getStatus() != StatusCode.OK.get()) {
+      throw new ExplorerException(response.getStatus() + " " + response.getMessage());
+    }
+    return response;
+  }
+
+  private void registerCertificate() {
+    LedgerServiceResponse response = clientService.registerCertificate();
+    if (response.getStatus() != StatusCode.OK.get()) {
+      throw new ExplorerException(response.getStatus() + " " + response.getMessage());
+    }
+  }
+
+  private void registerGetContract() {
+    registerContract(
+        clientConfig.getCertHolderId() + "GET",
+        "GetContract.class",
+        "com.scalar.client.tool.explorer.contract.GetContract");
+  }
+
+  private void registerScanContract() {
+    registerContract(
+        clientConfig.getCertHolderId() + "SCAN",
+        "ScanContract.class",
+        "com.scalar.client.tool.explorer.contract.ScanContract");
+  }
+
+  private void registerContract(String contractId, String contractClass, String contractName) {
+    try {
+      InputStream inputStream = Explorer.class.getClassLoader().getResourceAsStream(contractClass);
+      File tmp = File.createTempFile("whatever", ".class");
+      tmp.deleteOnExit();
+      Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+      LedgerServiceResponse response =
+          clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
+      if (response.getStatus() != StatusCode.OK.get()) {
+        throw new ExplorerException(response.getStatus() + " " + response.getMessage());
+      }
+    } catch (IOException e) {
+      throw new ExplorerException(e.getMessage());
+    }
+  }
+
+  public void validate(String assetId) {
+    ClientServiceRequester requester =
+        () -> new ClientServiceResponse(clientService.validateLedger(assetId));
+    fallback(requester);
+  }
+
+  public JsonObject contracts() {
+    ClientServiceRequester requester =
+        () -> new ClientServiceResponse(clientService.listContracts(null));
+    ClientServiceResponse response = fallback(requester);
+    return string2Json(response.getMessage());
+  }
+
+  public JsonObject get(String assetId) {
+    String id = clientConfig.getCertHolderId() + "GET";
+    JsonObject argument = Json.createObjectBuilder().add("asset_id", assetId).build();
+    return executeContract(id, argument);
+  }
+
+  public JsonArray scan(String assetId, JsonObject condition) {
+    String id = clientConfig.getCertHolderId() + "SCAN";
+    JsonObjectBuilder argumentBuilder = Json.createObjectBuilder(condition);
+    argumentBuilder.add("asset_id", assetId);
+    JsonObject result = executeContract(id, argumentBuilder.build());
+    return result.getJsonArray("history");
+  }
+
+  private JsonObject executeContract(String id, JsonObject argument) {
+    ClientServiceRequester requester =
+        () -> new ClientServiceResponse(clientService.executeContract(id, argument));
+    ClientServiceResponse response = fallback(requester);
+    return string2Json(response.getResult());
+  }
+
+  private JsonObject string2Json(String s) {
+    JsonReader reader = Json.createReader(new StringReader(s));
+    JsonObject json = reader.readObject();
+    reader.close();
+    return json;
+  }
+
+  @FunctionalInterface
+  interface ClientServiceRequester {
+    ClientServiceResponse request();
+  }
+
+  class ClientServiceResponse {
+    private final int status;
+    private final String message;
+    private final String result;
+
+    ClientServiceResponse(LedgerValidationResponse r) {
+      status = r.getStatus();
+      message = r.getMessage();
+      result = "";
+    }
+
+    ClientServiceResponse(LedgerServiceResponse r) {
+      status = r.getStatus();
+      message = r.getMessage();
+      result = "";
+    }
+
+    ClientServiceResponse(ContractExecutionResponse r) {
+      status = r.getStatus();
+      message = r.getMessage();
+      result = r.getResult();
+    }
+
+    int getStatus() {
+      return status;
+    }
+
+    String getMessage() {
+      return message;
+    }
+
+    String getResult() {
+      return result;
+    }
+  }
+}

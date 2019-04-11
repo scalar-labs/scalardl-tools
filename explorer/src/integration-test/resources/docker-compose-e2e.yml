@@ -1,0 +1,24 @@
+version: "3.6"
+services:
+  explorer-e2e:
+    image: cassandra:3.11
+    container_name: explorer.explorer-e2e
+    volumes:
+      - cassandra-data-e2e:/var/lib/cassandra
+      - ./create_schema.cql:/create_schema.cql
+  scalar-server-e2e:
+    image: scalarlabs/scalar-server
+    container_name: explorer.scalar-server-e2e
+    depends_on:
+      - explorer-e2e
+    environment:
+      - SCALAR_CASSANDRA_HOST=explorer-e2e
+    ports:
+      - "50052:50051"
+
+volumes:
+  cassandra-data-e2e:
+
+networks:
+  default:
+    name: e2e-network

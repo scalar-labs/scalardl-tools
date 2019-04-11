@@ -1,0 +1,55 @@
+plugins {
+    id 'java'
+    id 'application'
+    // TODO: uncomment out before release
+    // id 'com.github.sherter.google-java-format' version '0.8'
+}
+
+mainClassName = 'com.scalar.client.tool.explorer.command.Explorer'
+archivesBaseName = 'explorer'
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    compile group: 'com.scalar-labs', name: 'scalardl-client-sdk', version: '1.0.0-alpha.20190222'
+    compile 'info.picocli:picocli:3.8.2'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.8.6'
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.mockito:mockito-core:2.1.0'
+    testCompile 'org.assertj:assertj-core:3.11.1'
+}
+
+test {
+    testLogging {
+        events "PASSED", "FAILED", "SKIPPED"
+    }
+}
+
+sourceSets {
+    integrationTest {
+        java {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+            srcDir file('src/integration-test/java')
+        }
+        resources.srcDir file('src/integration-test/resources')
+    }
+}
+
+configurations {
+    integrationTestCompile.extendsFrom testCompile
+    integrationTestRuntime.extendsFrom testRuntime
+}
+
+task integrationTest(type: Test) {
+    description = 'Runs the integration tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    outputs.upToDateWhen { false }
+    shouldRunAfter test
+}
+
+check.dependsOn -= integrationTest
