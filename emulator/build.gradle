@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'idea'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
+    compile group: 'info.picocli', name: 'picocli', version: '3.8.2'
+    compile group: 'org.jline', name: 'jline', version: '3.9.0'
+    compile group: 'com.google.guava', name: 'guava', version: '27.0.1-jre'
+    compile group: 'com.google.inject', name: 'guice', version: '4.2.0'
+    compile group: 'org.glassfish', name: 'javax.json', version: '1.1.4'
+    compile fileTree(dir: 'client', include: 'ledger-emulator.jar')
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+    testCompile 'org.assertj:assertj-core:3.11.1'
+    testCompile group: 'org.mockito', name: 'mockito-core', version: '2.1.0'
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+archivesBaseName = 'scalardl-emulator'
+mainClassName = 'com.scalar.client.tool.emulator.EmulatorTerminal'
+applicationName = 'emulator'

@@ -1,0 +1,12 @@
+list-contracts
+execute put {"asset_id": "X", "data": {"alice": 100, "bob": 0}}
+execute put {"asset_id": "X", "data": {"alice": 70, "bob": 30}}
+execute put {"asset_id": "X", "data": {"alice": 20, "bob": 80}}
+execute get {"asset_id": "X"}
+execute scan {"asset_id": "X"}
+execute scan {"asset_id": "X", "start": 1}
+execute scan {"asset_id": "X", "limit": 1, "asc_order": true}
+register state-updater com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
+list-contracts
+execute state-updater {"asset_id": "Y", "state": 1}
+execute get {"asset_id": "Y"}
