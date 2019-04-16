@@ -25,7 +25,7 @@ Scalar DL Explorer has four commands:
 - `explorer get`: used to retrieve the current value of the specified asset id
 - `explorer scan`: used to retrieve the history of the specified asset id
 - `explorer validate`: used to validate if the value of the specified asset id has been tampered or not
-- `explorer list-contracts`: used to list all the registered contracts for given holder id
+- `explorer list-contracts`: used to list all the registered contracts
 
 ### Help
 
