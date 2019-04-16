@@ -30,6 +30,7 @@ import com.scalar.client.service.ClientModule;
 import com.scalar.client.service.ClientService;
 import com.scalar.client.tool.explorer.command.Explorer;
 import com.scalar.client.tool.explorer.e2e.contract.PutContract;
+import com.scalar.rpc.ledger.LedgerServiceResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -48,8 +49,6 @@ import javax.json.JsonReader;
 import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import javax.json.stream.JsonParsingException;
-
-import com.scalar.rpc.ledger.LedgerServiceResponse;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -62,12 +61,12 @@ import picocli.CommandLine;
 public class EndToEnd {
   private static final String USERNAME = "cassandra";
   private static final String PASSWORD = "cassandra";
-  private static String propertiesFilePath = Paths.get("src", "integration-test", "resources", "client.properties").toString();
+  private static String propertiesFilePath =
+      Paths.get("src", "integration-test", "resources", "client.properties").toString();
 
   private static ClientConfig clientConfig;
   private static ClientService clientService;
   private static String putContractId;
-
 
   @BeforeClass
   public static void setUpOnce() throws IOException {
@@ -101,7 +100,9 @@ public class EndToEnd {
                 "contract",
                 "PutContract.class")
             .toString();
-    LedgerServiceResponse l = clientService.registerContract(putContractId, contractName, contractFilePath, Optional.empty());
+    LedgerServiceResponse l =
+        clientService.registerContract(
+            putContractId, contractName, contractFilePath, Optional.empty());
     System.out.println(l.getMessage());
   }
 
