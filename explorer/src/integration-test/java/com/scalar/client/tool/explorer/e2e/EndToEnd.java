@@ -100,10 +100,7 @@ public class EndToEnd {
                 "contract",
                 "PutContract.class")
             .toString();
-    LedgerServiceResponse l =
-        clientService.registerContract(
-            putContractId, contractName, contractFilePath, Optional.empty());
-    System.out.println(l.getMessage());
+    clientService.registerContract(putContractId, contractName, contractFilePath, Optional.empty());
   }
 
   private static void createAsset() {
@@ -128,13 +125,7 @@ public class EndToEnd {
 
   @AfterClass
   public static void truncateTables() throws IOException, InterruptedException {
-    clientService.close();
-
-    ProcessBuilder builder;
-    Process process;
-    int ret;
-
-    builder =
+    ProcessBuilder builder =
         new ProcessBuilder(
             "cqlsh",
             "-u",
@@ -143,8 +134,8 @@ public class EndToEnd {
             PASSWORD,
             "-e",
             "TRUNCATE scalar.asset;" + "TRUNCATE scalar.asset_metadata;");
-    process = builder.start();
-    ret = process.waitFor();
+    Process process = builder.start();
+    int ret = process.waitFor();
     if (ret != 0) {
       Assert.fail("TRUNCATE TABLE failed.");
     }
@@ -159,7 +150,6 @@ public class EndToEnd {
       CommandLine.run(new Explorer(), ps, commandArgs);
       System.setOut(previousOut);
     }
-    System.out.println(output.toString());
     return output.toString();
   }
 
