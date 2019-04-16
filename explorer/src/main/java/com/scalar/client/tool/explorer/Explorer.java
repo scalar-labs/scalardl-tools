@@ -37,7 +37,6 @@ import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
 
 public class Explorer {
@@ -124,9 +123,8 @@ public class Explorer {
 
   public JsonArray scan(String assetId, JsonObject condition) {
     String id = clientConfig.getCertHolderId() + "SCAN";
-    JsonObjectBuilder argumentBuilder = Json.createObjectBuilder(condition);
-    argumentBuilder.add("asset_id", assetId);
-    JsonObject result = executeContract(id, argumentBuilder.build());
+    JsonObject argument = Json.createObjectBuilder(condition).add("asset_id", assetId).build();
+    JsonObject result = executeContract(id, argument);
     return result.getJsonArray("history");
   }
 

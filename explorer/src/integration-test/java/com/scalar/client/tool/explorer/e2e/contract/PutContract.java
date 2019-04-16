@@ -28,29 +28,17 @@ import javax.json.Json;
 import javax.json.JsonObject;
 
 public class PutContract extends Contract {
-  public static final String NAME = "name";
-  public static final String TYPE = "type";
-  private static final String RESULT = "result";
-  private static final String SUCCESS = "success";
-  public static final String ASSET = "asset";
   public static final String ID = "id";
-  public static final String TIMESTAMP = "timestamp";
+  public static final String NAME = "name";
 
   @Override
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> property) {
-
-    String type = argument.getString(TYPE);
     String id = argument.getString(ID);
-    String name = argument.getString(ASSET);
-    long timestamp = argument.getJsonNumber(TIMESTAMP).longValue();
+    String name = argument.getString(NAME);
 
-    ledger.get(type);
     ledger.get(id);
-    JsonObject assetStatusJson = Json.createObjectBuilder().add(TIMESTAMP, timestamp).build();
-    ledger.put(id, assetStatusJson);
-    JsonObject assetNameJson = Json.createObjectBuilder().add(ID, id).add(NAME, name).build();
-    ledger.put(type, assetNameJson);
+    ledger.put(id, Json.createObjectBuilder().add(ID, id).add(NAME, name).build());
 
-    return Json.createObjectBuilder().add(RESULT, SUCCESS).build();
+    return null;
   }
 }

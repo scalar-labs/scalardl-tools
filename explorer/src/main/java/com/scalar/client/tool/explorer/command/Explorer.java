@@ -92,7 +92,7 @@ public class Explorer implements Runnable {
         JsonWriterFactory factory = Json.createWriterFactory(config);
         JsonWriter writer = factory.createWriter(System.out);
         writer.write(structure);
-        System.out.println("");
+        System.out.println();
         writer.close();
         break;
     }
