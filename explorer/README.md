@@ -14,9 +14,9 @@ After a successful run the `explorer` executable may be found in `/build/install
 
 ## How to use the command-line interface
 
-The first thing you will need to do is to edit the [client.properties](./conf/client.properties) file (found in the `conf` directory) to suit your setup. `client.properties` is a configuration of Scalar server's and user's information. Scalar DL Explorer uses it to connect to a specified Scalar server and keep track of the user's private key.
+The first thing you will need to do is to create a [`client.properties`](./client.properties) file. The `client.properties` is used to specify the configuration of a Scalar DL server and the user's information. If you have already used Scalar DL then you probably already have a `client.properties` file. Simply copy it to the project directory.
 
-By default Scalar DL Explorer looks for the `client.properties` in the `conf` directory. You can use the `-f` option to specify a particular file.
+By default Scalar DL Explorer looks for the `client.properties` in the project directory. You can use the `-f` option to specify an alternative file.
 
 ### Commands
 
