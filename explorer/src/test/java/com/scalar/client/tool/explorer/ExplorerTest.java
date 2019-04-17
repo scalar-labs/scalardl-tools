@@ -32,9 +32,9 @@ import static org.mockito.Mockito.when;
 import com.scalar.client.config.ClientConfig;
 import com.scalar.client.service.ClientService;
 import com.scalar.client.service.StatusCode;
-import com.scalar.rpc.ledger.ContractExecutionResponse;
-import com.scalar.rpc.ledger.LedgerServiceResponse;
-import com.scalar.rpc.ledger.LedgerValidationResponse;
+import com.scalar.rpc.ContractExecutionResponse;
+import com.scalar.rpc.LedgerServiceResponse;
+import com.scalar.rpc.LedgerValidationResponse;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonArray;
@@ -214,26 +214,26 @@ public class ExplorerTest {
   @Test
   public void validate_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
     // Arrange
-    when(responseValidation.getStatus()).thenReturn(StatusCode.UNKNOWN_DATABASE_ERROR.get());
+    when(responseValidation.getStatus()).thenReturn(StatusCode.DATABASE_ERROR.get());
     when(responseValidation.getMessage()).thenReturn("message");
     when(clientService.validateLedger(ASSET_ID)).thenReturn(responseValidation);
 
     // Act-assert
     assertThatThrownBy(() -> explorer.validate(ASSET_ID))
         .isInstanceOf(ExplorerException.class)
-        .hasMessage("501 message");
+        .hasMessage("500 message");
   }
 
   @Test
   public void contracts_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
     // Arrange
-    when(responseListContract.getStatus()).thenReturn(StatusCode.UNKNOWN_DATABASE_ERROR.get());
+    when(responseListContract.getStatus()).thenReturn(StatusCode.DATABASE_ERROR.get());
     when(responseListContract.getMessage()).thenReturn("message");
     when(clientService.listContracts(null)).thenReturn(responseListContract);
 
     // Act-assert
     assertThatThrownBy(() -> explorer.listContracts())
         .isInstanceOf(ExplorerException.class)
-        .hasMessage("501 message");
+        .hasMessage("500 message");
   }
 }

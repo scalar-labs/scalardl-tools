@@ -30,7 +30,6 @@ import com.scalar.client.service.ClientModule;
 import com.scalar.client.service.ClientService;
 import com.scalar.client.tool.explorer.command.Explorer;
 import com.scalar.client.tool.explorer.e2e.contract.PutContract;
-import com.scalar.rpc.ledger.LedgerServiceResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -174,7 +173,6 @@ public class EndToEnd {
         Json.createObjectBuilder()
             .add("id", "book")
             .add("name", name)
-            .add("nonce", json.getJsonObject("data").getString("nonce"))
             .build();
 
     JsonObject book =
@@ -185,14 +183,6 @@ public class EndToEnd {
                 Json.createObjectBuilder()
                     .add("id", "book")
                     .add("name", obj[2].toString())
-                    .add(
-                        "nonce",
-                        age == 0
-                            ? ""
-                            : json.getJsonObject("input")
-                                .getJsonObject("book")
-                                .getJsonObject("data")
-                                .getString("nonce"))
                     .build())
             .build();
 
