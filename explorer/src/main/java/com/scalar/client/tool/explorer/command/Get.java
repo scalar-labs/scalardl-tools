@@ -44,8 +44,8 @@ public class Get implements Runnable {
   @CommandLine.Option(
       names = {"-f", "--file"},
       description =
-          "Specify an alternative client.properties file%n(default: conf/client.properties)",
-      defaultValue = "conf/client.properties")
+          "Specify an alternative client.properties file%n(default: client.properties)",
+      defaultValue = "client.properties")
   private String file;
 
   @CommandLine.Option(
