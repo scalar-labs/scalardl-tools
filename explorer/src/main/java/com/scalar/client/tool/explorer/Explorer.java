@@ -24,9 +24,9 @@ package com.scalar.client.tool.explorer;
 import com.scalar.client.config.ClientConfig;
 import com.scalar.client.service.ClientService;
 import com.scalar.client.service.StatusCode;
-import com.scalar.rpc.ledger.ContractExecutionResponse;
-import com.scalar.rpc.ledger.LedgerServiceResponse;
-import com.scalar.rpc.ledger.LedgerValidationResponse;
+import com.scalar.rpc.ContractExecutionResponse;
+import com.scalar.rpc.LedgerServiceResponse;
+import com.scalar.rpc.LedgerValidationResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -89,7 +89,7 @@ public class Explorer {
   private void registerContract(String contractId, String contractClass, String contractName) {
     try {
       InputStream inputStream = Explorer.class.getClassLoader().getResourceAsStream(contractClass);
-      File tmp = File.createTempFile("whatever", ".class");
+      File tmp = File.createTempFile("a_contract", ".class");
       tmp.deleteOnExit();
       Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
       LedgerServiceResponse response =
