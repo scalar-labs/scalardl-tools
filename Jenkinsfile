@@ -3,7 +3,7 @@ pipeline {
   stages {
     stage('Go to Emulator') {
       steps {
-        dir(path: 'emulator') {
+        dir(path: './emulator') {
           pwd()
         }
 
