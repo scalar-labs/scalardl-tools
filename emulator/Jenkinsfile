@@ -6,16 +6,16 @@ pipeline {
         sh './gradlew assemble'
       }
     }
-    state('Test') {
+    stage('Test') {
       steps {
         sh './gradlew test'
       }
     }
-    post {
-      always {
-              mail(to: 'siyopao@gmail.com', from: 'jenkins', subject: 'Build finished', body: 'Hi there!')
-            }
-      failure {}
+  }
+  post {
+    always {
+      mail(to: 'siyopao@gmail.com', from: 'jenkins', subject: 'Build finished', body: 'Hi there!')
     }
+    failure {}
   }
 }
