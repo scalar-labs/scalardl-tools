@@ -24,6 +24,7 @@ pipeline {
     stage('Notify') {
       steps {
         sh 'echo \'All done!\''
+        slackSend(attachments: 'Blah')
       }
     }
   }
