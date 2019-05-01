@@ -25,7 +25,7 @@ pipeline {
   post {
     always {
       slackSend(
-        channel:
+        channel: craig.pastro
         color: 'good'
         message: "All done!")
     }
