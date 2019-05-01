@@ -3,12 +3,8 @@ pipeline {
   stages {
     stage('Run Emulator Tests') {
       steps {
-        dir(path: './emulator') {
-          pwd()
-          sh './gradlew assemble'
-          sh './gradlew test'
-        }
-
+        sh './gradlew assemble'
+        sh './gradlew test'
       }
     }
     stage('Notify') {
