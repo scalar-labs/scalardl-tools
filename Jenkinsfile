@@ -22,4 +22,12 @@ pipeline {
       }
     }
   }
+  post {
+    always {
+      slackSend(
+        channel:
+        color: 'good'
+        message: "All done!")
+    }
+  }
 }
