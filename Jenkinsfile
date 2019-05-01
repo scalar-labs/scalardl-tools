@@ -3,7 +3,11 @@ pipeline {
   stages {
     stage('Go to Emulator') {
       steps {
-        dir(path: 'emulator')
+        dir(path: 'emulator') {
+          pwd()
+        }
+
+        sh 'echo $(pwd)'
       }
     }
     stage('Assemble') {
