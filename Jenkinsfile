@@ -21,11 +21,5 @@ pipeline {
         }
       }
     }
-    stage('Notify') {
-      steps {
-        sh 'echo \'All done!\''
-        slackSend(attachments: 'scalardl-tools', channel: 'craig.pastro', color: 'blue', message: 'blah')
-      }
-    }
   }
 }
