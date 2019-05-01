@@ -24,7 +24,7 @@ pipeline {
     stage('Notify') {
       steps {
         sh 'echo \'All done!\''
-        slackSend(attachments: 'attach?', token: 'SbKqPsm3oyOzg3pr8yM0DMeJ', channel: '@craig.pastro', color: 'blue', message: 'blah')
+        slackSend(attachments: 'scalardl-tools', channel: '@craig.pastro', color: 'blue', message: 'blah')
       }
     }
   }
