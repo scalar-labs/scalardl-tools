@@ -1,23 +1,14 @@
 pipeline {
   agent any
   stages {
-    stage('Go to Emulator') {
+    stage('Run Emulator Tests') {
       steps {
         dir(path: './emulator') {
           pwd()
+          sh './gradlew assemble'
+          sh './gradlew test'
         }
 
-        sh 'echo $(pwd)'
-      }
-    }
-    stage('Assemble') {
-      steps {
-        sh './gradlew assemble'
-      }
-    }
-    stage('Test') {
-      steps {
-        sh './gradlew test'
       }
     }
     stage('Notify') {
