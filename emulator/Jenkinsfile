@@ -1,7 +1,7 @@
 pipeline {
   agent any
   stages {
-    state('Blah'} {
+    stage('Blah') {
       steps {
         sh "echo $(pwd)"
         sh "echo $(ls)"
