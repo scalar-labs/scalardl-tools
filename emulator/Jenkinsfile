@@ -16,6 +16,6 @@ pipeline {
     always {
       mail(to: 'siyopao@gmail.com', from: 'jenkins', subject: 'Build finished', body: 'Hi there!')
     }
-    failure {}
+    //failure {}
   }
 }
