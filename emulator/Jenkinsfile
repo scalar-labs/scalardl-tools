@@ -1,6 +1,12 @@
 pipeline {
   agent any
   stages {
+    state('Blah'} {
+      steps {
+        sh "echo $(pwd)"
+        sh "echo $(ls)"
+      }
+    }
     stage('Build') {
       steps {
         sh './gradlew assemble'
