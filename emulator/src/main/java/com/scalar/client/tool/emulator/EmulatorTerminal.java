@@ -24,6 +24,7 @@ import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.scalar.client.tool.emulator.command.CommandExceptionHandler;
+import com.scalar.client.tool.emulator.command.Database;
 import com.scalar.client.tool.emulator.command.Execute;
 import com.scalar.client.tool.emulator.command.Get;
 import com.scalar.client.tool.emulator.command.GetWithSingleParameter;
@@ -95,7 +96,8 @@ public class EmulatorTerminal implements Runnable {
             new CommandLine(injector.getInstance(Put.class)),
             new CommandLine(injector.getInstance(Register.class)),
             new CommandLine(injector.getInstance(ScanWithSingleParameter.class)),
-            new CommandLine(injector.getInstance(Scan.class)));
+            new CommandLine(injector.getInstance(Scan.class)),
+            new CommandLine(injector.getInstance(Database.class)));
 
     CommandLine.run(injector.getInstance(EmulatorTerminal.class), args);
   }
@@ -184,8 +186,7 @@ public class EmulatorTerminal implements Runnable {
 
   private void printHelp() {
     terminal.println("Available commands:");
-    commands
-        .stream()
+    commands.stream()
         .map(CommandLine::getCommandName)
         .sorted(String::compareToIgnoreCase)
         .forEach(commandName -> terminal.println(" - " + commandName));
