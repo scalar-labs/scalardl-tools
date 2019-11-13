@@ -32,6 +32,7 @@ import com.scalar.client.tool.emulator.command.ListContracts;
 import com.scalar.client.tool.emulator.command.Put;
 import com.scalar.client.tool.emulator.command.PutWithSingleParameter;
 import com.scalar.client.tool.emulator.command.Register;
+import com.scalar.client.tool.emulator.command.RegisterFunction;
 import com.scalar.client.tool.emulator.command.Scan;
 import com.scalar.client.tool.emulator.command.ScanWithSingleParameter;
 import java.io.File;
@@ -94,6 +95,7 @@ public class EmulatorTerminal implements Runnable {
             new CommandLine(injector.getInstance(ListContracts.class)),
             new CommandLine(injector.getInstance(PutWithSingleParameter.class)),
             new CommandLine(injector.getInstance(Put.class)),
+            new CommandLine(injector.getInstance(RegisterFunction.class)),
             new CommandLine(injector.getInstance(Register.class)),
             new CommandLine(injector.getInstance(ScanWithSingleParameter.class)),
             new CommandLine(injector.getInstance(Scan.class)),
