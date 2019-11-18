@@ -36,7 +36,7 @@ Exit the emulator with `exit` or by ctrl-d (EOF).
  There are three predefined and preregistered contracts, with corresponding commands, to `put`, `get`, and `scan` assets. These contracts may be found in the `contract` subdirectory
  
  ```
- src/main/java/com/scalar/client/tool/emulator/contact
+ src/main/java/com/scalar/client/tool/emulator/contract
  ```
 
 ## Register a contract
@@ -44,7 +44,7 @@ Exit the emulator with `exit` or by ctrl-d (EOF).
 Write a contract and save it in the `contract` subdirectory
  
  ```
- src/main/java/com/scalar/client/tool/emulator/contact
+ src/main/java/com/scalar/client/tool/emulator/contract
  ```
 
 Run `./gradlew build` to compile the contract. Then start the emulator and register the contract by using the `register` command. For example, to register the contract `StateUpdater.java` with id `state-updater`
@@ -56,7 +56,7 @@ scalar> register state-updater com.scalar.client.tool.emulator.contract.StateUpd
 Now this contract may be executed, for example, as
 
 ```
-scalar> execute state-updater {"asset_id": "Y", "state": 1}"
+scalar> execute state-updater {"asset_id": "Y", "state": 1}
 ```
 
 ## Help
