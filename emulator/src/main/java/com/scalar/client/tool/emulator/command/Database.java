@@ -37,10 +37,12 @@ import picocli.CommandLine;
     footer = "Usage example: 'database'.%n")
 public class Database implements Runnable {
 
+  // TODO inject MutableDatabase
   public Database() {}
 
   @Override
   public void run() {
-    System.out.println("hello");
+    // TODO use injected MutableDatabase instance
+    // TODO subcommand (put, get, scan, delete)
   }
 }

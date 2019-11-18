@@ -63,6 +63,7 @@ public class Execute extends AbstractCommand {
       ContractManagerWrapper contractManager,
       TransactionalAssetbase assetbase,
       Ledger ledger) {
+      // TODO Inject MutableDatabase
     super(terminal, contractManager, assetbase, ledger);
   }
 
@@ -72,5 +73,7 @@ public class Execute extends AbstractCommand {
     if (json != null) {
       executeContract(toKey(id), json);
     }
+
+    // TODO execute UDF
   }
 }

@@ -69,6 +69,8 @@ public class EmulatorModule extends AbstractModule {
     return manager;
   }
 
+  // TODO check if there's UDF manager
+
   @Provides
   @Singleton
   ContractManagerWrapper provideContractManagerWrapper() {
@@ -80,4 +82,6 @@ public class EmulatorModule extends AbstractModule {
   Ledger provideLedger() {
     return new AssetLedger(assetbase);
   }
+
+  // TODO provide MutableDatabase
 }
