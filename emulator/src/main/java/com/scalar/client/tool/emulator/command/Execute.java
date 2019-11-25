@@ -23,6 +23,7 @@ package com.scalar.client.tool.emulator.command;
 import com.scalar.client.tool.emulator.ContractManagerWrapper;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
 import java.util.List;
 import javax.inject.Inject;
@@ -57,14 +58,17 @@ public class Execute extends AbstractCommand {
           "the JSON contract argument. A plain text JSON object or the path to a file containing a JSON object")
   private List<String> argument;
 
+  private MutableDatabaseEmulator databaseEmulator;
+
   @Inject
   public Execute(
       TerminalWrapper terminal,
       ContractManagerWrapper contractManager,
       TransactionalAssetbase assetbase,
-      Ledger ledger) {
-      // TODO Inject MutableDatabase
+      Ledger ledger,
+      MutableDatabaseEmulator databaseEmulator) {
     super(terminal, contractManager, assetbase, ledger);
+    this.databaseEmulator = databaseEmulator;
   }
 
   @Override
