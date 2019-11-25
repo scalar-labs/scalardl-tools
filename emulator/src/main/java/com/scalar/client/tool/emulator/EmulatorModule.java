@@ -27,10 +27,13 @@ import com.scalar.ledger.contract.ContractManager;
 import com.scalar.ledger.database.ContractRegistry;
 import com.scalar.ledger.database.TransactionalAssetbase;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
+import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.AssetLedger;
 import com.scalar.ledger.ledger.Ledger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.TreeMap;
 import org.jline.terminal.TerminalBuilder;
 
 public class EmulatorModule extends AbstractModule {
@@ -83,5 +86,9 @@ public class EmulatorModule extends AbstractModule {
     return new AssetLedger(assetbase);
   }
 
-  // TODO provide MutableDatabase
+  @Provides
+  @Singleton
+  MutableDatabaseEmulator provideMutableDatabaseEmulator() {
+    return new MutableDatabaseEmulator(new HashMap<String, TreeMap<Key, HashMap<String, Value>>>());
+  }
 }

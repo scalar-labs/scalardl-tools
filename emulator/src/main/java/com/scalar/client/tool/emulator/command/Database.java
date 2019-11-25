@@ -21,6 +21,8 @@
 package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.TerminalWrapper;
+import com.scalar.ledger.emulator.MutableDatabaseEmulator;
+import javax.inject.Inject;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -37,8 +39,12 @@ import picocli.CommandLine;
     footer = "Usage example: 'database'.%n")
 public class Database implements Runnable {
 
-  // TODO inject MutableDatabase
-  public Database() {}
+  private MutableDatabaseEmulator databaseEmulator;
+
+  @Inject
+  public Database(MutableDatabaseEmulator databaseEmulator) {
+    this.databaseEmulator = databaseEmulator;
+  }
 
   @Override
   public void run() {
