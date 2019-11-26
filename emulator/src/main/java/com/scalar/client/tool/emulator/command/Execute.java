@@ -22,7 +22,7 @@ package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.ContractManagerWrapper;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
 import java.util.List;
@@ -64,7 +64,7 @@ public class Execute extends AbstractCommand {
   public Execute(
       TerminalWrapper terminal,
       ContractManagerWrapper contractManager,
-      TransactionalAssetbase assetbase,
+      TamperEvidentAssetbase assetbase,
       Ledger ledger,
       MutableDatabaseEmulator databaseEmulator) {
     super(terminal, contractManager, assetbase, ledger);

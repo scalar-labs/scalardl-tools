@@ -24,7 +24,7 @@ import static org.mockito.Mockito.verify;
 
 import com.scalar.client.tool.emulator.ContractManagerWrapper;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
 import java.io.File;
@@ -39,7 +39,7 @@ public class RegisterTest {
   private static final String CONTRACT_NAME = "name";
   private static final String CONTRACT_FILE = "file";
   private Register register;
-  private TransactionalAssetbase assetbase;
+  private TamperEvidentAssetbase assetbase;
   @Mock TerminalWrapper terminal;
   @Mock ContractManagerWrapper contractManager;
   @Mock Ledger ledger;

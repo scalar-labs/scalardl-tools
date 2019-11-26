@@ -25,7 +25,7 @@ import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
 import com.scalar.ledger.crypto.CertificateEntry;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.ledger.Ledger;
 import java.io.File;
 import java.io.IOException;
@@ -46,7 +46,7 @@ import picocli.CommandLine;
 public abstract class AbstractCommand implements Runnable {
   TerminalWrapper terminal;
   ContractManagerWrapper contractManager;
-  TransactionalAssetbase assetbase;
+  TamperEvidentAssetbase assetbase;
   Ledger ledger;
 
   @CommandLine.Option(
@@ -58,7 +58,7 @@ public abstract class AbstractCommand implements Runnable {
   public AbstractCommand(
       TerminalWrapper terminal,
       ContractManagerWrapper contractManager,
-      TransactionalAssetbase assetbase,
+      TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     this.terminal = terminal;
     this.contractManager = contractManager;

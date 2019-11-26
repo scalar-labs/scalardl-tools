@@ -23,9 +23,11 @@ package com.scalar.client.tool.emulator;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
+import com.scalar.database.io.Key;
+import com.scalar.database.io.Value;
 import com.scalar.ledger.contract.ContractManager;
 import com.scalar.ledger.database.ContractRegistry;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.AssetLedger;
@@ -33,7 +35,8 @@ import com.scalar.ledger.ledger.Ledger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.TreeMap;
+import java.util.Map;
+import java.util.SortedMap;
 import org.jline.terminal.TerminalBuilder;
 
 public class EmulatorModule extends AbstractModule {
@@ -56,7 +59,7 @@ public class EmulatorModule extends AbstractModule {
 
   @Provides
   @Singleton
-  TransactionalAssetbase provideAssetbase() {
+  TamperEvidentAssetbase provideAssetbase() {
     return assetbase;
   }
 
@@ -89,6 +92,6 @@ public class EmulatorModule extends AbstractModule {
   @Provides
   @Singleton
   MutableDatabaseEmulator provideMutableDatabaseEmulator() {
-    return new MutableDatabaseEmulator(new HashMap<String, TreeMap<Key, HashMap<String, Value>>>());
+    return new MutableDatabaseEmulator(new HashMap<String, SortedMap<Key, Map<String, Value>>>());
   }
 }

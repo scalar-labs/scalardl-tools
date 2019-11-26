@@ -24,7 +24,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import com.scalar.client.tool.emulator.ContractManagerWrapper;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.ledger.Ledger;
 import java.io.File;
 import java.util.List;
@@ -77,7 +77,7 @@ public class Register extends AbstractCommand implements Runnable {
   public Register(
       TerminalWrapper terminal,
       ContractManagerWrapper contractManager,
-      TransactionalAssetbase assetbase,
+      TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     super(terminal, contractManager, assetbase, ledger);
   }

@@ -22,7 +22,7 @@ package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.ContractManagerWrapper;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.ledger.Ledger;
 import javax.inject.Inject;
 import javax.json.Json;
@@ -53,7 +53,7 @@ public class Get extends AbstractCommand {
   public Get(
       TerminalWrapper terminal,
       ContractManagerWrapper contractManager,
-      TransactionalAssetbase assetbase,
+      TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     super(terminal, contractManager, assetbase, ledger);
   }
