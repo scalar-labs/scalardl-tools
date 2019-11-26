@@ -32,6 +32,7 @@ import com.scalar.ledger.emulator.AssetbaseEmulator;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.AssetLedger;
 import com.scalar.ledger.ledger.Ledger;
+import com.scalar.ledger.udf.UdfManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -43,11 +44,13 @@ public class EmulatorModule extends AbstractModule {
   private final AssetbaseEmulator assetbase;
   private final ContractRegistry registry;
   private final ContractManager manager;
+  private final UdfManager udfManager;
 
   public EmulatorModule() {
     assetbase = new AssetbaseEmulator();
     registry = new ContractRegistryEmulator();
     manager = new ContractManager(registry);
+    udfManager = new UdfManager(new UdfRegistryEmulator());
   }
 
   @Provides
@@ -75,7 +78,11 @@ public class EmulatorModule extends AbstractModule {
     return manager;
   }
 
-  // TODO check if there's UDF manager
+  @Provides
+  @Singleton
+  UdfManager provideUdfManager() {
+    return udfManager;
+  }
 
   @Provides
   @Singleton
