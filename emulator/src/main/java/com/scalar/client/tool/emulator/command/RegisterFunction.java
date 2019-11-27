@@ -20,7 +20,16 @@
  */
 package com.scalar.client.tool.emulator.command;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.scalar.client.tool.emulator.TerminalWrapper;
+import com.scalar.ledger.exception.RegistryIOException;
+import com.scalar.ledger.udf.UdfEntry;
+import com.scalar.ledger.udf.UdfManager;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import javax.inject.Inject;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -36,11 +45,34 @@ import picocli.CommandLine;
     footerHeading = "%n",
     footer = "Usage example: 'register-function'.%n")
 public class RegisterFunction implements Runnable {
+  @CommandLine.Parameters(
+      index = "0",
+      paramLabel = "id",
+      description = "id that will be used when executing the udf")
+  private String id;
+
+  @CommandLine.Parameters(index = "1", paramLabel = "name", description = "udf canonical name")
+  private String name;
+
+  @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
+  private File udfFile;
+
+  @Inject private UdfManager udfManager;
 
   public RegisterFunction() {}
 
   @Override
   public void run() {
-    System.out.println("hello");
+    checkArgument(id != null, "id cannot be null");
+    checkArgument(name != null, "name cannot be null");
+    checkArgument(udfFile != null, "udfFile cannot be null");
+
+    try {
+      byte[] bytes = Files.readAllBytes(udfFile.toPath());
+      long registeredAt = System.currentTimeMillis();
+      udfManager.register(new UdfEntry(id, name, bytes, registeredAt));
+    } catch (IOException e) {
+      throw new RegistryIOException("could not register udf" + id);
+    }
   }
 }
