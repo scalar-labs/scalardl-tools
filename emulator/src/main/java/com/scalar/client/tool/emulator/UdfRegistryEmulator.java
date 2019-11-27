@@ -44,5 +44,7 @@ class UdfRegistryEmulator implements UdfRegistry {
   }
 
   @Override
-  public void unbind(String id) {}
+  public void unbind(String id) {
+    udfs.remove(id);
+  }
 }
