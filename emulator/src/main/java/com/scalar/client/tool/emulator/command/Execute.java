@@ -59,12 +59,11 @@ public class Execute extends AbstractCommand {
   private List<String> argument;
 
   @CommandLine.Option(
-    names = {"-fa", "--function_argument"},
-    description = "the argument passed to UDF")
+      names = {"-fa", "--function_argument"},
+      description = "the argument passed to UDF")
   private String functionArgument;
 
-  @Inject
-  private MutableDatabaseEmulator databaseEmulator;
+  @Inject private MutableDatabaseEmulator databaseEmulator;
 
   @Inject
   public Execute(
