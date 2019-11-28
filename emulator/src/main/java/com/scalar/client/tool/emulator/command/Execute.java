@@ -58,6 +58,12 @@ public class Execute extends AbstractCommand {
           "the JSON contract argument. A plain text JSON object or the path to a file containing a JSON object")
   private List<String> argument;
 
+  @CommandLine.Option(
+    names = {"-fa", "--function_argument"},
+    description = "the argument passed to UDF")
+  private String functionArgument;
+
+  @Inject
   private MutableDatabaseEmulator databaseEmulator;
 
   @Inject
@@ -65,8 +71,7 @@ public class Execute extends AbstractCommand {
       TerminalWrapper terminal,
       ContractManagerWrapper contractManager,
       TamperEvidentAssetbase assetbase,
-      Ledger ledger,
-      MutableDatabaseEmulator databaseEmulator) {
+      Ledger ledger) {
     super(terminal, contractManager, assetbase, ledger);
     this.databaseEmulator = databaseEmulator;
   }
