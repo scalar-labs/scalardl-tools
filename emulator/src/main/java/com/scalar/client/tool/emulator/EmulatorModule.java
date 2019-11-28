@@ -25,6 +25,7 @@ import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import com.scalar.database.io.Key;
 import com.scalar.database.io.Value;
+import com.scalar.ledger.config.LedgerConfig;
 import com.scalar.ledger.contract.ContractManager;
 import com.scalar.ledger.database.ContractRegistry;
 import com.scalar.ledger.database.TamperEvidentAssetbase;
@@ -37,6 +38,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.SortedMap;
 import org.jline.terminal.TerminalBuilder;
 
@@ -49,7 +51,7 @@ public class EmulatorModule extends AbstractModule {
   public EmulatorModule() {
     assetbase = new AssetbaseEmulator();
     registry = new ContractRegistryEmulator();
-    manager = new ContractManager(registry);
+    manager = new ContractManager(registry, new LedgerConfig(new Properties()));
     udfManager = new UdfManager(new UdfRegistryEmulator());
   }
 
