@@ -20,9 +20,19 @@
  */
 package com.scalar.client.tool.emulator.command;
 
+import com.scalar.client.tool.emulator.ContractManagerWrapper;
 import com.scalar.client.tool.emulator.TerminalWrapper;
+import com.scalar.database.api.Delete;
+import com.scalar.database.api.Get;
+import com.scalar.database.api.Put;
+import com.scalar.database.io.Key;
+import com.scalar.database.io.TextValue;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
+import com.scalar.ledger.ledger.Ledger;
+import java.util.List;
 import javax.inject.Inject;
+import javax.json.JsonObject;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -37,18 +47,75 @@ import picocli.CommandLine;
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",
     footer = "Usage example: 'database'.%n")
-public class Database implements Runnable {
+public class Database extends AbstractCommand implements Runnable {
+  @CommandLine.Parameters(
+      index = "0",
+      paramLabel = "method ",
+      description = "method that will be execute by MutableDatabase, e.g 'get'")
+  private String method;
+
+  @CommandLine.Parameters(
+      index = "1",
+      paramLabel = "namespace",
+      description = "the namespace of the database")
+  private String namespace;
+
+  @CommandLine.Parameters(
+      index = "2",
+      paramLabel = "table_name",
+      description = "the table_name of the database")
+  private String tableName;
+
+  @CommandLine.Parameters(
+      index = "3",
+      paramLabel = "asset_id",
+      description = "the asset id of th object stored in the database. ")
+  private String assetId;
+
+  @CommandLine.Option(
+      names = {"-o", "--object"},
+      description = "the JSON object that is to be inserted into the MutableDatabase")
+  private List<String> object;
 
   private MutableDatabaseEmulator databaseEmulator;
 
   @Inject
-  public Database(MutableDatabaseEmulator databaseEmulator) {
+  public Database(
+      MutableDatabaseEmulator databaseEmulator,
+      TerminalWrapper terminal,
+      ContractManagerWrapper contractManager,
+      TamperEvidentAssetbase assetbase,
+      Ledger ledger) {
+    super(terminal, contractManager, assetbase, ledger);
     this.databaseEmulator = databaseEmulator;
   }
 
   @Override
   public void run() {
-    // TODO use injected MutableDatabase instance
-    // TODO subcommand (put, get, scan, delete)
+    JsonObject data = convertJsonParameter(object);
+
+    if (method.equals("get")) {
+      Get get =
+          new Get(new Key(new TextValue("asset_id", assetId)))
+              .forNamespace(namespace)
+              .forTable(tableName);
+      databaseEmulator.get(get);
+    } else if (method.equals("delete")) {
+      Delete delete =
+          new Delete(new Key(new TextValue("asset_id", assetId)))
+              .forNamespace(namespace)
+              .forTable(tableName);
+      databaseEmulator.delete(delete);
+    } else if (method.equals("put")) {
+      Put put =
+          new Put(new Key(new TextValue("asset_id", assetId)))
+              .forNamespace(namespace)
+              .forTable(tableName);
+      if (object != null) {
+        put.withValue(new TextValue("data", data.toString()));
+      }
+      databaseEmulator.put(put);
+    }
+    // TODO subcommand (scan)
   }
 }
