@@ -23,7 +23,7 @@ package com.scalar.client.tool.emulator.command;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
@@ -44,7 +44,7 @@ public class ExecuteTest {
   private Execute execute;
   private AssetbaseEmulator assetbase;
   @Mock private Contract contract;
-  @Mock private ContractManagerWrapper contractManager;
+  @Mock private ContractManagerEmulator contractManager;
   @Mock private Ledger ledger;
   @Mock private TerminalWrapper terminal;
   private ContractEntry entry;
@@ -73,7 +73,7 @@ public class ExecuteTest {
             1,
             "signature".getBytes());
     when(contractManager.get(key)).thenReturn(entry);
-    when(contractManager.getInstance(key)).thenReturn(contract);
+    when(contractManager.getInstance(key.getId())).thenReturn(contract);
     when(contract.invoke(ledger, argument, Optional.empty())).thenReturn(null);
 
     // Act

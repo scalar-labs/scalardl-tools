@@ -22,7 +22,7 @@ package com.scalar.client.tool.emulator.command;
 
 import static org.mockito.Mockito.verify;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
@@ -41,7 +41,7 @@ public class RegisterTest {
   private Register register;
   private TamperEvidentAssetbase assetbase;
   @Mock TerminalWrapper terminal;
-  @Mock ContractManagerWrapper contractManager;
+  @Mock ContractManagerEmulator contractManager;
   @Mock Ledger ledger;
 
   @Before

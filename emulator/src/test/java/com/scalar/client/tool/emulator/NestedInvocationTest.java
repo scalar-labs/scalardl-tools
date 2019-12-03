@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
-import com.scalar.ledger.contract.ContractManager;
 import com.scalar.ledger.crypto.CertificateEntry;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
 import com.scalar.ledger.ledger.AssetLedger;
@@ -41,13 +40,12 @@ import org.junit.Test;
 public class NestedInvocationTest {
   private static final String CONTRACT_ID_ATTRIBUTE_NAME = "contract_id";
   private Ledger ledger;
-  private ContractManagerWrapper contractManager;
+  private ContractManagerEmulator contractManager;
 
   @Before
   public void setUp() {
     ledger = new AssetLedger(new AssetbaseEmulator());
-    contractManager =
-        new ContractManagerWrapper(new ContractManager(new ContractRegistryEmulator()));
+    contractManager = new ContractManagerEmulator(new ContractRegistryEmulator());
 
     registerContract("caller", "Caller");
     registerContract("callee", "Callee");
@@ -69,7 +67,7 @@ public class NestedInvocationTest {
     // Arrange
     ContractEntry.Key key =
         new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
-    Contract contract = contractManager.getInstance(key);
+    Contract contract = contractManager.getInstance(key.getId());
     JsonObject argument =
         Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
 

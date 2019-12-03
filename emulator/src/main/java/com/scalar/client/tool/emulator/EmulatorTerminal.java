@@ -60,7 +60,7 @@ import picocli.CommandLine;
 public class EmulatorTerminal implements Runnable {
   private static List<CommandLine> commands;
   private TerminalWrapper terminal;
-  private ContractManagerWrapper contractManager;
+  private ContractManagerEmulator contractManager;
   private boolean shouldExit;
 
   @CommandLine.Option(
@@ -77,7 +77,7 @@ public class EmulatorTerminal implements Runnable {
   private boolean help;
 
   @Inject
-  public EmulatorTerminal(TerminalWrapper terminal, ContractManagerWrapper contractManager) {
+  public EmulatorTerminal(TerminalWrapper terminal, ContractManagerEmulator contractManager) {
     this.terminal = terminal;
     this.contractManager = contractManager;
 
