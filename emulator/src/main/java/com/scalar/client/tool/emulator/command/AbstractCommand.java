@@ -20,7 +20,7 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
@@ -45,7 +45,7 @@ import picocli.CommandLine;
 
 public abstract class AbstractCommand implements Runnable {
   TerminalWrapper terminal;
-  ContractManagerWrapper contractManager;
+  ContractManagerEmulator contractManager;
   TamperEvidentAssetbase assetbase;
   Ledger ledger;
 
@@ -57,7 +57,7 @@ public abstract class AbstractCommand implements Runnable {
 
   public AbstractCommand(
       TerminalWrapper terminal,
-      ContractManagerWrapper contractManager,
+      ContractManagerEmulator contractManager,
       TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     this.terminal = terminal;
@@ -67,7 +67,7 @@ public abstract class AbstractCommand implements Runnable {
   }
 
   void executeContract(ContractEntry.Key key, JsonObject argument) {
-    Contract contract = contractManager.getInstance(key);
+    Contract contract = contractManager.getInstance(key.getId());
     JsonObject response =
         contract.invoke(this.ledger, argument, contractManager.get(key).getProperties());
     this.assetbase.commit();

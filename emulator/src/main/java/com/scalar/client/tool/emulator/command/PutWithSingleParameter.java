@@ -20,7 +20,7 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.ledger.Ledger;
@@ -58,7 +58,7 @@ public class PutWithSingleParameter extends AbstractCommand {
   @Inject
   public PutWithSingleParameter(
       TerminalWrapper terminal,
-      ContractManagerWrapper contractManager,
+      ContractManagerEmulator contractManager,
       TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     super(terminal, contractManager, assetbase, ledger);
