@@ -8,7 +8,7 @@ import com.scalar.ledger.udf.Function;
 import java.util.Optional;
 import javax.json.JsonObject;
 
-class KVUdf extends Function {
+public class KVUdf extends Function {
   @Override
   public void invoke(
       MutableDatabase database, JsonObject contractArgument, Optional<JsonObject> funtionArgument) {
