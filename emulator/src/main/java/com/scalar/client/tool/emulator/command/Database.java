@@ -20,7 +20,7 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.database.api.Delete;
 import com.scalar.database.api.Get;
@@ -83,7 +83,7 @@ public class Database extends AbstractCommand implements Runnable {
   public Database(
       MutableDatabaseEmulator databaseEmulator,
       TerminalWrapper terminal,
-      ContractManagerWrapper contractManager,
+      ContractManagerEmulator contractManager,
       TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     super(terminal, contractManager, assetbase, ledger);
