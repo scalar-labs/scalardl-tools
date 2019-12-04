@@ -28,6 +28,7 @@ import com.scalar.database.api.Delete;
 import com.scalar.database.api.Get;
 import com.scalar.database.api.Put;
 import com.scalar.database.api.Result;
+import com.scalar.database.api.Scan;
 import com.scalar.database.io.BooleanValue;
 import com.scalar.database.io.DoubleValue;
 import com.scalar.database.io.IntValue;
@@ -45,6 +46,7 @@ import java.util.Map;
 import java.util.Optional;
 import javax.inject.Inject;
 import javax.json.Json;
+import javax.json.JsonArrayBuilder;
 import javax.json.JsonNumber;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
@@ -73,10 +75,16 @@ public class Database extends AbstractCommand implements Runnable {
   private String method;
 
   @CommandLine.Option(
-      names = {"-k", "--key"},
+      names = {"-p", "--primarykey"},
       paramLabel = "key",
-      description = "the key (in JSON) that is to be inserted into the MutableDatabase")
-  private String key;
+      description = "the primary key (in JSON) that is to be inserted into the MutableDatabase")
+  private String primaryKey;
+
+  @CommandLine.Option(
+      names = {"-c", "--clusteringkey"},
+      paramLabel = "key",
+      description = "the primary key (in JSON) that is to be inserted into the MutableDatabase")
+  private String clusteringKey;
 
   @CommandLine.Option(
       names = {"-v", "--value"},
@@ -93,7 +101,7 @@ public class Database extends AbstractCommand implements Runnable {
 
   @CommandLine.Option(
       names = {"-t", "--table"},
-      paramLabel = "table_name",
+      paramLabel = "table",
       description = "the table_name of the database",
       defaultValue = "")
   private String table;
@@ -147,14 +155,9 @@ public class Database extends AbstractCommand implements Runnable {
     return values;
   }
 
-  private String json(Optional<Result> result) {
-    if (!result.isPresent()) {
-      return "{}";
-    }
-
+  private JsonObject json(Result result) {
     JsonObjectBuilder builder = Json.createObjectBuilder();
-    Result r = result.get();
-    Iterator<Map.Entry<String, Value>> iterator = r.getValues().entrySet().iterator();
+    Iterator<Map.Entry<String, Value>> iterator = result.getValues().entrySet().iterator();
     while (iterator.hasNext()) {
       Map.Entry<String, Value> entry = iterator.next();
       String key = entry.getKey();
@@ -177,27 +180,56 @@ public class Database extends AbstractCommand implements Runnable {
       }
     }
 
-    return builder.build().toString();
+    return builder.build();
+  }
+
+  private String json(Optional<Result> result) {
+    return result.isPresent() ? json(result.get()).toString() : "{}";
+  }
+
+  private String json(List<Result> results) {
+    JsonArrayBuilder array = Json.createArrayBuilder();
+    for (Result result : results) {
+      array.add(json(result));
+    }
+
+    return array.build().toString();
   }
 
   @Override
   public void run() {
     if (method.equals("get")) {
-      checkArgument(key != null, "key cannot be null");
-      checkArgument(key != null, "key cannot be null");
-      Get get = new Get(new Key(values(key))).forNamespace(namespace).forTable(table);
+      checkArgument(primaryKey != null, "primary key cannot be null");
+      Get get =
+          (clusteringKey != null)
+              ? new Get(new Key(values(primaryKey)), new Key(values(clusteringKey)))
+              : new Get(new Key(values(primaryKey)));
+      get.forNamespace(namespace).forTable(table);
       System.out.println(json(databaseEmulator.get(get)));
     } else if (method.equals("delete")) {
-      checkArgument(key != null, "key cannot be null");
-      Delete delete = new Delete(new Key(values(key))).forNamespace(namespace).forTable(table);
+      checkArgument(primaryKey != null, "primary key cannot be null");
+      Delete delete =
+          (clusteringKey != null)
+              ? new Delete(new Key(values(primaryKey)), new Key(values(clusteringKey)))
+              : new Delete(new Key(values(clusteringKey)));
+      delete.forNamespace(namespace).forTable(table);
       databaseEmulator.delete(delete);
     } else if (method.equals("put")) {
-      checkArgument(key != null, "key cannot be null");
+      checkArgument(primaryKey != null, "primary key cannot be null");
       checkArgument(value != null, "value cannot be null");
-      Put put = new Put(new Key(values(key))).forNamespace(namespace).forTable(table);
+      Put put =
+          (clusteringKey != null)
+              ? new Put(new Key(values(primaryKey)), new Key(values(clusteringKey)))
+              : new Put(new Key(values(primaryKey)));
+      put.forNamespace(namespace).forTable(table);
       put.withValues(values(value));
       databaseEmulator.put(put);
+    } else if (method.equals("scan")) {
+      checkArgument(primaryKey != null, "primary key cannot be null");
+      Scan scan = new Scan(new Key(values(primaryKey)));
+      scan.forNamespace(namespace).forTable(table);
+      // TODO support filter?
+      System.out.println(json(databaseEmulator.scan(scan)));
     }
-    // TODO subcommand (scan)
   }
 }
