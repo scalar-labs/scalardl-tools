@@ -7,15 +7,19 @@ import com.scalar.ledger.exception.RegistryIOException;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.json.JsonObject;
 
 public class ContractManagerEmulator extends ClassLoader {
 
   private final ContractRegistry registry;
+  private final Map<String, Contract> cache;
 
   public ContractManagerEmulator(ContractRegistry registry) {
     this.registry = registry;
+    this.cache = new HashMap<String, Contract>();
   }
 
   public void register(com.scalar.ledger.contract.ContractEntry entry) {
@@ -49,15 +53,22 @@ public class ContractManagerEmulator extends ClassLoader {
   }
 
   public com.scalar.ledger.contract.Contract getInstance(java.lang.String id) {
-    ContractEntry entry = registry.lookup(id);
-    try {
-      return (Contract)
-          defineClass(entry.getBinaryName(), entry.getByteCode(), 0, entry.getByteCode().length)
-              .getConstructor(new Class[0])
-              .newInstance(new Object[0]);
-    } catch (Exception e) {
-      return null;
+    Contract contract = cache.get(id);
+    if (contract == null) {
+      try {
+        ContractEntry entry = registry.lookup(id);
+        contract =
+            (Contract)
+                defineClass(
+                        entry.getBinaryName(), entry.getByteCode(), 0, entry.getByteCode().length)
+                    .getConstructor(new Class[0])
+                    .newInstance(new Object[0]);
+        cache.put(id, contract);
+      } catch (Exception e) {
+      }
     }
+
+    return contract;
   }
 
   public List<ContractEntry> scan() {
