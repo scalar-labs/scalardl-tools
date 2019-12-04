@@ -102,8 +102,8 @@ public class Execute extends AbstractCommand {
     JsonArray udfs = json.getJsonArray("_functions_");
     if (udfs != null) {
       for (JsonValue udf : udfs) {
-        String functionName = ((JsonString) udf).getString();
-        Function f = udfManager.getInstance(functionName);
+        String id = ((JsonString) udf).getString();
+        Function f = udfManager.getInstance(id);
         f.invoke(databaseEmulator, json, Optional.ofNullable(functionArgumentObject));
       }
     }
