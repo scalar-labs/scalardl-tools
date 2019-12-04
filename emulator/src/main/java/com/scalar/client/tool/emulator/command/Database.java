@@ -95,15 +95,13 @@ public class Database extends AbstractCommand implements Runnable {
   @CommandLine.Option(
       names = {"-n", "--namespace"},
       paramLabel = "namespace",
-      description = "the namespace of the database",
-      defaultValue = "")
+      description = "the namespace of the database")
   private String namespace;
 
   @CommandLine.Option(
       names = {"-t", "--table"},
       paramLabel = "table",
-      description = "the table_name of the database",
-      defaultValue = "")
+      description = "the table of the database")
   private String table;
 
   private MutableDatabaseEmulator databaseEmulator;
@@ -204,7 +202,12 @@ public class Database extends AbstractCommand implements Runnable {
           (clusteringKey != null)
               ? new Get(new Key(values(primaryKey)), new Key(values(clusteringKey)))
               : new Get(new Key(values(primaryKey)));
-      get.forNamespace(namespace).forTable(table);
+      if (namespace != null) {
+        get.forNamespace(namespace);
+      }
+      if (table != null) {
+        get.forTable(table);
+      }
       System.out.println(json(databaseEmulator.get(get)));
     } else if (method.equals("delete")) {
       checkArgument(primaryKey != null, "primary key cannot be null");
@@ -212,7 +215,12 @@ public class Database extends AbstractCommand implements Runnable {
           (clusteringKey != null)
               ? new Delete(new Key(values(primaryKey)), new Key(values(clusteringKey)))
               : new Delete(new Key(values(clusteringKey)));
-      delete.forNamespace(namespace).forTable(table);
+      if (namespace != null) {
+        delete.forNamespace(namespace);
+      }
+      if (table != null) {
+        delete.forTable(table);
+      }
       databaseEmulator.delete(delete);
     } else if (method.equals("put")) {
       checkArgument(primaryKey != null, "primary key cannot be null");
@@ -221,13 +229,23 @@ public class Database extends AbstractCommand implements Runnable {
           (clusteringKey != null)
               ? new Put(new Key(values(primaryKey)), new Key(values(clusteringKey)))
               : new Put(new Key(values(primaryKey)));
-      put.forNamespace(namespace).forTable(table);
+      if (namespace != null) {
+        put.forNamespace(namespace);
+      }
+      if (table != null) {
+        put.forTable(table);
+      }
       put.withValues(values(value));
       databaseEmulator.put(put);
     } else if (method.equals("scan")) {
       checkArgument(primaryKey != null, "primary key cannot be null");
       Scan scan = new Scan(new Key(values(primaryKey)));
-      scan.forNamespace(namespace).forTable(table);
+      if (namespace != null) {
+        scan.forNamespace(namespace);
+      }
+      if (table != null) {
+        scan.forTable(table);
+      }
       // TODO support filter?
       System.out.println(json(databaseEmulator.scan(scan)));
     }
