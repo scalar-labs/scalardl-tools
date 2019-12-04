@@ -20,19 +20,37 @@
  */
 package com.scalar.client.tool.emulator.command;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.database.api.Delete;
 import com.scalar.database.api.Get;
 import com.scalar.database.api.Put;
+import com.scalar.database.api.Result;
+import com.scalar.database.io.BooleanValue;
+import com.scalar.database.io.DoubleValue;
+import com.scalar.database.io.IntValue;
 import com.scalar.database.io.Key;
 import com.scalar.database.io.TextValue;
+import com.scalar.database.io.Value;
 import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import javax.inject.Inject;
+import javax.json.Json;
+import javax.json.JsonNumber;
 import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonReader;
+import javax.json.JsonString;
+import javax.json.JsonValue;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -50,32 +68,35 @@ import picocli.CommandLine;
 public class Database extends AbstractCommand implements Runnable {
   @CommandLine.Parameters(
       index = "0",
-      paramLabel = "method ",
+      paramLabel = "method",
       description = "method that will be execute by MutableDatabase, e.g 'get'")
   private String method;
 
-  @CommandLine.Parameters(
-      index = "1",
-      paramLabel = "namespace",
-      description = "the namespace of the database")
-  private String namespace;
-
-  @CommandLine.Parameters(
-      index = "2",
-      paramLabel = "table_name",
-      description = "the table_name of the database")
-  private String tableName;
-
-  @CommandLine.Parameters(
-      index = "3",
-      paramLabel = "asset_id",
-      description = "the asset id of th object stored in the database. ")
-  private String assetId;
+  @CommandLine.Option(
+      names = {"-k", "--key"},
+      paramLabel = "key",
+      description = "the key (in JSON) that is to be inserted into the MutableDatabase")
+  private String key;
 
   @CommandLine.Option(
-      names = {"-o", "--object"},
-      description = "the JSON object that is to be inserted into the MutableDatabase")
-  private List<String> object;
+      names = {"-v", "--value"},
+      paramLabel = "value",
+      description = "the value (in JSON) that is to be inserted into the MutableDatabase")
+  private String value;
+
+  @CommandLine.Option(
+      names = {"-n", "--namespace"},
+      paramLabel = "namespace",
+      description = "the namespace of the database",
+      defaultValue = "")
+  private String namespace;
+
+  @CommandLine.Option(
+      names = {"-t", "--table"},
+      paramLabel = "table_name",
+      description = "the table_name of the database",
+      defaultValue = "")
+  private String table;
 
   private MutableDatabaseEmulator databaseEmulator;
 
@@ -90,30 +111,91 @@ public class Database extends AbstractCommand implements Runnable {
     this.databaseEmulator = databaseEmulator;
   }
 
+  private List<Value> values(String json) {
+    List<Value> values = new ArrayList<Value>();
+    JsonReader reader = Json.createReader(new StringReader(json));
+    JsonObject object = reader.readObject();
+
+    Iterator<Map.Entry<String, JsonValue>> iterator = object.entrySet().iterator();
+    while (iterator.hasNext()) {
+      Map.Entry<String, JsonValue> entry = iterator.next();
+      String key = entry.getKey();
+      JsonValue value = entry.getValue();
+      switch (value.getValueType().name()) {
+        case "STRING":
+          values.add(new TextValue(key, ((JsonString) value).getString()));
+          break;
+        case "TRUE":
+          values.add(new BooleanValue(key, true));
+          break;
+        case "FALSE":
+          values.add(new BooleanValue(key, false));
+          break;
+        case "NUMBER":
+          JsonNumber n = (JsonNumber) value;
+          if (n.isIntegral()) {
+            values.add(new IntValue(key, n.intValue()));
+          } else {
+            values.add(new DoubleValue(key, n.doubleValue()));
+          }
+          break;
+        default:
+          // TODO handle other types?
+      }
+    }
+
+    return values;
+  }
+
+  private String json(Optional<Result> result) {
+    if (!result.isPresent()) {
+      return "{}";
+    }
+
+    JsonObjectBuilder builder = Json.createObjectBuilder();
+    Result r = result.get();
+    Iterator<Map.Entry<String, Value>> iterator = r.getValues().entrySet().iterator();
+    while (iterator.hasNext()) {
+      Map.Entry<String, Value> entry = iterator.next();
+      String key = entry.getKey();
+      Value value = entry.getValue();
+      switch (value.getClass().getSimpleName()) {
+        case "TextValue":
+          builder.add(key, ((TextValue) value).getString().get());
+          break;
+        case "IntValue":
+          builder.add(key, ((IntValue) value).get());
+          break;
+        case "DoubleValue":
+          builder.add(key, ((DoubleValue) value).get());
+          break;
+        case "BooleanValue":
+          builder.add(key, ((BooleanValue) value).get());
+          break;
+        default:
+          // TODO handle other types?
+      }
+    }
+
+    return builder.build().toString();
+  }
+
   @Override
   public void run() {
-    JsonObject data = convertJsonParameter(object);
-
     if (method.equals("get")) {
-      Get get =
-          new Get(new Key(new TextValue("asset_id", assetId)))
-              .forNamespace(namespace)
-              .forTable(tableName);
-      databaseEmulator.get(get);
+      checkArgument(key != null, "key cannot be null");
+      checkArgument(key != null, "key cannot be null");
+      Get get = new Get(new Key(values(key))).forNamespace(namespace).forTable(table);
+      System.out.println(json(databaseEmulator.get(get)));
     } else if (method.equals("delete")) {
-      Delete delete =
-          new Delete(new Key(new TextValue("asset_id", assetId)))
-              .forNamespace(namespace)
-              .forTable(tableName);
+      checkArgument(key != null, "key cannot be null");
+      Delete delete = new Delete(new Key(values(key))).forNamespace(namespace).forTable(table);
       databaseEmulator.delete(delete);
     } else if (method.equals("put")) {
-      Put put =
-          new Put(new Key(new TextValue("asset_id", assetId)))
-              .forNamespace(namespace)
-              .forTable(tableName);
-      if (object != null) {
-        put.withValue(new TextValue("data", data.toString()));
-      }
+      checkArgument(key != null, "key cannot be null");
+      checkArgument(value != null, "value cannot be null");
+      Put put = new Put(new Key(values(key))).forNamespace(namespace).forTable(table);
+      put.withValues(values(value));
       databaseEmulator.put(put);
     }
     // TODO subcommand (scan)
