@@ -25,9 +25,18 @@ import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
+import com.scalar.ledger.udf.Function;
+import com.scalar.ledger.udf.UdfManager;
+import java.io.StringReader;
 import java.util.List;
+import java.util.Optional;
 import javax.inject.Inject;
+import javax.json.Json;
+import javax.json.JsonArray;
 import javax.json.JsonObject;
+import javax.json.JsonReader;
+import javax.json.JsonString;
+import javax.json.JsonValue;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -65,6 +74,8 @@ public class Execute extends AbstractCommand {
 
   @Inject private MutableDatabaseEmulator databaseEmulator;
 
+  @Inject private UdfManager udfManager;
+
   @Inject
   public Execute(
       TerminalWrapper terminal,
@@ -72,7 +83,6 @@ public class Execute extends AbstractCommand {
       TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     super(terminal, contractManager, assetbase, ledger);
-    this.databaseEmulator = databaseEmulator;
   }
 
   @Override
@@ -82,6 +92,20 @@ public class Execute extends AbstractCommand {
       executeContract(toKey(id), json);
     }
 
-    // TODO execute UDF
+    JsonObject functionArgumentObject = null;
+    if (functionArgument != null) {
+      JsonReader jsonReader = Json.createReader(new StringReader(functionArgument));
+      functionArgumentObject = jsonReader.readObject();
+      jsonReader.close();
+    }
+
+    JsonArray udfs = json.getJsonArray("_functions_");
+    if (udfs != null) {
+      for (JsonValue udf : udfs) {
+        String functionName = ((JsonString) udf).getString();
+        Function f = udfManager.getInstance(functionName);
+        f.invoke(databaseEmulator, json, Optional.ofNullable(functionArgumentObject));
+      }
+    }
   }
 }
