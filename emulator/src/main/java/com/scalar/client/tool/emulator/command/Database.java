@@ -194,60 +194,76 @@ public class Database extends AbstractCommand implements Runnable {
     return array.build().toString();
   }
 
+  private void runGet() {
+    checkArgument(primaryKey != null, "primary key cannot be null");
+    Get get =
+        (clusteringKey != null)
+            ? new Get(new Key(values(primaryKey)), new Key(values(clusteringKey)))
+            : new Get(new Key(values(primaryKey)));
+    if (namespace != null) {
+      get.forNamespace(namespace);
+    }
+    if (table != null) {
+      get.forTable(table);
+    }
+    System.out.println(json(databaseEmulator.get(get)));
+  }
+
+  private void runDelete() {
+    checkArgument(primaryKey != null, "primary key cannot be null");
+    Delete delete =
+        (clusteringKey != null)
+            ? new Delete(new Key(values(primaryKey)), new Key(values(clusteringKey)))
+            : new Delete(new Key(values(clusteringKey)));
+    if (namespace != null) {
+      delete.forNamespace(namespace);
+    }
+    if (table != null) {
+      delete.forTable(table);
+    }
+    databaseEmulator.delete(delete);
+  }
+
+  private void runPut() {
+    checkArgument(primaryKey != null, "primary key cannot be null");
+    checkArgument(value != null, "value cannot be null");
+    Put put =
+        (clusteringKey != null)
+            ? new Put(new Key(values(primaryKey)), new Key(values(clusteringKey)))
+            : new Put(new Key(values(primaryKey)));
+    if (namespace != null) {
+      put.forNamespace(namespace);
+    }
+    if (table != null) {
+      put.forTable(table);
+    }
+    put.withValues(values(value));
+    databaseEmulator.put(put);
+  }
+
+  private void runScan() {
+    checkArgument(primaryKey != null, "primary key cannot be null");
+    Scan scan = new Scan(new Key(values(primaryKey)));
+    if (namespace != null) {
+      scan.forNamespace(namespace);
+    }
+    if (table != null) {
+      scan.forTable(table);
+    }
+    // TODO support filter?
+    System.out.println(json(databaseEmulator.scan(scan)));
+  }
+
   @Override
   public void run() {
     if (method.equals("get")) {
-      checkArgument(primaryKey != null, "primary key cannot be null");
-      Get get =
-          (clusteringKey != null)
-              ? new Get(new Key(values(primaryKey)), new Key(values(clusteringKey)))
-              : new Get(new Key(values(primaryKey)));
-      if (namespace != null) {
-        get.forNamespace(namespace);
-      }
-      if (table != null) {
-        get.forTable(table);
-      }
-      System.out.println(json(databaseEmulator.get(get)));
+      runGet();
     } else if (method.equals("delete")) {
-      checkArgument(primaryKey != null, "primary key cannot be null");
-      Delete delete =
-          (clusteringKey != null)
-              ? new Delete(new Key(values(primaryKey)), new Key(values(clusteringKey)))
-              : new Delete(new Key(values(clusteringKey)));
-      if (namespace != null) {
-        delete.forNamespace(namespace);
-      }
-      if (table != null) {
-        delete.forTable(table);
-      }
-      databaseEmulator.delete(delete);
+      runDelete();
     } else if (method.equals("put")) {
-      checkArgument(primaryKey != null, "primary key cannot be null");
-      checkArgument(value != null, "value cannot be null");
-      Put put =
-          (clusteringKey != null)
-              ? new Put(new Key(values(primaryKey)), new Key(values(clusteringKey)))
-              : new Put(new Key(values(primaryKey)));
-      if (namespace != null) {
-        put.forNamespace(namespace);
-      }
-      if (table != null) {
-        put.forTable(table);
-      }
-      put.withValues(values(value));
-      databaseEmulator.put(put);
+      runPut();
     } else if (method.equals("scan")) {
-      checkArgument(primaryKey != null, "primary key cannot be null");
-      Scan scan = new Scan(new Key(values(primaryKey)));
-      if (namespace != null) {
-        scan.forNamespace(namespace);
-      }
-      if (table != null) {
-        scan.forTable(table);
-      }
-      // TODO support filter?
-      System.out.println(json(databaseEmulator.scan(scan)));
+      runScan();
     }
   }
 }
