@@ -22,7 +22,6 @@ package com.scalar.client.tool.emulator.command;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.database.api.Delete;
 import com.scalar.database.api.Get;
@@ -35,9 +34,7 @@ import com.scalar.database.io.IntValue;
 import com.scalar.database.io.Key;
 import com.scalar.database.io.TextValue;
 import com.scalar.database.io.Value;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
-import com.scalar.ledger.ledger.Ledger;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -67,7 +64,7 @@ import picocli.CommandLine;
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",
     footer = "Usage example: 'database'.%n")
-public class Database extends AbstractCommand implements Runnable {
+public class Database implements Runnable {
   @CommandLine.Parameters(
       index = "0",
       paramLabel = "method",
@@ -104,18 +101,9 @@ public class Database extends AbstractCommand implements Runnable {
       description = "the table of the database")
   private String table;
 
-  private MutableDatabaseEmulator databaseEmulator;
+  @Inject private MutableDatabaseEmulator databaseEmulator;
 
-  @Inject
-  public Database(
-      MutableDatabaseEmulator databaseEmulator,
-      TerminalWrapper terminal,
-      ContractManagerEmulator contractManager,
-      TamperEvidentAssetbase assetbase,
-      Ledger ledger) {
-    super(terminal, contractManager, assetbase, ledger);
-    this.databaseEmulator = databaseEmulator;
-  }
+  public Database() {}
 
   @Override
   public void run() {
