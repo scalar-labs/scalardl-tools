@@ -39,7 +39,7 @@ import picocli.CommandLine;
     headerHeading = "%n@|bold,underline Usage|@:%n",
     synopsisHeading = "",
     descriptionHeading = "%n@|bold,underline Description|@:%n",
-    description = "<TBD>",
+    description = "Use this command to register user-defined functions (UDF)",
     parameterListHeading = "%n@|bold,underline Parameters|@:%n",
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",
