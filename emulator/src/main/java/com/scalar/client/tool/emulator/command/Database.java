@@ -29,6 +29,7 @@ import com.scalar.database.api.Put;
 import com.scalar.database.api.Result;
 import com.scalar.database.api.Scan;
 import com.scalar.database.io.BigIntValue;
+import com.scalar.database.io.BlobValue;
 import com.scalar.database.io.BooleanValue;
 import com.scalar.database.io.DoubleValue;
 import com.scalar.database.io.FloatValue;
@@ -39,6 +40,7 @@ import com.scalar.database.io.Value;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
@@ -248,6 +250,14 @@ public class Database implements Runnable {
                   break;
                 case "BooleanValue":
                   builder.add(key, ((BooleanValue) value).get());
+                  break;
+                case "BlobValue":
+                  builder.add(
+                      key,
+                      ((BlobValue) value)
+                          .get()
+                          .map(bytes -> Base64.getEncoder().encodeToString(bytes))
+                          .orElse(null));
                   break;
               }
             });
