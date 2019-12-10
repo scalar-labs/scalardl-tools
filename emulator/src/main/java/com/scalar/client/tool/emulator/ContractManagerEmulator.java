@@ -144,7 +144,7 @@ public class ContractManagerEmulator {
     if (contract == null) {
       try {
         ContractEntry entry = registry.lookup(id);
-        contract = hackContract(entry);
+        contract = emulateContract(entry);
         cache.put(id, contract);
       } catch (Exception e) {
         e.printStackTrace();
