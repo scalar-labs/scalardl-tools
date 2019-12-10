@@ -49,21 +49,26 @@ public class ContractManagerEmulator {
     }
   }
 
-  private ContractEntry toContractEntry(
-      String id, String name, byte[] contract, JsonObject properties) {
-    return new ContractEntry(
-        id,
-        name,
-        "holder_id",
-        1,
-        contract,
-        properties,
-        System.currentTimeMillis(),
-        "signature".getBytes());
-  }
-
   public ContractEntry get(ContractEntry.Key key) {
     return registry.lookup(key.getId());
+  }
+
+  public Contract getInstance(String id) {
+    Contract contract = cache.get(id);
+    if (contract == null) {
+      try {
+        ContractEntry entry = registry.lookup(id);
+        contract = emulateContract(entry);
+        cache.put(id, contract);
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
+    return contract;
+  }
+
+  public List<ContractEntry> scan() {
+    return registry.scan("emulator_user");
   }
 
   /** Thes method is used to delegate contract's invoke. */
@@ -78,6 +83,19 @@ public class ContractManagerEmulator {
       e.printStackTrace();
     }
     return Json.createObjectBuilder().build();
+  }
+
+  private ContractEntry toContractEntry(
+      String id, String name, byte[] contract, JsonObject properties) {
+    return new ContractEntry(
+        id,
+        name,
+        "holder_id",
+        1,
+        contract,
+        properties,
+        System.currentTimeMillis(),
+        "signature".getBytes());
   }
 
   private Contract emulateContract(ContractEntry entry) throws Exception {
@@ -112,23 +130,5 @@ public class ContractManagerEmulator {
     Method m = contract.getClass().getMethod("setHiddenManager", this.getClass());
     m.invoke(contract, this);
     return contract;
-  }
-
-  public Contract getInstance(String id) {
-    Contract contract = cache.get(id);
-    if (contract == null) {
-      try {
-        ContractEntry entry = registry.lookup(id);
-        contract = emulateContract(entry);
-        cache.put(id, contract);
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-    }
-    return contract;
-  }
-
-  public List<ContractEntry> scan() {
-    return registry.scan("emulator_user");
   }
 }
