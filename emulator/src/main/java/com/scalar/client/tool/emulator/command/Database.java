@@ -256,7 +256,7 @@ public class Database implements Runnable {
                       key,
                       ((BlobValue) value)
                           .get()
-                          .map(bytes -> Base64.getEncoder().encodeToString(bytes))
+                          .map(bytes -> "data:;base64," + Base64.getEncoder().encodeToString(bytes))
                           .orElse(null));
                   break;
               }
