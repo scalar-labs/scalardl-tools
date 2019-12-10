@@ -125,7 +125,7 @@ public class ContractManagerEmulator {
           .equals(
               "com.scalar.ledger.contract.Contract.invoke(java.lang.String,com.scalar.ledger.ledger.Ledger,javax.json.JsonObject)")) {
         CtMethod m = CtNewMethod.delegator(method, contractClass);
-        CtMethod invoke = emulatorClass.getDeclaredMethod("delegatedInvoke");
+        CtMethod invoke = emulatorClass.getDeclaredMethod("emulatedInvoke");
         m.setBody(invoke, null);
         m.setModifiers(Modifier.PRIVATE);
         contractClass.addMethod(m);
