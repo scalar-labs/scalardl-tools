@@ -188,17 +188,17 @@ public class Database implements Runnable {
       Map.Entry<String, JsonValue> entry = iterator.next();
       String key = entry.getKey();
       JsonValue value = entry.getValue();
-      switch (value.getValueType().name()) {
-        case "STRING":
+      switch (value.getValueType()) {
+        case STRING:
           values.add(new TextValue(key, ((JsonString) value).getString()));
           break;
-        case "TRUE":
+        case TRUE:
           values.add(new BooleanValue(key, true));
           break;
-        case "FALSE":
+        case FALSE:
           values.add(new BooleanValue(key, false));
           break;
-        case "NUMBER":
+        case NUMBER:
           JsonNumber n = (JsonNumber) value;
           if (n.isIntegral()) {
             values.add(new IntValue(key, n.intValue()));
@@ -206,11 +206,11 @@ public class Database implements Runnable {
             values.add(new DoubleValue(key, n.doubleValue()));
           }
           break;
-        case "NULL":
+        case NULL:
           values.add(new TextValue(key, (byte[]) null));
           break;
-        case "ARRAY":
-        case "OBJECT":
+        case ARRAY:
+        case OBJECT:
         default:
           break;
       }
