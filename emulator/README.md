@@ -88,7 +88,7 @@ Every command has a detailed help that can be displayed with `-h`. For example:
 scalar> execute -h
 
 Usage:
-execute [-h] [-fa=<functionArgument>] id argument...
+execute [-h] [-fa=<function argument>] id argument...
 
 Description:
 Execute a registered contract.
