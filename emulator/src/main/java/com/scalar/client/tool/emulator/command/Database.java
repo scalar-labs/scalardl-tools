@@ -206,8 +206,13 @@ public class Database implements Runnable {
             values.add(new DoubleValue(key, n.doubleValue()));
           }
           break;
+        case "NULL":
+          values.add(new TextValue(key, (byte[]) null));
+          break;
+        case "ARRAY":
+        case "OBJECT":
         default:
-          // TODO handle other types?
+          break;
       }
     }
 
