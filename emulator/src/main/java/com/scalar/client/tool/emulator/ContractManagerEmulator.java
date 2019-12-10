@@ -92,7 +92,7 @@ public class ContractManagerEmulator {
   }
 
   /** Thes method is used to delegate contract's invoke. */
-  protected JsonObject delegatedInvoke(String id, Ledger ledger, JsonObject argument) {
+  protected JsonObject emulatedInvoke(String id, Ledger ledger, JsonObject argument) {
     try {
       Field field = this.getClass().getField("that");
       Object o = field.get(this);
