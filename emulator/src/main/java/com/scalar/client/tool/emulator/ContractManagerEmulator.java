@@ -33,7 +33,6 @@ public class ContractManagerEmulator {
   public ContractManagerEmulator(ContractRegistry registry) {
     this.registry = registry;
     this.cache = new HashMap<String, Contract>();
-    removeContractClassInvokeMethodModifier();
     that = this;
   }
 
@@ -47,30 +46,6 @@ public class ContractManagerEmulator {
       register(toContractEntry(id, name, contract, properties));
     } catch (IOException e) {
       throw new RegistryIOException("could not register contract " + id);
-    }
-  }
-
-  /**
-   * invoke(id, ledger, argument) in Contract class has modifier `final`. To override it for
-   * registered contracts, we need to reset the modifier.
-   */
-  private void removeContractClassInvokeMethodModifier() {
-    ClassPool pool = ClassPool.getDefault();
-    try {
-      CtClass clazz = pool.get("com.scalar.ledger.contract.Contract");
-      for (CtMethod method : clazz.getMethods()) {
-        if (method
-            .getLongName()
-            .equals(
-                "com.scalar.ledger.contract.Contract.invoke(java.lang.String,com.scalar.ledger.ledger.Ledger,javax.json.JsonObject)")) {
-          method.setModifiers(Modifier.PUBLIC);
-          break;
-        }
-      }
-      clazz.toClass();
-      clazz.defrost();
-    } catch (Exception e) {
-      e.printStackTrace();
     }
   }
 
