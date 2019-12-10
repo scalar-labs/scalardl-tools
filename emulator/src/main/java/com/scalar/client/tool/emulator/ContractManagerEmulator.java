@@ -105,7 +105,7 @@ public class ContractManagerEmulator {
     return Json.createObjectBuilder().build();
   }
 
-  private Contract hackContract(ContractEntry entry) throws Exception {
+  private Contract emulateContract(ContractEntry entry) throws Exception {
     ClassPool pool = ClassPool.getDefault();
     pool.insertClassPath(new ByteArrayClassPath(entry.getBinaryName(), entry.getByteCode()));
     CtClass contractClass = pool.get(entry.getBinaryName());
