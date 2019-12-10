@@ -28,8 +28,10 @@ import com.scalar.database.api.Get;
 import com.scalar.database.api.Put;
 import com.scalar.database.api.Result;
 import com.scalar.database.api.Scan;
+import com.scalar.database.io.BigIntValue;
 import com.scalar.database.io.BooleanValue;
 import com.scalar.database.io.DoubleValue;
+import com.scalar.database.io.FloatValue;
 import com.scalar.database.io.IntValue;
 import com.scalar.database.io.Key;
 import com.scalar.database.io.TextValue;
@@ -235,14 +237,18 @@ public class Database implements Runnable {
                 case "IntValue":
                   builder.add(key, ((IntValue) value).get());
                   break;
+                case "BigIntValue":
+                  builder.add(key, ((BigIntValue) value).get());
+                  break;
+                case "FloatValue":
+                  builder.add(key, ((FloatValue) value).get());
+                  break;
                 case "DoubleValue":
                   builder.add(key, ((DoubleValue) value).get());
                   break;
                 case "BooleanValue":
                   builder.add(key, ((BooleanValue) value).get());
                   break;
-                default:
-                  // TODO handle other types?
               }
             });
 
