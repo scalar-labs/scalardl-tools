@@ -37,9 +37,7 @@ import com.scalar.database.io.Value;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import java.io.StringReader;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import javax.inject.Inject;
 import javax.json.Json;
@@ -183,66 +181,70 @@ public class Database implements Runnable {
     JsonReader reader = Json.createReader(new StringReader(json));
     JsonObject object = reader.readObject();
 
-    Iterator<Map.Entry<String, JsonValue>> iterator = object.entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<String, JsonValue> entry = iterator.next();
-      String key = entry.getKey();
-      JsonValue value = entry.getValue();
-      switch (value.getValueType()) {
-        case STRING:
-          values.add(new TextValue(key, ((JsonString) value).getString()));
-          break;
-        case TRUE:
-          values.add(new BooleanValue(key, true));
-          break;
-        case FALSE:
-          values.add(new BooleanValue(key, false));
-          break;
-        case NUMBER:
-          JsonNumber n = (JsonNumber) value;
-          if (n.isIntegral()) {
-            values.add(new IntValue(key, n.intValue()));
-          } else {
-            values.add(new DoubleValue(key, n.doubleValue()));
-          }
-          break;
-        case NULL:
-          values.add(new TextValue(key, (byte[]) null));
-          break;
-        case ARRAY:
-        case OBJECT:
-        default:
-          break;
-      }
-    }
+    object
+        .entrySet()
+        .forEach(
+            entry -> {
+              String key = entry.getKey();
+              JsonValue value = entry.getValue();
+              switch (value.getValueType()) {
+                case STRING:
+                  values.add(new TextValue(key, ((JsonString) value).getString()));
+                  break;
+                case TRUE:
+                  values.add(new BooleanValue(key, true));
+                  break;
+                case FALSE:
+                  values.add(new BooleanValue(key, false));
+                  break;
+                case NUMBER:
+                  JsonNumber n = (JsonNumber) value;
+                  if (n.isIntegral()) {
+                    values.add(new IntValue(key, n.intValue()));
+                  } else {
+                    values.add(new DoubleValue(key, n.doubleValue()));
+                  }
+                  break;
+                case NULL:
+                  values.add(new TextValue(key, (byte[]) null));
+                  break;
+                case ARRAY:
+                case OBJECT:
+                default:
+                  break;
+              }
+            });
 
     return values;
   }
 
   private JsonObject json(Result result) {
     JsonObjectBuilder builder = Json.createObjectBuilder();
-    Iterator<Map.Entry<String, Value>> iterator = result.getValues().entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<String, Value> entry = iterator.next();
-      String key = entry.getKey();
-      Value value = entry.getValue();
-      switch (value.getClass().getSimpleName()) {
-        case "TextValue":
-          builder.add(key, ((TextValue) value).getString().get());
-          break;
-        case "IntValue":
-          builder.add(key, ((IntValue) value).get());
-          break;
-        case "DoubleValue":
-          builder.add(key, ((DoubleValue) value).get());
-          break;
-        case "BooleanValue":
-          builder.add(key, ((BooleanValue) value).get());
-          break;
-        default:
-          // TODO handle other types?
-      }
-    }
+
+    result
+        .getValues()
+        .entrySet()
+        .forEach(
+            entry -> {
+              String key = entry.getKey();
+              Value value = entry.getValue();
+              switch (value.getClass().getSimpleName()) {
+                case "TextValue":
+                  builder.add(key, ((TextValue) value).getString().get());
+                  break;
+                case "IntValue":
+                  builder.add(key, ((IntValue) value).get());
+                  break;
+                case "DoubleValue":
+                  builder.add(key, ((DoubleValue) value).get());
+                  break;
+                case "BooleanValue":
+                  builder.add(key, ((BooleanValue) value).get());
+                  break;
+                default:
+                  // TODO handle other types?
+              }
+            });
 
     return builder.build();
   }
@@ -253,9 +255,8 @@ public class Database implements Runnable {
 
   private String json(List<Result> results) {
     JsonArrayBuilder array = Json.createArrayBuilder();
-    for (Result result : results) {
-      array.add(json(result));
-    }
+
+    results.forEach(result -> array.add(json(result)));
 
     return array.build().toString();
   }
