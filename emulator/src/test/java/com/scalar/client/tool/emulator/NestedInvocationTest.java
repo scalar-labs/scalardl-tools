@@ -20,7 +20,7 @@
  */
 package com.scalar.client.tool.emulator;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
@@ -71,8 +71,11 @@ public class NestedInvocationTest {
     JsonObject argument =
         Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
 
+    // Action
+    JsonObject result = contract.invoke(ledger, argument, Optional.empty());
+
     // Act assert
-    assertThatCode(() -> contract.invoke(ledger, argument, Optional.empty()))
-        .doesNotThrowAnyException();
+    assertThat(result.getBoolean("caller_is_called")).isTrue();
+    assertThat(result.getBoolean("callee_is_called")).isTrue();
   }
 }

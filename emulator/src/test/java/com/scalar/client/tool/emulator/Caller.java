@@ -25,6 +25,7 @@ import com.scalar.ledger.ledger.Ledger;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
 
 public class Caller extends Contract {
   private static final String CONTRACT_ID_ATTRIBUTE_NAME = "contract_id";
@@ -33,6 +34,11 @@ public class Caller extends Contract {
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
     String contractId = argument.getString(CONTRACT_ID_ATTRIBUTE_NAME);
 
-    return invoke(contractId, ledger, Json.createObjectBuilder().build());
+    JsonObject resultFromCallee = invoke(contractId, ledger, Json.createObjectBuilder().build());
+
+    JsonObjectBuilder builder = Json.createObjectBuilder(resultFromCallee);
+    builder.add("caller_is_called", true);
+
+    return builder.build();
   }
 }
