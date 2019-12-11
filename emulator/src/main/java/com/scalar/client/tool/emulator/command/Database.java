@@ -282,7 +282,6 @@ public class Database implements Runnable {
 
   private String json(List<Result> results) {
     JsonArrayBuilder array = Json.createArrayBuilder();
-
     results.forEach(result -> array.add(json(result)));
 
     return array.build().toString();
