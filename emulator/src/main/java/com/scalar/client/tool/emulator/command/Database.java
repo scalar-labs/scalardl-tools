@@ -105,9 +105,12 @@ public class Database implements Runnable {
 
   private MutableDatabaseEmulator databaseEmulator;
 
+  private TerminalWrapper terminal;
+
   @Inject
-  public Database(MutableDatabaseEmulator databaseEmulator) {
+  public Database(MutableDatabaseEmulator databaseEmulator, TerminalWrapper terminal) {
     this.databaseEmulator = databaseEmulator;
+    this.terminal = terminal;
   }
 
   @Override
@@ -128,7 +131,7 @@ public class Database implements Runnable {
           break;
       }
     } catch (IllegalArgumentException e) {
-      System.out.println(e.getMessage());
+      terminal.println(e.getMessage());
     }
   }
 
@@ -144,7 +147,7 @@ public class Database implements Runnable {
     if (table != null) {
       get.forTable(table);
     }
-    System.out.println(json(databaseEmulator.get(get)));
+    terminal.println(json(databaseEmulator.get(get)));
   }
 
   private void runDelete() {
@@ -189,7 +192,7 @@ public class Database implements Runnable {
       scan.forTable(table);
     }
     // TODO support filter?
-    System.out.println(json(databaseEmulator.scan(scan)));
+    terminal.println(json(databaseEmulator.scan(scan)));
   }
 
   private List<Value> values(String json) throws IllegalArgumentException {

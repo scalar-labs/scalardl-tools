@@ -20,10 +20,10 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.database.api.Delete;
 import com.scalar.database.api.Get;
 import com.scalar.database.api.Put;
@@ -35,8 +35,6 @@ import com.scalar.database.io.TextValue;
 import com.scalar.database.io.Value;
 import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.emulator.MutableDatabaseResult;
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,14 +48,13 @@ import picocli.CommandLine;
 
 public class DatabaseTest {
   @Mock private MutableDatabaseEmulator backend;
+  @Mock private TerminalWrapper terminal;
   private Database database;
-  private ByteArrayOutputStream stubbedStdOut = new ByteArrayOutputStream();
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    database = new Database(backend);
-    System.setOut(new PrintStream(stubbedStdOut));
+    database = new Database(backend, terminal);
   }
 
   @Test
@@ -75,8 +72,8 @@ public class DatabaseTest {
     CommandLine.run(database, "get", "-p {\"partition\":\"p\"}");
 
     // Assert
-    String expected = "{\"value\":\"bar\"}\n";
-    assertThat(stubbedStdOut.toString()).isEqualTo(expected);
+    String expected = "{\"value\":\"bar\"}";
+    verify(terminal).println(expected);
   }
 
   @Test
@@ -95,8 +92,8 @@ public class DatabaseTest {
     CommandLine.run(database, "get", "-p {\"partition\":\"p\"}", "-c {\"clustering\":\"c\"}");
 
     // Assert
-    String expected = "{\"value\":\"bar\"}\n";
-    assertThat(stubbedStdOut.toString()).isEqualTo(expected);
+    String expected = "{\"value\":\"bar\"}";
+    verify(terminal).println(expected);
   }
 
   @Test
@@ -174,8 +171,8 @@ public class DatabaseTest {
     CommandLine.run(database, "scan", "-p {\"partition\":\"p\"}");
 
     // Assert
-    String expected = "[{\"value\":\"bar\"}]\n";
-    assertThat(stubbedStdOut.toString()).isEqualTo(expected);
+    String expected = "[{\"value\":\"bar\"}]";
+    verify(terminal).println(expected);
   }
 
   @Test
@@ -186,8 +183,8 @@ public class DatabaseTest {
     CommandLine.run(database, "get", "-p {\"partition\":{\"nested\":\"p\"}}");
 
     // Assert
-    String expected = "Structured data is not supported\n";
-    assertThat(stubbedStdOut.toString()).isEqualTo(expected);
+    String expected = "Structured data is not supported";
+    verify(terminal).println(expected);
   }
 
   @Test
@@ -206,7 +203,7 @@ public class DatabaseTest {
     CommandLine.run(database, "get", "-p {\"partition\":\"p\"}");
 
     // Assert
-    String expected = "{\"value\":\"data:;base64,YmFy\"}\n";
-    assertThat(stubbedStdOut.toString()).isEqualTo(expected);
+    String expected = "{\"value\":\"data:;base64,YmFy\"}";
+    verify(terminal).println(expected);
   }
 }
