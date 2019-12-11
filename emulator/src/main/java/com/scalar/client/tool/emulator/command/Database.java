@@ -152,7 +152,7 @@ public class Database implements Runnable {
     Delete delete =
         (clusteringKey != null)
             ? new Delete(new Key(values(primaryKey)), new Key(values(clusteringKey)))
-            : new Delete(new Key(values(clusteringKey)));
+            : new Delete(new Key(values(primaryKey)));
     if (namespace != null) {
       delete.forNamespace(namespace);
     }
