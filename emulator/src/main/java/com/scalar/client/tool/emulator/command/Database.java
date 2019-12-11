@@ -109,14 +109,23 @@ public class Database implements Runnable {
 
   @Override
   public void run() {
-    if (method.equals("get")) {
-      runGet();
-    } else if (method.equals("delete")) {
-      runDelete();
-    } else if (method.equals("put")) {
-      runPut();
-    } else if (method.equals("scan")) {
-      runScan();
+    try {
+      switch (method) {
+        case "get":
+          runGet();
+          break;
+        case "delete":
+          runDelete();
+          break;
+        case "put":
+          runPut();
+          break;
+        case "scan":
+          runScan();
+          break;
+      }
+    } catch (IllegalArgumentException e) {
+      System.out.println(e.getMessage());
     }
   }
 
@@ -180,7 +189,7 @@ public class Database implements Runnable {
     System.out.println(json(databaseEmulator.scan(scan)));
   }
 
-  private List<Value> values(String json) {
+  private List<Value> values(String json) throws IllegalArgumentException {
     List<Value> values = new ArrayList<Value>();
     JsonReader reader = Json.createReader(new StringReader(json));
     JsonObject object = reader.readObject();
@@ -214,8 +223,7 @@ public class Database implements Runnable {
                   break;
                 case ARRAY:
                 case OBJECT:
-                default:
-                  break;
+                  throw new IllegalArgumentException("Structured data is not supported");
               }
             });
 
