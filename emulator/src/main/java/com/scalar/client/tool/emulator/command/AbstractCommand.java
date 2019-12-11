@@ -86,6 +86,14 @@ public abstract class AbstractCommand implements Runnable {
     return new ContractEntry.Key(id, new CertificateEntry.Key("emulator_user", 0));
   }
 
+  JsonObject convertJsonParameter(String text) {
+    if (text == null) {
+      return null;
+    }
+    JsonReader reader = Json.createReader(new StringReader(text));
+    return reader.readObject();
+  }
+
   JsonObject convertJsonParameter(List<String> values) {
     String text = values.stream().reduce("", (a, b) -> a = a + " " + b);
     try {
@@ -93,8 +101,7 @@ public abstract class AbstractCommand implements Runnable {
         text = new String(Files.readAllBytes(new File(text).toPath()));
       }
 
-      JsonReader reader = Json.createReader(new StringReader(text));
-      return reader.readObject();
+      return convertJsonParameter(text);
     } catch (IOException e) {
       terminal.println("Error parsing json parameter: " + text);
       terminal.println(e.toString());

@@ -27,16 +27,12 @@ import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
 import com.scalar.ledger.udf.Function;
 import com.scalar.ledger.udf.UdfManager;
-import java.io.StringReader;
 import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
-import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
-import javax.json.JsonReader;
 import javax.json.JsonString;
-import javax.json.JsonValue;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -92,20 +88,17 @@ public class Execute extends AbstractCommand {
       executeContract(toKey(id), json);
     }
 
-    JsonObject functionArgumentObject = null;
-    if (functionArgument != null) {
-      JsonReader jsonReader = Json.createReader(new StringReader(functionArgument));
-      functionArgumentObject = jsonReader.readObject();
-      jsonReader.close();
-    }
-
     JsonArray udfs = json.getJsonArray("_functions_");
     if (udfs != null) {
-      for (JsonValue udf : udfs) {
-        String id = ((JsonString) udf).getString();
-        Function f = udfManager.getInstance(id);
-        f.invoke(databaseEmulator, json, Optional.ofNullable(functionArgumentObject));
-      }
+      udfs.forEach(
+          udf -> {
+            String id = ((JsonString) udf).getString();
+            Function f = udfManager.getInstance(id);
+            f.invoke(
+                databaseEmulator,
+                json,
+                Optional.ofNullable(convertJsonParameter(functionArgument)));
+          });
     }
   }
 }
