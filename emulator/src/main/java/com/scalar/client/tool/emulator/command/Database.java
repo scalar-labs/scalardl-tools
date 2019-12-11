@@ -103,9 +103,12 @@ public class Database implements Runnable {
       description = "the table of the database")
   private String table;
 
-  @Inject private MutableDatabaseEmulator databaseEmulator;
+  private MutableDatabaseEmulator databaseEmulator;
 
-  public Database() {}
+  @Inject
+  public Database(MutableDatabaseEmulator databaseEmulator) {
+    this.databaseEmulator = databaseEmulator;
+  }
 
   @Override
   public void run() {
