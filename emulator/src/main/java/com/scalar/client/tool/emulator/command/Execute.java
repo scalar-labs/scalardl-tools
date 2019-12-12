@@ -68,17 +68,21 @@ public class Execute extends AbstractCommand {
       description = "the argument passed to UDF")
   private String functionArgument;
 
-  @Inject private MutableDatabaseEmulator databaseEmulator;
+  private MutableDatabaseEmulator databaseEmulator;
 
-  @Inject private UdfManager udfManager;
+  private UdfManager udfManager;
 
   @Inject
   public Execute(
       TerminalWrapper terminal,
       ContractManagerEmulator contractManager,
       TamperEvidentAssetbase assetbase,
-      Ledger ledger) {
+      Ledger ledger,
+      UdfManager udfManager,
+      MutableDatabaseEmulator databaseEmulator) {
     super(terminal, contractManager, assetbase, ledger);
+    this.databaseEmulator = databaseEmulator;
+    this.udfManager = udfManager;
   }
 
   @Override
