@@ -57,9 +57,12 @@ public class RegisterFunction implements Runnable {
   @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
   private File udfFile;
 
-  @Inject private UdfManager udfManager;
+  private UdfManager udfManager;
 
-  public RegisterFunction() {}
+  @Inject
+  public RegisterFunction(UdfManager udfManager) {
+    this.udfManager = udfManager;
+  }
 
   @Override
   public void run() {
@@ -72,7 +75,7 @@ public class RegisterFunction implements Runnable {
       long registeredAt = System.currentTimeMillis();
       udfManager.register(new UdfEntry(id, name, bytes, registeredAt));
     } catch (IOException e) {
-      throw new RegistryIOException("could not register udf" + id);
+      throw new RegistryIOException("could not register udf " + id);
     }
   }
 }
