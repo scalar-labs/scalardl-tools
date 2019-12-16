@@ -20,25 +20,31 @@
  */
 package com.scalar.client.tool.emulator;
 
-import com.scalar.ledger.contract.Contract;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.ledger.database.UdfRegistry;
+import com.scalar.ledger.udf.UdfEntry;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
-import javax.json.Json;
-import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
 
-public class Caller extends Contract {
-  private static final String CONTRACT_ID_ATTRIBUTE_NAME = "contract_id";
+class UdfRegistryEmulator implements UdfRegistry {
+  private final Map<String, UdfEntry> udfs;
+
+  public UdfRegistryEmulator() {
+    udfs = new LinkedHashMap<String, UdfEntry>();
+  }
 
   @Override
-  public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
-    String contractId = argument.getString(CONTRACT_ID_ATTRIBUTE_NAME);
+  public void bind(UdfEntry udfEntry) {
+    udfs.put(udfEntry.getId(), udfEntry);
+  }
 
-    JsonObject resultFromCallee = invoke(contractId, ledger, Json.createObjectBuilder().build());
+  @Override
+  public Optional<UdfEntry> lookup(String id) {
+    return Optional.ofNullable(udfs.get(id));
+  }
 
-    JsonObjectBuilder builder = Json.createObjectBuilder(resultFromCallee);
-    builder.add("caller_is_called", true);
-
-    return builder.build();
+  @Override
+  public void unbind(String id) {
+    udfs.remove(id);
   }
 }

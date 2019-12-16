@@ -20,46 +20,62 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import com.scalar.client.tool.emulator.ContractManagerEmulator;
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.ledger.exception.RegistryIOException;
+import com.scalar.ledger.udf.UdfEntry;
+import com.scalar.ledger.udf.UdfManager;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import javax.inject.Inject;
-import javax.json.Json;
 import picocli.CommandLine;
 
 @CommandLine.Command(
-    name = "get",
+    name = "register-function",
     sortOptions = false,
     usageHelpWidth = TerminalWrapper.USAGE_HELP_WIDTH,
     headerHeading = "%n@|bold,underline Usage|@:%n",
     synopsisHeading = "",
     descriptionHeading = "%n@|bold,underline Description|@:%n",
-    description =
-        "Execute the get contract using simplified parameter format. This command is equivalent to 'execute get'.",
+    description = "Use this command to register user-defined functions (UDF)",
     parameterListHeading = "%n@|bold,underline Parameters|@:%n",
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",
-    footer = "Usage example: 'get foo'.%n")
-public class Get extends AbstractCommand {
-
+    footer = "Usage example: 'register-function'.%n")
+public class RegisterFunction implements Runnable {
   @CommandLine.Parameters(
       index = "0",
-      paramLabel = "asset_id",
-      description = "the asset id of the object stored on the Ledger. For example: 'foo'")
-  private String assetId;
+      paramLabel = "id",
+      description = "id that will be used when executing the udf")
+  private String id;
+
+  @CommandLine.Parameters(index = "1", paramLabel = "name", description = "udf canonical name")
+  private String name;
+
+  @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
+  private File udfFile;
+
+  private UdfManager udfManager;
 
   @Inject
-  public Get(
-      TerminalWrapper terminal,
-      ContractManagerEmulator contractManager,
-      TamperEvidentAssetbase assetbase,
-      Ledger ledger) {
-    super(terminal, contractManager, assetbase, ledger);
+  public RegisterFunction(UdfManager udfManager) {
+    this.udfManager = udfManager;
   }
 
   @Override
   public void run() {
-    executeContract(toKey("get"), Json.createObjectBuilder().add("asset_id", assetId).build());
+    checkArgument(id != null, "id cannot be null");
+    checkArgument(name != null, "name cannot be null");
+    checkArgument(udfFile != null, "udfFile cannot be null");
+
+    try {
+      byte[] bytes = Files.readAllBytes(udfFile.toPath());
+      long registeredAt = System.currentTimeMillis();
+      udfManager.register(new UdfEntry(id, name, bytes, registeredAt));
+    } catch (IOException e) {
+      throw new RegistryIOException("could not register udf " + id);
+    }
   }
 }

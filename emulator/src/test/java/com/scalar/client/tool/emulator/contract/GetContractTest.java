@@ -23,7 +23,7 @@ package com.scalar.client.tool.emulator.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
 import com.scalar.ledger.exception.ContractContextException;
 import com.scalar.ledger.ledger.AssetLedger;
@@ -37,7 +37,7 @@ public class GetContractTest {
   private static final String ASSET_ID = "X";
   private PutContract put = new PutContract();
   private GetContract get = new GetContract();
-  private TransactionalAssetbase assetbase = new AssetbaseEmulator();
+  private TamperEvidentAssetbase assetbase = new AssetbaseEmulator();
   private Ledger ledger = new AssetLedger(assetbase);
 
   private void addAssetToLedger() {

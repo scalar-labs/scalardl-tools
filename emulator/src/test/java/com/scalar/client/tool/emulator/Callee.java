@@ -29,6 +29,6 @@ import javax.json.JsonObject;
 public class Callee extends Contract {
   @Override
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
-    return Json.createObjectBuilder().add("called", true).build();
+    return Json.createObjectBuilder().add("callee_is_called", true).build();
   }
 }

@@ -24,6 +24,7 @@ import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.scalar.client.tool.emulator.command.CommandExceptionHandler;
+import com.scalar.client.tool.emulator.command.Database;
 import com.scalar.client.tool.emulator.command.Execute;
 import com.scalar.client.tool.emulator.command.Get;
 import com.scalar.client.tool.emulator.command.GetWithSingleParameter;
@@ -31,6 +32,7 @@ import com.scalar.client.tool.emulator.command.ListContracts;
 import com.scalar.client.tool.emulator.command.Put;
 import com.scalar.client.tool.emulator.command.PutWithSingleParameter;
 import com.scalar.client.tool.emulator.command.Register;
+import com.scalar.client.tool.emulator.command.RegisterFunction;
 import com.scalar.client.tool.emulator.command.Scan;
 import com.scalar.client.tool.emulator.command.ScanWithSingleParameter;
 import java.io.File;
@@ -58,7 +60,7 @@ import picocli.CommandLine;
 public class EmulatorTerminal implements Runnable {
   private static List<CommandLine> commands;
   private TerminalWrapper terminal;
-  private ContractManagerWrapper contractManager;
+  private ContractManagerEmulator contractManager;
   private boolean shouldExit;
 
   @CommandLine.Option(
@@ -75,7 +77,7 @@ public class EmulatorTerminal implements Runnable {
   private boolean help;
 
   @Inject
-  public EmulatorTerminal(TerminalWrapper terminal, ContractManagerWrapper contractManager) {
+  public EmulatorTerminal(TerminalWrapper terminal, ContractManagerEmulator contractManager) {
     this.terminal = terminal;
     this.contractManager = contractManager;
 
@@ -93,9 +95,11 @@ public class EmulatorTerminal implements Runnable {
             new CommandLine(injector.getInstance(ListContracts.class)),
             new CommandLine(injector.getInstance(PutWithSingleParameter.class)),
             new CommandLine(injector.getInstance(Put.class)),
+            new CommandLine(injector.getInstance(RegisterFunction.class)),
             new CommandLine(injector.getInstance(Register.class)),
             new CommandLine(injector.getInstance(ScanWithSingleParameter.class)),
-            new CommandLine(injector.getInstance(Scan.class)));
+            new CommandLine(injector.getInstance(Scan.class)),
+            new CommandLine(injector.getInstance(Database.class)));
 
     CommandLine.run(injector.getInstance(EmulatorTerminal.class), args);
   }
@@ -184,8 +188,7 @@ public class EmulatorTerminal implements Runnable {
 
   private void printHelp() {
     terminal.println("Available commands:");
-    commands
-        .stream()
+    commands.stream()
         .map(CommandLine::getCommandName)
         .sorted(String::compareToIgnoreCase)
         .forEach(commandName -> terminal.println(" - " + commandName));

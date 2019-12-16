@@ -20,12 +20,12 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
 import com.scalar.ledger.crypto.CertificateEntry;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
 import com.scalar.ledger.ledger.Ledger;
 import java.io.File;
 import java.io.IOException;
@@ -45,8 +45,8 @@ import picocli.CommandLine;
 
 public abstract class AbstractCommand implements Runnable {
   TerminalWrapper terminal;
-  ContractManagerWrapper contractManager;
-  TransactionalAssetbase assetbase;
+  ContractManagerEmulator contractManager;
+  TamperEvidentAssetbase assetbase;
   Ledger ledger;
 
   @CommandLine.Option(
@@ -57,8 +57,8 @@ public abstract class AbstractCommand implements Runnable {
 
   public AbstractCommand(
       TerminalWrapper terminal,
-      ContractManagerWrapper contractManager,
-      TransactionalAssetbase assetbase,
+      ContractManagerEmulator contractManager,
+      TamperEvidentAssetbase assetbase,
       Ledger ledger) {
     this.terminal = terminal;
     this.contractManager = contractManager;
@@ -67,7 +67,7 @@ public abstract class AbstractCommand implements Runnable {
   }
 
   void executeContract(ContractEntry.Key key, JsonObject argument) {
-    Contract contract = contractManager.getInstance(key);
+    Contract contract = contractManager.getInstance(key.getId());
     JsonObject response =
         contract.invoke(this.ledger, argument, contractManager.get(key).getProperties());
     this.assetbase.commit();
@@ -86,6 +86,14 @@ public abstract class AbstractCommand implements Runnable {
     return new ContractEntry.Key(id, new CertificateEntry.Key("emulator_user", 0));
   }
 
+  JsonObject convertJsonParameter(String text) {
+    if (text == null) {
+      return null;
+    }
+    JsonReader reader = Json.createReader(new StringReader(text));
+    return reader.readObject();
+  }
+
   JsonObject convertJsonParameter(List<String> values) {
     String text = values.stream().reduce("", (a, b) -> a = a + " " + b);
     try {
@@ -93,8 +101,7 @@ public abstract class AbstractCommand implements Runnable {
         text = new String(Files.readAllBytes(new File(text).toPath()));
       }
 
-      JsonReader reader = Json.createReader(new StringReader(text));
-      return reader.readObject();
+      return convertJsonParameter(text);
     } catch (IOException e) {
       terminal.println("Error parsing json parameter: " + text);
       terminal.println(e.toString());

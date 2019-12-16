@@ -23,13 +23,16 @@ package com.scalar.client.tool.emulator.command;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.contract.Contract;
 import com.scalar.ledger.contract.ContractEntry;
 import com.scalar.ledger.crypto.CertificateEntry;
 import com.scalar.ledger.emulator.AssetbaseEmulator;
+import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
+import com.scalar.ledger.udf.Function;
+import com.scalar.ledger.udf.UdfManager;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -44,16 +47,18 @@ public class ExecuteTest {
   private Execute execute;
   private AssetbaseEmulator assetbase;
   @Mock private Contract contract;
-  @Mock private ContractManagerWrapper contractManager;
+  @Mock private Function function;
+  @Mock private ContractManagerEmulator contractManager;
   @Mock private Ledger ledger;
   @Mock private TerminalWrapper terminal;
-  private ContractEntry entry;
+  @Mock private UdfManager udfManager;
+  @Mock private MutableDatabaseEmulator database;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     assetbase = new AssetbaseEmulator();
-    execute = new Execute(terminal, contractManager, assetbase, ledger);
+    execute = new Execute(terminal, contractManager, assetbase, ledger, udfManager, database);
   }
 
   @Test
@@ -62,7 +67,7 @@ public class ExecuteTest {
     JsonObject argument = Json.createObjectBuilder().add("x", "y").build();
     ContractEntry.Key key =
         new ContractEntry.Key(CONTRACT_ID, new CertificateEntry.Key("emulator_user", 0));
-    entry =
+    ContractEntry entry =
         new ContractEntry(
             "id",
             "binaryName",
@@ -73,7 +78,7 @@ public class ExecuteTest {
             1,
             "signature".getBytes());
     when(contractManager.get(key)).thenReturn(entry);
-    when(contractManager.getInstance(key)).thenReturn(contract);
+    when(contractManager.getInstance(key.getId())).thenReturn(contract);
     when(contract.invoke(ledger, argument, Optional.empty())).thenReturn(null);
 
     // Act
@@ -81,5 +86,69 @@ public class ExecuteTest {
 
     // Assert
     verify(contract).invoke(ledger, argument, Optional.empty());
+  }
+
+  @Test
+  public void run_ExecuteContractWithUdf_ShouldSucceed() {
+    // Arrange
+    JsonObject contractArgument =
+        Json.createObjectBuilder()
+            .add("_functions_", Json.createArrayBuilder().add("udf_foo"))
+            .build();
+    JsonObject functionArgument = Json.createObjectBuilder().add("foo", "bar").build();
+    ContractEntry.Key key =
+        new ContractEntry.Key(CONTRACT_ID, new CertificateEntry.Key("emulator_user", 0));
+    ContractEntry entry =
+        new ContractEntry(
+            "id",
+            "binaryName",
+            "cert_holder_id",
+            1,
+            "contract".getBytes(),
+            null,
+            1,
+            "signature".getBytes());
+    when(contractManager.get(key)).thenReturn(entry);
+    when(contractManager.getInstance(key.getId())).thenReturn(contract);
+    when(udfManager.getInstance("udf_foo")).thenReturn(function);
+
+    // Act
+    CommandLine.run(
+        execute, CONTRACT_ID, contractArgument.toString(), "-fa=" + functionArgument.toString());
+
+    // Assert
+    verify(contract).invoke(ledger, contractArgument, Optional.empty());
+    verify(function).invoke(database, contractArgument, Optional.of(functionArgument));
+  }
+
+  @Test
+  public void run_ExecuteContractWithUdfNoArgument_ShouldSucceed() {
+    // Arrange
+    JsonObject contractArgument =
+        Json.createObjectBuilder()
+            .add("_functions_", Json.createArrayBuilder().add("udf_foo"))
+            .build();
+    ContractEntry.Key key =
+        new ContractEntry.Key(CONTRACT_ID, new CertificateEntry.Key("emulator_user", 0));
+    ContractEntry entry =
+        new ContractEntry(
+            "id",
+            "binaryName",
+            "cert_holder_id",
+            1,
+            "contract".getBytes(),
+            null,
+            1,
+            "signature".getBytes());
+    when(contractManager.get(key)).thenReturn(entry);
+    when(contractManager.getInstance(key.getId())).thenReturn(contract);
+    when(udfManager.getInstance("udf_foo")).thenReturn(function);
+
+    // Act
+    CommandLine.run(execute, CONTRACT_ID, contractArgument.toString());
+
+    // Assert
+    verify(contract).invoke(ledger, contractArgument, Optional.empty());
+    verify(function).invoke(database, contractArgument, Optional.empty());
   }
 }

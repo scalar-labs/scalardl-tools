@@ -34,7 +34,7 @@ Exit the emulator with `exit` or by ctrl-d (EOF).
 ## Preregistered contracts
 
  There are three predefined and preregistered contracts, with corresponding commands, to `put`, `get`, and `scan` assets. These contracts may be found in the `contract` subdirectory
- 
+
  ```
  src/main/java/com/scalar/client/tool/emulator/contract
  ```
@@ -42,7 +42,7 @@ Exit the emulator with `exit` or by ctrl-d (EOF).
 ## Register a contract
 
 Write a contract and save it in the `contract` subdirectory
- 
+
  ```
  src/main/java/com/scalar/client/tool/emulator/contract
  ```
@@ -66,6 +66,7 @@ Type `help` to display the list of available commands inside the interactive ter
 ```
 scalar> help
 Available commands:
+ - database
  - execute
  - get
  - get -j
@@ -73,6 +74,7 @@ Available commands:
  - put
  - put -j
  - register
+ - register-function
  - scan
  - scan -j
  - help
@@ -86,7 +88,7 @@ Every command has a detailed help that can be displayed with `-h`. For example:
 scalar> execute -h
 
 Usage:
-execute [-h] id argument...
+execute [-h] [-fa=<function argument>] id argument...
 
 Description:
 Execute a registered contract.
@@ -97,6 +99,8 @@ Parameters:
 
 Options:
   -h, --help        print the help and exit
+    -fa, --function_argument=<functionArgument>
+        the argument passed to UDF
 
 For example: 'execute get {"asset_id": "foo"}'
 ```

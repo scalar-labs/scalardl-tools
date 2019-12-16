@@ -20,13 +20,19 @@
  */
 package com.scalar.client.tool.emulator.command;
 
-import com.scalar.client.tool.emulator.ContractManagerWrapper;
+import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TransactionalAssetbase;
+import com.scalar.ledger.database.TamperEvidentAssetbase;
+import com.scalar.ledger.emulator.MutableDatabaseEmulator;
 import com.scalar.ledger.ledger.Ledger;
+import com.scalar.ledger.udf.Function;
+import com.scalar.ledger.udf.UdfManager;
 import java.util.List;
+import java.util.Optional;
 import javax.inject.Inject;
+import javax.json.JsonArray;
 import javax.json.JsonObject;
+import javax.json.JsonString;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -57,13 +63,26 @@ public class Execute extends AbstractCommand {
           "the JSON contract argument. A plain text JSON object or the path to a file containing a JSON object")
   private List<String> argument;
 
+  @CommandLine.Option(
+      names = {"-fa", "--function_argument"},
+      description = "the argument passed to UDF")
+  private String functionArgument;
+
+  private MutableDatabaseEmulator databaseEmulator;
+
+  private UdfManager udfManager;
+
   @Inject
   public Execute(
       TerminalWrapper terminal,
-      ContractManagerWrapper contractManager,
-      TransactionalAssetbase assetbase,
-      Ledger ledger) {
+      ContractManagerEmulator contractManager,
+      TamperEvidentAssetbase assetbase,
+      Ledger ledger,
+      UdfManager udfManager,
+      MutableDatabaseEmulator databaseEmulator) {
     super(terminal, contractManager, assetbase, ledger);
+    this.databaseEmulator = databaseEmulator;
+    this.udfManager = udfManager;
   }
 
   @Override
@@ -71,6 +90,19 @@ public class Execute extends AbstractCommand {
     JsonObject json = convertJsonParameter(argument);
     if (json != null) {
       executeContract(toKey(id), json);
+    }
+
+    JsonArray udfs = json.getJsonArray("_functions_");
+    if (udfs != null) {
+      udfs.forEach(
+          udf -> {
+            String id = ((JsonString) udf).getString();
+            Function f = udfManager.getInstance(id);
+            f.invoke(
+                databaseEmulator,
+                json,
+                Optional.ofNullable(convertJsonParameter(functionArgument)));
+          });
     }
   }
 }
