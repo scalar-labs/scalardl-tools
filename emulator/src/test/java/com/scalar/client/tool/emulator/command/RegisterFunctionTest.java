@@ -70,7 +70,6 @@ public class RegisterFunctionTest {
   }
 
   class UdfEntryMatcher implements ArgumentMatcher<UdfEntry> {
-
     private String id;
     private String canonicalName;
     private byte[] bytes;
