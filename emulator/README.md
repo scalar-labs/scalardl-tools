@@ -59,6 +59,63 @@ Now this contract may be executed, for example, as
 scalar> execute state-updater {"asset_id": "Y", "state": 1}
 ```
 
+## Register a user-defined function (UDF)
+
+A UDF is used to manipulate the mutable database in the Scalar DL network.
+It can be registered by `register-function` command in this format.
+
+```
+scalar> register-function <id> <canonical-name> <path-to-file>
+```
+
+For example, if we have a UDF `com.example.udf.RecordUpdater` in `/tmp/RecordUpdater.class`, then we can use this command
+
+```
+scalar> register-function record-updater com.example.udf.RecordUpdater /tmp/RecordUpdater.class
+```
+
+to register the function `RecordUpdater` with id `record-updater`
+
+### Execute UDF
+Registered UDFs can only be executed by executing a register contract.
+We cannot execute UDFs without executing any contract.
+
+When we request to execute a contract,
+if we add a field `_functions_` with an array of registered UDF id into the contract argument,
+then all the specified UDF will be executed atomically with the contract.
+
+For example,
+assuming that we already registered a contract with id `state-updater` and a UDF with id `record-updater`,
+then we can execute `state-updater` and `record-updater` by the `execute` command
+
+```
+scalar> execute state-updater {"argument_to_contract":"argument_value","_functions_":["record-updater"]} -fa {"argument_to_udf":"argument_value"}
+```
+
+## MutableDatabase
+UDF execution causes the change on the mutable records in a Scalar DL network.
+We can use `database` command to investigate the current states of the mutable records.
+
+```
+scalar> database <put|get|scan|delete> -p <partition-key> [-v <value>] [-c <clustering-key>] [-n <namespace>] [-t <table>]
+```
+Notice the values of options `-p` `-v` and `-c` should be formatted in JSON.
+
+For example, we can use
+
+```
+scalar> database get -n mynamespace -t mytable -p {"key":"foo"}
+```
+
+to check the state of the record `key = foo` in the table.
+
+```
+mynamespace.mytable (
+  key text PRIMARY KEY,
+  value text
+)
+```
+
 ## Help
 
 Type `help` to display the list of available commands inside the interactive terminal.
