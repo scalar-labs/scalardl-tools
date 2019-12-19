@@ -74,15 +74,15 @@ public class Database implements Runnable {
   private String method;
 
   @CommandLine.Option(
-      names = {"-p", "--primarykey"},
+      names = {"-p", "--partitionkey"},
       paramLabel = "key",
-      description = "the primary key (in JSON) that is to be inserted into the MutableDatabase")
+      description = "the partition key (in JSON) that is to be inserted into the MutableDatabase")
   private String primaryKey;
 
   @CommandLine.Option(
       names = {"-c", "--clusteringkey"},
       paramLabel = "key",
-      description = "the primary key (in JSON) that is to be inserted into the MutableDatabase")
+      description = "the clustering key (in JSON) that is to be inserted into the MutableDatabase")
   private String clusteringKey;
 
   @CommandLine.Option(
