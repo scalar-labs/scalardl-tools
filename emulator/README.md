@@ -85,7 +85,7 @@ Registered UDFs can only be executed with a register contract and what UDFs to e
 For example, a UDF with id `state-updater-function` can be executed with a contrat with id `state-updater-contract` as follows.
 
 ```
-scalar> execute state-updater-contract {"argument_to_contract":"argument_value","_functions_":["state-updater-function"]} -fa {"argument_to_udf":"argument_value"}
+scalar> execute state-updater-contract {"asset_id":"Y","_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
 ```
 
 NOTE:
