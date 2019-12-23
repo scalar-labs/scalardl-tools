@@ -49,7 +49,7 @@ Run `./gradlew build` to compile the contract.
 
 ## Register a contract
 
-`register` command will reigister the specified contract with the specified contract id and the binary name.
+`register` command will register the specified contract with the specified contract id and binary name.
 
  For example, the contract `com.scalar.client.tool.emulator.contract.StateUpdater.java` with id `state-updater-contract` can be registered as follows.
 
@@ -57,9 +57,9 @@ Run `./gradlew build` to compile the contract.
 scalar> register state-updater-contract com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
 ```
 
-## Exexute a contract
+## Execute a contract
 
-`execute` command will excute the specified contract.
+`execute` command will execute the specified contract.
 
 For example, the `state-updater-contract` can be executed as follows.
 
@@ -69,8 +69,8 @@ scalar> execute state-updater-contract {"asset_id": "Y", "state": 1}
 
 ## Register a user-defined function (UDF)
 
-UDF is a business logic to update the mutable database in the Scalar DL network.
-`register-function` command will register the the specified function with the specified id and the binary name.
+UDF is a business logic to update the mutable database in the Scalar DL network. The
+`register-function` command will register the specified function with the specified id and binary name.
 
 For example, the UDF `com.scalar.client.tool.emulator.function.StateUpdater` with id `state-updater-function` can be registered as follows.
 
@@ -80,16 +80,16 @@ scalar> register-function state-updater-function com.scalar.client.tool.emulator
 
 ## Execute a UDF
 
-Registered UDFs can only be executed with a register contract and what UDFs to execute can be specified with `_functions_` key in the contract argument.
+Registered UDFs can only be executed with a registered contract, and the user can specify which UDFs to execute using the `_functions_` key in the contract argument.
 
-For example, a UDF with id `state-updater-function` can be executed with a contrat with id `state-updater-contract` as follows.
+For example, a UDF with id `state-updater-function` can be executed by a contract with id `state-updater-contract` as follows.
 
 ```
 scalar> execute state-updater-contract {"asset_id":"Y","_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
 ```
 
 NOTE:
-You can use `database` command to see what is stored by UDFs.
+You can use the `database` command to see what is stored by UDFs.
 
 ## Help
 
