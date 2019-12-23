@@ -50,6 +50,7 @@ Run `./gradlew build` to compile the contract.
 ## Register a contract
 
 `register` command will reigister the specified contract with the specified contract id and the binary name.
+
  For example, the contract `com.scalar.client.tool.emulator.contract.StateUpdater.java` with id `state-updater-contract` can be registered as follows.
 
 ```
@@ -59,6 +60,7 @@ scalar> register state-updater-contract com.scalar.client.tool.emulator.contract
 ## Exexute a contract
 
 `execute` command will excute the specified contract.
+
 For example, the `state-updater-contract` can be executed as follows.
 
 ```
@@ -78,7 +80,7 @@ scalar> register-function state-updater-function com.scalar.client.tool.emulator
 
 ## Execute a UDF
 
-Registered UDFs can only be executed with a register contract and what UDFs to execute is specified with `_functions_` key in the contract argument.
+Registered UDFs can only be executed with a register contract and what UDFs to execute can be specified with `_functions_` key in the contract argument.
 
 For example, a UDF with id `state-updater-function` can be executed with a contrat with id `state-updater-contract` as follows.
 
