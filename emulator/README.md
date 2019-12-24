@@ -51,7 +51,7 @@ Run `./gradlew build` to compile the contract.
 
 `register` command will register the specified contract with the specified contract id and binary name.
 
- For example, the contract `com.scalar.client.tool.emulator.contract.StateUpdater.java` with id `state-updater-contract` can be registered as follows.
+ For example, the contract `com.scalar.client.tool.emulator.contract.StateUpdater` with id `state-updater-contract` can be registered as follows.
 
 ```
 scalar> register state-updater-contract com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
@@ -75,7 +75,7 @@ UDF is a business logic to update the mutable database in the Scalar DL network.
 For example, the UDF `com.scalar.client.tool.emulator.function.StateUpdater` with id `state-updater-function` can be registered as follows.
 
 ```
-scalar> register-function state-updater-function com.scalar.client.tool.emulator.function.StateUpdater.java ./build/classes/java/main/com/scalar/client/tool/emulator/function/StateUpdater.class
+scalar> register-function state-updater-function com.scalar.client.tool.emulator.function.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/function/StateUpdater.class
 ```
 
 ## Execute a UDF
@@ -85,7 +85,7 @@ Registered UDFs can only be executed with a registered contract, and the user ca
 For example, a UDF with id `state-updater-function` can be executed by a contract with id `state-updater-contract` as follows.
 
 ```
-scalar> execute state-updater-contract {"asset_id":"Y","_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
+scalar> execute state-updater-contract {"asset_id":"Y","state":1,"_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
 ```
 
 NOTE:

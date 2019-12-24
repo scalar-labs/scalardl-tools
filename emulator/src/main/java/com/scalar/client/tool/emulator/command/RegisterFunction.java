@@ -59,9 +59,12 @@ public class RegisterFunction implements Runnable {
 
   private UdfManager udfManager;
 
+  private TerminalWrapper terminal;
+
   @Inject
-  public RegisterFunction(UdfManager udfManager) {
+  public RegisterFunction(TerminalWrapper terminal, UdfManager udfManager) {
     this.udfManager = udfManager;
+    this.terminal = terminal;
   }
 
   @Override
@@ -74,6 +77,7 @@ public class RegisterFunction implements Runnable {
       byte[] bytes = Files.readAllBytes(udfFile.toPath());
       long registeredAt = System.currentTimeMillis();
       udfManager.register(new UdfEntry(id, name, bytes, registeredAt));
+      terminal.println("UDF '" + id + "' successfully registered");
     } catch (IOException e) {
       throw new RegistryIOException("could not register udf " + id);
     }
