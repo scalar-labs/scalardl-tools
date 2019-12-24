@@ -23,6 +23,7 @@ package com.scalar.client.tool.emulator.command;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 
+import com.scalar.client.tool.emulator.TerminalWrapper;
 import com.scalar.ledger.udf.UdfEntry;
 import com.scalar.ledger.udf.UdfManager;
 import java.io.File;
@@ -40,13 +41,14 @@ import picocli.CommandLine;
 public class RegisterFunctionTest {
   @Mock UdfManager manager;
   @Mock File udfFile;
+  @Mock TerminalWrapper terminal;
   RegisterFunction registerFunction;
   File udf;
 
   @Before
   public void setUp() throws IOException {
     MockitoAnnotations.initMocks(this);
-    registerFunction = new RegisterFunction(manager);
+    registerFunction = new RegisterFunction(terminal, manager);
     udf = File.createTempFile("udf", ".class");
   }
 
