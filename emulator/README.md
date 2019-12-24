@@ -1,6 +1,6 @@
 # Scalar DL Emulator
 
-Scalar DL Emulator is an interactive command line interface to run Scalar DL on a local mutable in-memory ledger. The emulator may be used to quickly and easily test Scalar DL contracts. It does, however, lack any of the tamper-evident features found in the actual Scalar DL.
+Scalar DL Emulator is an interactive command line interface to run Scalar DL on a local mutable in-memory ledger and database. The emulator may be used to quickly and easily test Scalar DL contracts. It does, however, lack any of the tamper-evident features found in the actual Scalar DL.
 
 ## Generate an executable
 
@@ -27,8 +27,6 @@ this will run the commands contained in [cmds.txt](./cmds.txt)
 ./build/install/emulator/bin/emulator -f cmds.txt
 ```
 
-## Exit the emulator
-
 Exit the emulator with `exit` or by ctrl-d (EOF).
 
 ## Preregistered contracts
@@ -39,7 +37,7 @@ Exit the emulator with `exit` or by ctrl-d (EOF).
  src/main/java/com/scalar/client/tool/emulator/contract
  ```
 
-## Register a contract
+## Build a contract
 
 Write a contract and save it in the `contract` subdirectory
 
@@ -47,17 +45,51 @@ Write a contract and save it in the `contract` subdirectory
  src/main/java/com/scalar/client/tool/emulator/contract
  ```
 
-Run `./gradlew build` to compile the contract. Then start the emulator and register the contract by using the `register` command. For example, to register the contract `StateUpdater.java` with id `state-updater`
+Run `./gradlew build` to compile the contract.
+
+## Register a contract
+
+`register` command will register the specified contract with the specified contract id and binary name.
+
+ For example, the contract `com.scalar.client.tool.emulator.contract.StateUpdater.java` with id `state-updater-contract` can be registered as follows.
 
 ```
-scalar> register state-updater com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
+scalar> register state-updater-contract com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
 ```
 
-Now this contract may be executed, for example, as
+## Execute a contract
+
+`execute` command will execute the specified contract.
+
+For example, the `state-updater-contract` can be executed as follows.
 
 ```
-scalar> execute state-updater {"asset_id": "Y", "state": 1}
+scalar> execute state-updater-contract {"asset_id": "Y", "state": 1}
 ```
+
+## Register a user-defined function (UDF)
+
+UDF is a business logic to update the mutable database in the Scalar DL network. The
+`register-function` command will register the specified function with the specified id and binary name.
+
+For example, the UDF `com.scalar.client.tool.emulator.function.StateUpdater` with id `state-updater-function` can be registered as follows.
+
+```
+scalar> register-function state-updater-function com.scalar.client.tool.emulator.function.StateUpdater.java ./build/classes/java/main/com/scalar/client/tool/emulator/function/StateUpdater.class
+```
+
+## Execute a UDF
+
+Registered UDFs can only be executed with a registered contract, and the user can specify which UDFs to execute using the `_functions_` key in the contract argument.
+
+For example, a UDF with id `state-updater-function` can be executed by a contract with id `state-updater-contract` as follows.
+
+```
+scalar> execute state-updater-contract {"asset_id":"Y","_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
+```
+
+NOTE:
+You can use the `database` command to see what is stored by UDFs.
 
 ## Help
 
