@@ -22,9 +22,9 @@ package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.contract.ContractEntry;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.contract.ContractEntry;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
 import java.util.List;
 import javax.inject.Inject;
 import picocli.CommandLine;

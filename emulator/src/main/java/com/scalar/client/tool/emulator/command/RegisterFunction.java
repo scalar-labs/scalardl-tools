@@ -23,9 +23,9 @@ package com.scalar.client.tool.emulator.command;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.exception.RegistryIOException;
-import com.scalar.ledger.udf.UdfEntry;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.dl.ledger.exception.RegistryIOException;
+import com.scalar.dl.ledger.function.FunctionEntry;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -57,13 +57,13 @@ public class RegisterFunction implements Runnable {
   @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
   private File udfFile;
 
-  private UdfManager udfManager;
+  private FunctionManager functionManager;
 
   private TerminalWrapper terminal;
 
   @Inject
-  public RegisterFunction(TerminalWrapper terminal, UdfManager udfManager) {
-    this.udfManager = udfManager;
+  public RegisterFunction(TerminalWrapper terminal, FunctionManager functionManager) {
+    this.functionManager = functionManager;
     this.terminal = terminal;
   }
 
@@ -76,7 +76,7 @@ public class RegisterFunction implements Runnable {
     try {
       byte[] bytes = Files.readAllBytes(udfFile.toPath());
       long registeredAt = System.currentTimeMillis();
-      udfManager.register(new UdfEntry(id, name, bytes, registeredAt));
+      functionManager.register(new FunctionEntry(id, name, bytes, registeredAt));
       terminal.println("UDF '" + id + "' successfully registered");
     } catch (IOException e) {
       throw new RegistryIOException("could not register udf " + id);

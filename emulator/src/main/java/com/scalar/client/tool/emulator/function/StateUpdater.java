@@ -1,18 +1,21 @@
 package com.scalar.client.tool.emulator.function;
 
-import com.scalar.database.api.Put;
-import com.scalar.database.io.IntValue;
-import com.scalar.database.io.Key;
-import com.scalar.database.io.TextValue;
-import com.scalar.ledger.database.MutableDatabase;
-import com.scalar.ledger.udf.Function;
+import com.scalar.db.api.Put;
+import com.scalar.db.io.IntValue;
+import com.scalar.db.io.Key;
+import com.scalar.db.io.TextValue;
+import com.scalar.dl.ledger.database.Database;
+import com.scalar.dl.ledger.function.Function;
 import java.util.Optional;
 import javax.json.JsonObject;
 
 public class StateUpdater extends Function {
   @Override
   public void invoke(
-      MutableDatabase database, JsonObject contractArgument, Optional<JsonObject> funtionArgument) {
+      Database database,
+      Optional<JsonObject> funtionArgument,
+      JsonObject contractArgument,
+      Optional<JsonObject> contractProperties) {
 
     funtionArgument.ifPresent(
         argument -> {

@@ -1,10 +1,11 @@
 package com.scalar.client.tool.emulator;
 
-import com.scalar.ledger.contract.Contract;
-import com.scalar.ledger.contract.ContractEntry;
-import com.scalar.ledger.database.ContractRegistry;
-import com.scalar.ledger.exception.RegistryIOException;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.contract.Contract;
+import com.scalar.dl.ledger.contract.ContractEntry;
+import com.scalar.dl.ledger.crypto.CertificateEntry;
+import com.scalar.dl.ledger.database.ContractRegistry;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.exception.RegistryIOException;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -36,7 +37,7 @@ public class ContractManagerEmulator {
     that = this;
   }
 
-  public void register(com.scalar.ledger.contract.ContractEntry entry) {
+  public void register(com.scalar.dl.ledger.contract.ContractEntry entry) {
     registry.bind(entry);
   }
 
@@ -111,12 +112,12 @@ public class ContractManagerEmulator {
     contractClass.addMethod(setter);
     contractClass.addField(that);
 
-    // Delegate `Contract.invoke(id, ledger, argument)`
     for (CtMethod method : contractClass.getMethods()) {
+      // Delegate `Contract.invoke(id, ledger, argument)`
       if (method
           .getLongName()
           .equals(
-              "com.scalar.ledger.contract.Contract.invoke(java.lang.String,com.scalar.ledger.ledger.Ledger,javax.json.JsonObject)")) {
+              "com.scalar.dl.ledger.contract.Contract.invoke(java.lang.String,com.scalar.dl.ledger.database.Ledger,javax.json.JsonObject)")) {
         CtMethod m = CtNewMethod.delegator(method, contractClass);
         CtMethod invoke = emulatorClass.getDeclaredMethod("emulatedInvoke");
         m.setBody(invoke, null);

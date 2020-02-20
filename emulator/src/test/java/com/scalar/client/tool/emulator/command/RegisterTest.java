@@ -24,9 +24,9 @@ import static org.mockito.Mockito.verify;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.emulator.AssetbaseEmulator;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
+import com.scalar.dl.ledger.emulator.AssetbaseEmulator;
 import java.io.File;
 import org.junit.Before;
 import org.junit.Test;

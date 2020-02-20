@@ -22,11 +22,11 @@ package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.emulator.MutableDatabaseEmulator;
-import com.scalar.ledger.ledger.Ledger;
-import com.scalar.ledger.udf.Function;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
+import com.scalar.dl.ledger.emulator.MutableDatabaseEmulator;
+import com.scalar.dl.ledger.function.Function;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
@@ -70,7 +70,7 @@ public class Execute extends AbstractCommand {
 
   private MutableDatabaseEmulator databaseEmulator;
 
-  private UdfManager udfManager;
+  private FunctionManager functionManager;
 
   @Inject
   public Execute(
@@ -78,11 +78,11 @@ public class Execute extends AbstractCommand {
       ContractManagerEmulator contractManager,
       TamperEvidentAssetbase assetbase,
       Ledger ledger,
-      UdfManager udfManager,
+      FunctionManager functionManager,
       MutableDatabaseEmulator databaseEmulator) {
     super(terminal, contractManager, assetbase, ledger);
     this.databaseEmulator = databaseEmulator;
-    this.udfManager = udfManager;
+    this.functionManager = functionManager;
   }
 
   @Override
