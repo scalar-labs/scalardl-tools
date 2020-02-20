@@ -51,14 +51,16 @@ public class ContractManagerEmulator {
   }
 
   public ContractEntry get(ContractEntry.Key key) {
-    return registry.lookup(key.getId());
+    return registry.lookup(key);
   }
 
   public Contract getInstance(String id) {
     Contract contract = cache.get(id);
     if (contract == null) {
       try {
-        ContractEntry entry = registry.lookup(id);
+        ContractEntry.Key key =
+            new ContractEntry.Key(id, new CertificateEntry.Key("emulator_user", 0));
+        ContractEntry entry = registry.lookup(key);
         contract = emulateContract(entry);
         cache.put(id, contract);
       } catch (Exception e) {

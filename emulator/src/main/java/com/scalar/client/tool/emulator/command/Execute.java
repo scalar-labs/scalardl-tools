@@ -92,16 +92,17 @@ public class Execute extends AbstractCommand {
       executeContract(toKey(id), json);
     }
 
-    JsonArray udfs = json.getJsonArray("_functions_");
-    if (udfs != null) {
-      udfs.forEach(
-          udf -> {
-            String id = ((JsonString) udf).getString();
-            Function f = udfManager.getInstance(id);
+    JsonArray functions = json.getJsonArray("_functions_");
+    if (functions != null) {
+      functions.forEach(
+          func -> {
+            String functionId = ((JsonString) func).getString();
+            Function f = functionManager.getInstance(functionId);
             f.invoke(
                 databaseEmulator,
+                Optional.ofNullable(convertJsonParameter(functionArgument)),
                 json,
-                Optional.ofNullable(convertJsonParameter(functionArgument)));
+                contractManager.get(toKey(id)).getProperties());
           });
     }
   }
