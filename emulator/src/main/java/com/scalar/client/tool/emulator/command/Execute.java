@@ -65,7 +65,7 @@ public class Execute extends AbstractCommand {
 
   @CommandLine.Option(
       names = {"-fa", "--function_argument"},
-      description = "the argument passed to UDF")
+      description = "the argument passed to function")
   private String functionArgument;
 
   private MutableDatabaseEmulator databaseEmulator;

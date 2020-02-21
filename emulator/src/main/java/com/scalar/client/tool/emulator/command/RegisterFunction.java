@@ -55,7 +55,7 @@ public class RegisterFunction implements Runnable {
   private String name;
 
   @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
-  private File udfFile;
+  private File functionFile;
 
   private FunctionManager functionManager;
 
@@ -71,10 +71,10 @@ public class RegisterFunction implements Runnable {
   public void run() {
     checkArgument(id != null, "id cannot be null");
     checkArgument(name != null, "name cannot be null");
-    checkArgument(udfFile != null, "udfFile cannot be null");
+    checkArgument(functionFile != null, "udfFile cannot be null");
 
     try {
-      byte[] bytes = Files.readAllBytes(udfFile.toPath());
+      byte[] bytes = Files.readAllBytes(functionFile.toPath());
       long registeredAt = System.currentTimeMillis();
       functionManager.register(new FunctionEntry(id, name, bytes, registeredAt));
       terminal.println("UDF '" + id + "' successfully registered");
