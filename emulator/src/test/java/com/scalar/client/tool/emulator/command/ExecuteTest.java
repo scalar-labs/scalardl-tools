@@ -89,11 +89,11 @@ public class ExecuteTest {
   }
 
   @Test
-  public void run_ExecuteContractWithUdf_ShouldSucceed() {
+  public void run_ExecuteContractWithFunction_ShouldSucceed() {
     // Arrange
     JsonObject contractArgument =
         Json.createObjectBuilder()
-            .add("_functions_", Json.createArrayBuilder().add("udf_foo"))
+            .add("_functions_", Json.createArrayBuilder().add("function_foo"))
             .build();
     JsonObject functionArgument = Json.createObjectBuilder().add("foo", "bar").build();
     ContractEntry.Key key =
@@ -110,7 +110,7 @@ public class ExecuteTest {
             "signature".getBytes());
     when(contractManager.get(key)).thenReturn(entry);
     when(contractManager.getInstance(key.getId())).thenReturn(contract);
-    when(functionManager.getInstance("udf_foo")).thenReturn(function);
+    when(functionManager.getInstance("function_foo")).thenReturn(function);
 
     // Act
     CommandLine.run(
@@ -123,11 +123,11 @@ public class ExecuteTest {
   }
 
   @Test
-  public void run_ExecuteContractWithUdfNoArgument_ShouldSucceed() {
+  public void run_ExecuteContractWithFunctionNoArgument_ShouldSucceed() {
     // Arrange
     JsonObject contractArgument =
         Json.createObjectBuilder()
-            .add("_functions_", Json.createArrayBuilder().add("udf_foo"))
+            .add("_functions_", Json.createArrayBuilder().add("function_foo"))
             .build();
     ContractEntry.Key key =
         new ContractEntry.Key(CONTRACT_ID, new CertificateEntry.Key("emulator_user", 0));
@@ -143,7 +143,7 @@ public class ExecuteTest {
             "signature".getBytes());
     when(contractManager.get(key)).thenReturn(entry);
     when(contractManager.getInstance(key.getId())).thenReturn(contract);
-    when(functionManager.getInstance("udf_foo")).thenReturn(function);
+    when(functionManager.getInstance("function_foo")).thenReturn(function);
 
     // Act
     CommandLine.run(execute, CONTRACT_ID, contractArgument.toString());

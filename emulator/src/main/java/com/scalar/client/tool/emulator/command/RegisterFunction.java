@@ -39,7 +39,7 @@ import picocli.CommandLine;
     headerHeading = "%n@|bold,underline Usage|@:%n",
     synopsisHeading = "",
     descriptionHeading = "%n@|bold,underline Description|@:%n",
-    description = "Use this command to register user-defined functions (UDF)",
+    description = "Use this command to register user-defined functions",
     parameterListHeading = "%n@|bold,underline Parameters|@:%n",
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",
@@ -48,13 +48,13 @@ public class RegisterFunction implements Runnable {
   @CommandLine.Parameters(
       index = "0",
       paramLabel = "id",
-      description = "id that will be used when executing the udf")
+      description = "id that will be used when executing the function")
   private String id;
 
-  @CommandLine.Parameters(index = "1", paramLabel = "name", description = "udf canonical name")
+  @CommandLine.Parameters(index = "1", paramLabel = "name", description = "function canonical name")
   private String name;
 
-  @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
+  @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled function class file")
   private File functionFile;
 
   private FunctionManager functionManager;
@@ -71,15 +71,15 @@ public class RegisterFunction implements Runnable {
   public void run() {
     checkArgument(id != null, "id cannot be null");
     checkArgument(name != null, "name cannot be null");
-    checkArgument(functionFile != null, "udfFile cannot be null");
+    checkArgument(functionFile != null, "function file cannot be null");
 
     try {
       byte[] bytes = Files.readAllBytes(functionFile.toPath());
       long registeredAt = System.currentTimeMillis();
       functionManager.register(new FunctionEntry(id, name, bytes, registeredAt));
-      terminal.println("UDF '" + id + "' successfully registered");
+      terminal.println("Function '" + id + "' successfully registered");
     } catch (IOException e) {
-      throw new RegistryIOException("could not register udf " + id);
+      throw new RegistryIOException("could not register function " + id);
     }
   }
 }
