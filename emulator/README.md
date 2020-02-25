@@ -132,7 +132,7 @@ Parameters:
 Options:
   -h, --help        print the help and exit
     -fa, --function_argument=<functionArgument>
-        the argument passed to the function
+        the argument passed to function
 
 For example: 'execute get {"asset_id": "foo"}'
 ```
