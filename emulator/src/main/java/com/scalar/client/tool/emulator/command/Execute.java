@@ -22,11 +22,11 @@ package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.emulator.MutableDatabaseEmulator;
-import com.scalar.ledger.ledger.Ledger;
-import com.scalar.ledger.udf.Function;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
+import com.scalar.dl.ledger.emulator.MutableDatabaseEmulator;
+import com.scalar.dl.ledger.function.Function;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.util.List;
 import java.util.Optional;
 import javax.inject.Inject;
@@ -65,12 +65,12 @@ public class Execute extends AbstractCommand {
 
   @CommandLine.Option(
       names = {"-fa", "--function_argument"},
-      description = "the argument passed to UDF")
+      description = "the argument passed to function")
   private String functionArgument;
 
   private MutableDatabaseEmulator databaseEmulator;
 
-  private UdfManager udfManager;
+  private FunctionManager functionManager;
 
   @Inject
   public Execute(
@@ -78,11 +78,11 @@ public class Execute extends AbstractCommand {
       ContractManagerEmulator contractManager,
       TamperEvidentAssetbase assetbase,
       Ledger ledger,
-      UdfManager udfManager,
+      FunctionManager functionManager,
       MutableDatabaseEmulator databaseEmulator) {
     super(terminal, contractManager, assetbase, ledger);
     this.databaseEmulator = databaseEmulator;
-    this.udfManager = udfManager;
+    this.functionManager = functionManager;
   }
 
   @Override
@@ -92,16 +92,17 @@ public class Execute extends AbstractCommand {
       executeContract(toKey(id), json);
     }
 
-    JsonArray udfs = json.getJsonArray("_functions_");
-    if (udfs != null) {
-      udfs.forEach(
-          udf -> {
-            String id = ((JsonString) udf).getString();
-            Function f = udfManager.getInstance(id);
+    JsonArray functions = json.getJsonArray("_functions_");
+    if (functions != null) {
+      functions.forEach(
+          func -> {
+            String functionId = ((JsonString) func).getString();
+            Function f = functionManager.getInstance(functionId);
             f.invoke(
                 databaseEmulator,
+                Optional.ofNullable(convertJsonParameter(functionArgument)),
                 json,
-                Optional.ofNullable(convertJsonParameter(functionArgument)));
+                contractManager.get(toKey(id)).getProperties());
           });
     }
   }

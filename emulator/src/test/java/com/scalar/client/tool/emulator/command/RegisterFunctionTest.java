@@ -24,8 +24,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.udf.UdfEntry;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.dl.ledger.function.FunctionEntry;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,17 +39,16 @@ import org.mockito.MockitoAnnotations;
 import picocli.CommandLine;
 
 public class RegisterFunctionTest {
-  @Mock UdfManager manager;
-  @Mock File udfFile;
+  @Mock FunctionManager manager;
   @Mock TerminalWrapper terminal;
   RegisterFunction registerFunction;
-  File udf;
+  File file;
 
   @Before
   public void setUp() throws IOException {
     MockitoAnnotations.initMocks(this);
     registerFunction = new RegisterFunction(terminal, manager);
-    udf = File.createTempFile("udf", ".class");
+    file = File.createTempFile("function", ".class");
   }
 
   @Test
@@ -57,33 +56,33 @@ public class RegisterFunctionTest {
     // Arrange
     String id = "id";
     String canonicalName = "canonical";
-    byte[] bytes = Files.readAllBytes(udf.toPath());
+    byte[] bytes = Files.readAllBytes(file.toPath());
 
     // Act
-    CommandLine.run(registerFunction, id, canonicalName, udf.getAbsolutePath());
+    CommandLine.run(registerFunction, id, canonicalName, file.getAbsolutePath());
 
     // Assert
-    verify(manager).register(argThat(new UdfEntryMatcher(id, canonicalName, bytes)));
+    verify(manager).register(argThat(new FunctionEntryMatcher(id, canonicalName, bytes)));
   }
 
   @After
   public void tearDown() {
-    udf.deleteOnExit();
+    file.deleteOnExit();
   }
 
-  class UdfEntryMatcher implements ArgumentMatcher<UdfEntry> {
+  class FunctionEntryMatcher implements ArgumentMatcher<FunctionEntry> {
     private String id;
     private String canonicalName;
     private byte[] bytes;
 
-    public UdfEntryMatcher(String id, String canonicalName, byte[] bytes) {
+    public FunctionEntryMatcher(String id, String canonicalName, byte[] bytes) {
       this.id = id;
       this.canonicalName = canonicalName;
       this.bytes = bytes;
     }
 
     @Override
-    public boolean matches(UdfEntry right) {
+    public boolean matches(FunctionEntry right) {
       return right.getId().equals(this.id)
           && right.getBinaryName().equals(this.canonicalName)
           && Arrays.equals(this.bytes, right.getByteCode());

@@ -25,14 +25,14 @@ import static org.mockito.Mockito.when;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.contract.Contract;
-import com.scalar.ledger.contract.ContractEntry;
-import com.scalar.ledger.crypto.CertificateEntry;
-import com.scalar.ledger.emulator.AssetbaseEmulator;
-import com.scalar.ledger.emulator.MutableDatabaseEmulator;
-import com.scalar.ledger.ledger.Ledger;
-import com.scalar.ledger.udf.Function;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.dl.ledger.contract.Contract;
+import com.scalar.dl.ledger.contract.ContractEntry;
+import com.scalar.dl.ledger.crypto.CertificateEntry;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.emulator.AssetbaseEmulator;
+import com.scalar.dl.ledger.emulator.MutableDatabaseEmulator;
+import com.scalar.dl.ledger.function.Function;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -51,14 +51,14 @@ public class ExecuteTest {
   @Mock private ContractManagerEmulator contractManager;
   @Mock private Ledger ledger;
   @Mock private TerminalWrapper terminal;
-  @Mock private UdfManager udfManager;
+  @Mock private FunctionManager functionManager;
   @Mock private MutableDatabaseEmulator database;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     assetbase = new AssetbaseEmulator();
-    execute = new Execute(terminal, contractManager, assetbase, ledger, udfManager, database);
+    execute = new Execute(terminal, contractManager, assetbase, ledger, functionManager, database);
   }
 
   @Test
@@ -89,11 +89,11 @@ public class ExecuteTest {
   }
 
   @Test
-  public void run_ExecuteContractWithUdf_ShouldSucceed() {
+  public void run_ExecuteContractWithFunction_ShouldSucceed() {
     // Arrange
     JsonObject contractArgument =
         Json.createObjectBuilder()
-            .add("_functions_", Json.createArrayBuilder().add("udf_foo"))
+            .add("_functions_", Json.createArrayBuilder().add("function_foo"))
             .build();
     JsonObject functionArgument = Json.createObjectBuilder().add("foo", "bar").build();
     ContractEntry.Key key =
@@ -110,7 +110,7 @@ public class ExecuteTest {
             "signature".getBytes());
     when(contractManager.get(key)).thenReturn(entry);
     when(contractManager.getInstance(key.getId())).thenReturn(contract);
-    when(udfManager.getInstance("udf_foo")).thenReturn(function);
+    when(functionManager.getInstance("function_foo")).thenReturn(function);
 
     // Act
     CommandLine.run(
@@ -118,15 +118,16 @@ public class ExecuteTest {
 
     // Assert
     verify(contract).invoke(ledger, contractArgument, Optional.empty());
-    verify(function).invoke(database, contractArgument, Optional.of(functionArgument));
+    verify(function)
+        .invoke(database, Optional.of(functionArgument), contractArgument, Optional.empty());
   }
 
   @Test
-  public void run_ExecuteContractWithUdfNoArgument_ShouldSucceed() {
+  public void run_ExecuteContractWithFunctionNoArgument_ShouldSucceed() {
     // Arrange
     JsonObject contractArgument =
         Json.createObjectBuilder()
-            .add("_functions_", Json.createArrayBuilder().add("udf_foo"))
+            .add("_functions_", Json.createArrayBuilder().add("function_foo"))
             .build();
     ContractEntry.Key key =
         new ContractEntry.Key(CONTRACT_ID, new CertificateEntry.Key("emulator_user", 0));
@@ -142,13 +143,13 @@ public class ExecuteTest {
             "signature".getBytes());
     when(contractManager.get(key)).thenReturn(entry);
     when(contractManager.getInstance(key.getId())).thenReturn(contract);
-    when(udfManager.getInstance("udf_foo")).thenReturn(function);
+    when(functionManager.getInstance("function_foo")).thenReturn(function);
 
     // Act
     CommandLine.run(execute, CONTRACT_ID, contractArgument.toString());
 
     // Assert
     verify(contract).invoke(ledger, contractArgument, Optional.empty());
-    verify(function).invoke(database, contractArgument, Optional.empty());
+    verify(function).invoke(database, Optional.empty(), contractArgument, Optional.empty());
   }
 }

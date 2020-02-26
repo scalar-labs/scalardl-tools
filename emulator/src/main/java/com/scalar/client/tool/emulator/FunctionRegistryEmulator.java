@@ -20,31 +20,31 @@
  */
 package com.scalar.client.tool.emulator;
 
-import com.scalar.ledger.database.UdfRegistry;
-import com.scalar.ledger.udf.UdfEntry;
+import com.scalar.dl.ledger.database.FunctionRegistry;
+import com.scalar.dl.ledger.function.FunctionEntry;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
-class UdfRegistryEmulator implements UdfRegistry {
-  private final Map<String, UdfEntry> udfs;
+class FunctionRegistryEmulator implements FunctionRegistry {
+  private final Map<String, FunctionEntry> functions;
 
-  public UdfRegistryEmulator() {
-    udfs = new LinkedHashMap<String, UdfEntry>();
+  public FunctionRegistryEmulator() {
+    functions = new LinkedHashMap<String, FunctionEntry>();
   }
 
   @Override
-  public void bind(UdfEntry udfEntry) {
-    udfs.put(udfEntry.getId(), udfEntry);
+  public void bind(FunctionEntry functionEntry) {
+    functions.put(functionEntry.getId(), functionEntry);
   }
 
   @Override
-  public Optional<UdfEntry> lookup(String id) {
-    return Optional.ofNullable(udfs.get(id));
+  public Optional<FunctionEntry> lookup(String id) {
+    return Optional.ofNullable(functions.get(id));
   }
 
   @Override
   public void unbind(String id) {
-    udfs.remove(id);
+    functions.remove(id);
   }
 }

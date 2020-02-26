@@ -67,29 +67,29 @@ For example, the `state-updater-contract` can be executed as follows.
 scalar> execute state-updater-contract {"asset_id": "Y", "state": 1}
 ```
 
-## Register a user-defined function (UDF)
+## Register a user-defined function
 
-UDF is a business logic to update the mutable database in the Scalar DL network. The
+User-defined function is a business logic to update the mutable database in the Scalar DL network. The
 `register-function` command will register the specified function with the specified id and binary name.
 
-For example, the UDF `com.scalar.client.tool.emulator.function.StateUpdater` with id `state-updater-function` can be registered as follows.
+For example, the function `com.scalar.client.tool.emulator.function.StateUpdater` with id `state-updater-function` can be registered as follows.
 
 ```
 scalar> register-function state-updater-function com.scalar.client.tool.emulator.function.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/function/StateUpdater.class
 ```
 
-## Execute a UDF
+## Execute a function
 
-Registered UDFs can only be executed with a registered contract, and the user can specify which UDFs to execute using the `_functions_` key in the contract argument.
+Registered functions can only be executed with a registered contract, and the user can specify which functions to execute using the `_functions_` key in the contract argument.
 
-For example, a UDF with id `state-updater-function` can be executed by a contract with id `state-updater-contract` as follows.
+For example, function that registered with id `state-updater-function` can be executed by a contract with id `state-updater-contract` as follows.
 
 ```
 scalar> execute state-updater-contract {"asset_id":"Y","state":1,"_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
 ```
 
 NOTE:
-You can use the `database` command to see what is stored by UDFs.
+You can use the `database` command to see what is stored by functions.
 
 ## Help
 
@@ -132,7 +132,7 @@ Parameters:
 Options:
   -h, --help        print the help and exit
     -fa, --function_argument=<functionArgument>
-        the argument passed to UDF
+        the argument passed to function
 
 For example: 'execute get {"asset_id": "foo"}'
 ```

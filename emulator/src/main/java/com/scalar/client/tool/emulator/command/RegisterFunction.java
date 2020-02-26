@@ -23,9 +23,9 @@ package com.scalar.client.tool.emulator.command;
 import static com.google.common.base.Preconditions.checkArgument;
 
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.exception.RegistryIOException;
-import com.scalar.ledger.udf.UdfEntry;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.dl.ledger.exception.RegistryIOException;
+import com.scalar.dl.ledger.function.FunctionEntry;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,7 +39,7 @@ import picocli.CommandLine;
     headerHeading = "%n@|bold,underline Usage|@:%n",
     synopsisHeading = "",
     descriptionHeading = "%n@|bold,underline Description|@:%n",
-    description = "Use this command to register user-defined functions (UDF)",
+    description = "Use this command to register user-defined functions",
     parameterListHeading = "%n@|bold,underline Parameters|@:%n",
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",
@@ -48,22 +48,22 @@ public class RegisterFunction implements Runnable {
   @CommandLine.Parameters(
       index = "0",
       paramLabel = "id",
-      description = "id that will be used when executing the udf")
+      description = "id that will be used when executing the function")
   private String id;
 
-  @CommandLine.Parameters(index = "1", paramLabel = "name", description = "udf canonical name")
+  @CommandLine.Parameters(index = "1", paramLabel = "name", description = "function canonical name")
   private String name;
 
-  @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled udf class file")
-  private File udfFile;
+  @CommandLine.Parameters(index = "2", paramLabel = "file", description = "compiled function class file")
+  private File functionFile;
 
-  private UdfManager udfManager;
+  private FunctionManager functionManager;
 
   private TerminalWrapper terminal;
 
   @Inject
-  public RegisterFunction(TerminalWrapper terminal, UdfManager udfManager) {
-    this.udfManager = udfManager;
+  public RegisterFunction(TerminalWrapper terminal, FunctionManager functionManager) {
+    this.functionManager = functionManager;
     this.terminal = terminal;
   }
 
@@ -71,15 +71,15 @@ public class RegisterFunction implements Runnable {
   public void run() {
     checkArgument(id != null, "id cannot be null");
     checkArgument(name != null, "name cannot be null");
-    checkArgument(udfFile != null, "udfFile cannot be null");
+    checkArgument(functionFile != null, "function file cannot be null");
 
     try {
-      byte[] bytes = Files.readAllBytes(udfFile.toPath());
+      byte[] bytes = Files.readAllBytes(functionFile.toPath());
       long registeredAt = System.currentTimeMillis();
-      udfManager.register(new UdfEntry(id, name, bytes, registeredAt));
-      terminal.println("UDF '" + id + "' successfully registered");
+      functionManager.register(new FunctionEntry(id, name, bytes, registeredAt));
+      terminal.println("Function '" + id + "' successfully registered");
     } catch (IOException e) {
-      throw new RegistryIOException("could not register udf " + id);
+      throw new RegistryIOException("could not register function " + id);
     }
   }
 }

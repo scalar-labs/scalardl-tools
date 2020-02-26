@@ -24,8 +24,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
 import java.io.File;
 import java.util.List;
 import javax.inject.Inject;

@@ -20,9 +20,9 @@
  */
 package com.scalar.client.tool.emulator;
 
-import com.scalar.ledger.contract.ContractEntry;
-import com.scalar.ledger.database.ContractRegistry;
-import com.scalar.ledger.exception.MissingContractException;
+import com.scalar.dl.ledger.contract.ContractEntry;
+import com.scalar.dl.ledger.database.ContractRegistry;
+import com.scalar.dl.ledger.exception.MissingContractException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,12 +45,16 @@ public class ContractRegistryEmulator implements ContractRegistry {
     contracts.remove(key.getId());
   }
 
-  @Override
   public ContractEntry lookup(String id) {
     if (contracts.containsKey(id)) {
       return contracts.get(id);
     }
     throw new MissingContractException("Contract " + id + " has not been registered");
+  }
+
+  @Override
+  public ContractEntry lookup(ContractEntry.Key key) {
+    return lookup(key.getId());
   }
 
   @Override

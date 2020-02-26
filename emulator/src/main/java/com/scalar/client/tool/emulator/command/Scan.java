@@ -22,8 +22,8 @@ package com.scalar.client.tool.emulator.command;
 
 import com.scalar.client.tool.emulator.ContractManagerEmulator;
 import com.scalar.client.tool.emulator.TerminalWrapper;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
 import javax.inject.Inject;
 import javax.json.Json;
 import javax.json.JsonObjectBuilder;

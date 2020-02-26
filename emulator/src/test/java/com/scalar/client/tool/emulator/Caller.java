@@ -20,8 +20,8 @@
  */
 package com.scalar.client.tool.emulator;
 
-import com.scalar.ledger.contract.Contract;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.contract.Contract;
+import com.scalar.dl.ledger.database.Ledger;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;

@@ -23,14 +23,14 @@ package com.scalar.client.tool.emulator;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
-import com.scalar.database.io.Key;
-import com.scalar.database.io.Value;
-import com.scalar.ledger.database.TamperEvidentAssetbase;
-import com.scalar.ledger.emulator.AssetbaseEmulator;
-import com.scalar.ledger.emulator.MutableDatabaseEmulator;
-import com.scalar.ledger.ledger.AssetLedger;
-import com.scalar.ledger.ledger.Ledger;
-import com.scalar.ledger.udf.UdfManager;
+import com.scalar.db.io.Key;
+import com.scalar.db.io.Value;
+import com.scalar.dl.ledger.database.AssetLedger;
+import com.scalar.dl.ledger.database.Ledger;
+import com.scalar.dl.ledger.database.TamperEvidentAssetbase;
+import com.scalar.dl.ledger.emulator.AssetbaseEmulator;
+import com.scalar.dl.ledger.emulator.MutableDatabaseEmulator;
+import com.scalar.dl.ledger.function.FunctionManager;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -40,12 +40,12 @@ import org.jline.terminal.TerminalBuilder;
 
 public class EmulatorModule extends AbstractModule {
   private final AssetbaseEmulator assetbase;
-  private final UdfManager udfManager;
+  private final FunctionManager functionManager;
   private final ContractManagerEmulator contractManager;
 
   public EmulatorModule() {
     assetbase = new AssetbaseEmulator();
-    udfManager = new UdfManager(new UdfRegistryEmulator());
+    functionManager = new FunctionManager(new FunctionRegistryEmulator());
     contractManager = new ContractManagerEmulator(new ContractRegistryEmulator());
   }
 
@@ -64,8 +64,8 @@ public class EmulatorModule extends AbstractModule {
 
   @Provides
   @Singleton
-  UdfManager provideUdfManager() {
-    return udfManager;
+  FunctionManager provideFunctionManager() {
+    return functionManager;
   }
 
   @Provides
