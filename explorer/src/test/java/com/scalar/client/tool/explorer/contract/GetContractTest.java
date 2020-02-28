@@ -24,9 +24,9 @@ package com.scalar.client.tool.explorer.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.scalar.ledger.asset.InternalAsset;
-import com.scalar.ledger.exception.ContractContextException;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.asset.InternalAsset;
+import com.scalar.dl.ledger.exception.ContractContextException;
+import com.scalar.dl.ledger.database.Ledger;
 import java.util.Base64;
 import java.util.Optional;
 import javax.json.Json;

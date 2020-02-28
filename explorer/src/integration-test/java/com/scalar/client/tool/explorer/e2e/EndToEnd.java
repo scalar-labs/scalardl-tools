@@ -25,9 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.scalar.client.config.ClientConfig;
-import com.scalar.client.service.ClientModule;
-import com.scalar.client.service.ClientService;
+import com.scalar.dl.client.config.ClientConfig;
+import com.scalar.dl.client.service.ClientModule;
+import com.scalar.dl.client.service.ClientService;
 import com.scalar.client.tool.explorer.command.Explorer;
 import com.scalar.client.tool.explorer.e2e.contract.PutContract;
 import java.io.ByteArrayOutputStream;
