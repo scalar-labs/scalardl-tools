@@ -95,7 +95,7 @@ public abstract class AbstractCommand implements Runnable {
   }
 
   JsonObject convertJsonParameter(List<String> values) {
-    String text = values.stream().reduce("", (a, b) -> a = a + " " + b);
+    String text = String.join("", values);
     try {
       if (text.contains(File.separator)) {
         text = new String(Files.readAllBytes(new File(text).toPath()));
