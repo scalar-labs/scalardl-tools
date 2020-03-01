@@ -1,235 +1,211 @@
-///*
-// * This file is part of the Scalar DL Explorer.
-// * Copyright (c) 2019 Scalar, Inc.
-// *
-// * This program is free software: you can redistribute it and/or modify
-// * it under the terms of the GNU Affero General Public License as published by
-// * the Free Software Foundation, either version 3 of the License, or
-// * (at your option) any later version.
-// *
-// * This program is distributed in the hope that it will be useful,
-// * but WITHOUT ANY WARRANTY; without even the implied warranty of
-// * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// * GNU Affero General Public License for more details.
-// *
-// * You should have received a copy of the GNU Affero General Public License
-// * along with this program.  If not, see <https://www.gnu.org/licenses/>.
-// *
-// * You can be released from the requirements of the license by purchasing
-// * a commercial license.  For more information, please contact Scalar, Inc.
-// */
-//
-//package com.scalar.client.tool.explorer;
-//
-//import static org.assertj.core.api.Assertions.assertThat;
-//import static org.assertj.core.api.Assertions.assertThatThrownBy;
-//import static org.mockito.ArgumentMatchers.any;
-//import static org.mockito.ArgumentMatchers.eq;
-//import static org.mockito.Mockito.verify;
-//import static org.mockito.Mockito.when;
-//
-//import com.scalar.dl.client.config.ClientConfig;
-//import com.scalar.dl.client.exception.ClientException;
-//import com.scalar.dl.client.service.ClientService;
-//import com.scalar.dl.ledger.model.ContractExecutionResult;
-//import com.scalar.dl.ledger.model.LedgerValidationResult;
-//import com.scalar.dl.ledger.service.StatusCode;
-//import com.scalar.dl.rpc.ContractExecutionResponse;
-//
-//import java.io.StringReader;
-//import java.util.Optional;
-//import javax.json.Json;
-//import javax.json.JsonArray;
-//import javax.json.JsonObject;
-//import org.junit.Before;
-//import org.junit.Rule;
-//import org.junit.Test;
-//import org.junit.rules.ExpectedException;
-//import org.mockito.Mock;
-//import org.mockito.Mockito;
-//import org.mockito.MockitoAnnotations;
-//
-//public class ExplorerTest {
-//  private static String HOLDER_ID = "abc";
-//  private static String ASSET_ID = "xyz";
-//  @Mock private ClientConfig clientConfig;
-//  @Mock private ClientService clientService;
-//  @Mock private ContractExecutionResponse contractExecutionResponseOK;
-//  @Mock private ContractExecutionResult contractExecutionResultOK;
-//  @Mock private ClientException clientException;
-//  @Mock private LedgerValidationResult resultValidation;
-//  private Explorer explorer;
-//
-//  @Rule public ExpectedException thrown = ExpectedException.none();
-//
-//  @Before
-//  public void setUp() {
-//    MockitoAnnotations.initMocks(this);
-//
-//    explorer = new Explorer(clientService, clientConfig);
-//    when(clientConfig.getCertHolderId()).thenReturn(HOLDER_ID);
-//
-////    when(clientService.registerCertificate()).thenReturn(ledgerServiceResponseOK);
-////    when(clientService.registerContract(
-////            anyString(), anyString(), anyString(), eq(Optional.empty())))
-////        .thenReturn(ledgerServiceResponseOK);
-//
-//    when(contractExecutionResultOK.getResult()).thenReturn(Optional.of(Json.createReader(new StringReader("{ \"status\": \"OK\" , \"message\": \"\"}")).readObject()));
-////    when(ledgerServiceResponseCertificateNotFound.getStatus())
-////        .thenReturn(StatusCode.CERTIFICATE_NOT_FOUND.get());
-////    when(ledgerServiceResponseCertificateNotFound.getMessage()).thenReturn("certificate not found");
-//
-////    when(contractExecutionResponseOK.getStatus()).thenReturn(StatusCode.OK.get());
-////    when(contractExecutionResponseCertificateNotFound.getStatus())
-////        .thenReturn(StatusCode.CERTIFICATE_NOT_FOUND.get());
-////    when(contractExecutionResponseCertificateNotFound.getMessage())
-////        .thenReturn("certificate not found");
-////    when(contractExecutionResponseContractNotFound.getStatus())
-////        .thenReturn(StatusCode.CONTRACT_NOT_FOUND.get());
-////    when(contractExecutionResponseContractNotFound.getMessage()).thenReturn("contract not found");
-//  }
-//
-//  @Test
-//  public void get_CertificateAndContractNotRegistered_ShouldSucceed() {
-//    // Arrange
-//    when(contractExecutionResponseOK.getResult()).thenReturn("{ \"id\": \"bar\" }");
-//    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
-//        .thenReturn(contractExecutionResultOK);
-//
-//    // Act
-//    JsonObject result = explorer.get(ASSET_ID);
-//
-//    // Assert
-//    verify(clientService, Mockito.times(3))
-//        .executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class));
-//    assertThat(result.getString("id")).isEqualTo("bar");
-//  }
-//
-//  @Test
-//  public void get_FailedToRegisterCertificate_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
-//        .thenReturn(clientException);
-////    when(clientService.registerCertificate()).thenReturn(ledgerServiceResponseCertificateNotFound);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.get(ASSET_ID))
-//        .isInstanceOf(ClientException.class)
-//        .hasMessage("403 certificate not found");
-//  }
-//
-//  @Test
-//  public void get_CertificateNotFoundTwice_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
-//        .thenReturn(
-//                contractExecutionResultCertificateNotFound,
-//                contractExecutionResultContractNotFound);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.get(ASSET_ID))
-//        .isInstanceOf(ClientException.class)
-//        .hasMessage("403 certificate not found");
-//  }
-//
-//  @Test
-//  public void get_ContractNotFoundTwice_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
-//        .thenReturn(
-//                contractExecutionResultCertificateNotFound,
-//                contractExecutionResultContractNotFound);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.get(ASSET_ID))
-//        .isInstanceOf(ExplorerException.class)
-//        .hasMessage("404 contract not found");
-//  }
-//
-//  @Test
-//  public void scan_ThrowExceptionOnlyOneTime_ShouldReturnSuccess() {
-//    // Arrange
-//    when(contractExecutionResponseOK.getResult())
-//        .thenReturn(
-//            "{\"result\":\"success\",\"history\":[{\"id\":\"bar\",\"age\":0,\"data\":{}}]}");
-//    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
-//        .thenReturn(
-//                contractExecutionResultCertificateNotFound,
-//                contractExecutionResultContractNotFound,
-//                contractExecutionResultOK);
-//
-//    // Act
-//    JsonArray result = explorer.scan(ASSET_ID, Json.createObjectBuilder().build());
-//
-//    // Assert
-//    verify(clientService, Mockito.times(3))
-//        .executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class));
-//    assertThat(result.getJsonObject(0).getString("id")).isEqualTo("bar");
-//    assertThat(result.getJsonObject(0).getInt("age")).isEqualTo(0);
-//  }
-//
-//  @Test
-//  public void scan_FailedResponseWhenRegisteringCertificate_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
-//        .thenReturn(contractExecutionResultCertificateNotFound);
-////    when(clientService.registerCertificate()).thenReturn(ledgerServiceResponseCertificateNotFound);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
-//        .isInstanceOf(ExplorerException.class)
-//        .hasMessage("403 certificate not found");
-//  }
-//
-//  @Test
-//  public void scan_CertificateNotFoundTwice_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
-//        .thenReturn(
-//                contractExecutionResultCertificateNotFound,
-//                contractExecutionResultCertificateNotFound);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
-//        .isInstanceOf(ExplorerException.class)
-//        .hasMessage("403 certificate not found");
-//  }
-//
-//  @Test
-//  public void scan_ContractNotFoundTwice_ShouldThrowsExplorerException() {
-//    // Arrange
-//    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
-//        .thenReturn(
-//                contractExecutionResultCertificateNotFound,
-//                contractExecutionResultContractNotFound);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
-//        .isInstanceOf(ExplorerException.class)
-//        .hasMessage("404 contract not found");
-//  }
-//
-//  @Test
-//  public void validate_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(resultValidation.getCode()).thenReturn(StatusCode.DATABASE_ERROR);
-////    when(responseValidation.getMessage()).thenReturn("message");
-//    when(clientService.validateLedger(ASSET_ID)).thenReturn(resultValidation);
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.validate(ASSET_ID))
-//        .isInstanceOf(ExplorerException.class)
-//        .hasMessage("500 message");
-//  }
-//
-//  @Test
-//  public void contracts_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
-//    // Arrange
-//    when(clientService.listContracts(null)).thenReturn(Json.createReader(new StringReader("")).readObject());
-//
-//    // Act-assert
-//    assertThatThrownBy(() -> explorer.listContracts())
-//        .isInstanceOf(ExplorerException.class)
-//        .hasMessage("500 message");
-//  }
-//}
+/*
+ * This file is part of the Scalar DL Explorer.
+ * Copyright (c) 2019 Scalar, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * You can be released from the requirements of the license by purchasing
+ * a commercial license.  For more information, please contact Scalar, Inc.
+ */
+
+package com.scalar.client.tool.explorer;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+import com.scalar.dl.client.config.ClientConfig;
+import com.scalar.dl.client.exception.ClientException;
+import com.scalar.dl.client.service.ClientService;
+import com.scalar.dl.ledger.model.ContractExecutionResult;
+import com.scalar.dl.ledger.model.LedgerValidationResult;
+import com.scalar.dl.ledger.service.StatusCode;
+import com.scalar.dl.rpc.ContractExecutionResponse;
+
+import java.io.StringReader;
+import java.util.Optional;
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonObject;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+public class ExplorerTest {
+  private static String HOLDER_ID = "abc";
+  private static String ASSET_ID = "xyz";
+  @Mock private ClientConfig clientConfig;
+  @Mock private ClientService clientService;
+  @Mock private ContractExecutionResponse contractExecutionResponseOK;
+  @Mock private ContractExecutionResult contractExecutionResultOK;
+  @Mock private ClientException clientException;
+  @Mock private LedgerValidationResult resultValidation;
+  private Explorer explorer;
+  private ClientException clientExceptionCertificateNotFound;
+  private ClientException clientExceptionContractNotFound;
+
+  @Rule public ExpectedException thrown = ExpectedException.none();
+
+  @Before
+  public void setUp() {
+    MockitoAnnotations.initMocks(this);
+
+    clientExceptionCertificateNotFound = new ClientException("Certificate not found", StatusCode.CERTIFICATE_NOT_FOUND);
+    clientExceptionContractNotFound = new ClientException("contract not found", StatusCode.CONTRACT_NOT_FOUND);
+
+    explorer = new Explorer(clientService, clientConfig);
+    when(clientConfig.getCertHolderId()).thenReturn(HOLDER_ID);
+  }
+
+  @Test
+  public void get_CertificateAndContractNotRegistered_ShouldSucceed() {
+    // Arrange
+    Optional<JsonObject> jsonObject = Optional.of(Json.createObjectBuilder().add("status", StatusCode.OK.get()).build());
+    when(contractExecutionResultOK.getResult()).thenReturn(jsonObject);
+    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
+        .thenReturn(contractExecutionResultOK);
+    // Act
+    JsonObject result = explorer.get(ASSET_ID);
+
+    // Assert
+    verify(clientService)
+        .executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class));
+    assertThat(result).isEqualTo(jsonObject.get());
+  }
+
+  @Test
+  public void get_FailedToRegisterCertificate_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientService.executeContract(eq( HOLDER_ID + "GET"), any(JsonObject.class)))
+        .thenThrow(clientExceptionCertificateNotFound);
+    doAnswer((i) -> { return null;} ).when(clientService).registerCertificate();
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.get(ASSET_ID))
+        .isInstanceOf(ExplorerException.class)
+        .hasMessage("403 Certificate not found");
+  }
+
+  @Test
+  public void get_CertificateNotFound_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
+        .thenThrow(clientExceptionCertificateNotFound);
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.get(ASSET_ID))
+        .isInstanceOf(ExplorerException.class)
+        .hasMessage("403 Certificate not found");
+  }
+
+  @Test
+  public void scan_ThrowExceptionOnlyOneTime_ShouldReturnSuccess() {
+    // Arrange
+    Optional<JsonObject> jsonObject = Optional.of(Json.createReader(
+                    new StringReader("{\"status\":\"OK\",\"history\":[{\"id\":\"bar\",\"age\":0,\"data\":{}}]}"))
+                    .readObject());
+    when(contractExecutionResultOK.getResult())
+        .thenReturn(jsonObject);
+    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
+        .thenReturn(contractExecutionResultOK);
+
+    // Act
+    JsonArray result = explorer.scan(ASSET_ID, Json.createObjectBuilder().build());
+
+    // Assert
+    verify(clientService)
+        .executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class));
+    assertThat(result.getJsonObject(0).getString("id")).isEqualTo("bar");
+    assertThat(result.getJsonObject(0).getInt("age")).isEqualTo(0);
+  }
+
+  @Test
+  public void scan_FailedResponseWhenRegisteringCertificate_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
+        .thenThrow(clientExceptionCertificateNotFound);
+    doAnswer((i) -> { return null;} ).when(clientService).registerCertificate();
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
+        .isInstanceOf(ExplorerException.class)
+        .hasMessage("403 Certificate not found");
+  }
+
+  @Test
+  public void get_ContractNotFoundTwice_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
+            .thenThrow(clientExceptionContractNotFound);
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.get(ASSET_ID))
+            .isInstanceOf(ExplorerException.class)
+            .hasMessage("404 contract not found");
+  }
+  @Test
+  public void scan_ContractNotFoundTwice_ShouldThrowsExplorerException() {
+    // Arrange
+    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
+            .thenThrow(clientExceptionContractNotFound);
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
+            .isInstanceOf(ExplorerException.class)
+            .hasMessage("404 contract not found");
+  }
+  @Test
+  public void scan_CertificateNotFoundTwice_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
+        .thenThrow(clientExceptionCertificateNotFound);
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
+        .isInstanceOf(ExplorerException.class)
+        .hasMessage("403 Certificate not found");
+  }
+
+  @Test
+  public void validate_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientException.getStatusCode()).thenReturn(StatusCode.DATABASE_ERROR);
+    when(clientException.getMessage()).thenReturn("message");
+    when(clientService.validateLedger(ASSET_ID)).thenThrow(clientException);
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.validate(ASSET_ID))
+        .isInstanceOf(ExplorerException.class)
+        .hasMessage("500 message");
+  }
+
+  @Test
+  public void contracts_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
+    // Arrange
+    when(clientException.getStatusCode()).thenReturn(StatusCode.DATABASE_ERROR);
+    when(clientException.getMessage()).thenReturn("message");
+    when(clientService.listContracts(null)).thenThrow(clientException);
+
+    // Act-assert
+    assertThatThrownBy(() -> explorer.listContracts())
+            .isInstanceOf(ExplorerException.class)
+            .hasMessage("500 message");
+  }
+}

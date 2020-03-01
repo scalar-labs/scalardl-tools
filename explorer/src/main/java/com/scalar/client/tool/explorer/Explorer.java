@@ -56,7 +56,7 @@ public class Explorer {
       registerScanContract();
     }
     if (!(clientException.getStatusCode().equals(StatusCode.OK))) {
-      throw new ExplorerException(clientException.getStatusCode() + " " + clientException.getMessage());
+      throw new ExplorerException(clientException.getStatusCode().get() + " " + clientException.getMessage());
     }
   }
 
@@ -64,7 +64,7 @@ public class Explorer {
     try {
       clientService.registerCertificate();
     } catch (ClientException ex) {
-      throw new ExplorerException(ex.getStatusCode() + " " + ex.getMessage());
+      throw new ExplorerException(ex.getStatusCode().get() + " " + ex.getMessage());
     }
   }
 
@@ -91,7 +91,7 @@ public class Explorer {
       try {
         clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
       } catch (ClientException ex) {
-        throw new ExplorerException(ex.getStatusCode() + " " + ex.getMessage());
+        throw new ExplorerException(ex.getStatusCode().get() + " " + ex.getMessage());
       }
     } catch (IOException e) {
       throw new ExplorerException(e.getMessage());
