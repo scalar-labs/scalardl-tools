@@ -40,8 +40,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -201,7 +204,8 @@ public class EmulatorTerminal implements Runnable {
     for (CommandLine command : commands) {
       if (line.startsWith(command.getCommandName())) {
         String params = line.replaceFirst(command.getCommandName(), "").trim();
-        String[] paramsArray = params.isEmpty() ? new String[] {} : params.split(" ");
+        String[] paramsArray =
+            params.isEmpty() ? new String[] {} : getParamsArray(params, command.getCommandName());
         command.parseWithHandlers(
             new CommandLine.RunFirst(),
             new CommandExceptionHandler(terminal.getTerminal().writer()),
@@ -210,5 +214,21 @@ public class EmulatorTerminal implements Runnable {
       }
     }
     return false;
+  }
+
+  private String[] getParamsArray(String params, String commandName) {
+    if (commandName.matches("register[\\w-]*")) {
+      return params.split(" ");
+    }
+    List<String> allMatches = new ArrayList<String>();
+    Pattern pattern = Pattern.compile("(\".+?\"|[\\w.-]*)(\\s.+|.*)");
+    Matcher matcher = pattern.matcher(params);
+    matcher.find();
+    for (int i = 1; i <= matcher.groupCount(); i++) {
+      if (!matcher.group(i).isEmpty()) {
+        allMatches.add(matcher.group(i).replaceAll("^\"|\"$", ""));
+      }
+    }
+    return allMatches.toArray(new String[0]);
   }
 }
