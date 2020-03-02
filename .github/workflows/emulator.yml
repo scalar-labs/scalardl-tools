@@ -4,7 +4,6 @@ on: [push]
 
 jobs:
   Emulator:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -16,7 +15,7 @@ jobs:
       with:
         java-version: 1.8
 
-    - name: Build with Gradle
+    - name: Build Emulator
       run: |
         cd emulator
         ./gradlew build
