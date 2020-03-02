@@ -237,7 +237,7 @@ public class EmulatorTerminal implements Runnable {
 
       byteArray.write(params.charAt(i));
       if ((character.matches(" ") && stack.empty()) || i == params.length() - 1) {
-        paramsList.add(byteArray.toString().trim());
+        paramsList.add(byteArray.toString().trim().replaceAll("^\"|\"$", ""));
         byteArray.reset();
       }
     }
