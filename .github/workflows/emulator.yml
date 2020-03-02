@@ -19,4 +19,5 @@ jobs:
     - name: Build with Gradle
       run: |
         cd emulator
+        ./gradlew build
         ./gradlew installDist
