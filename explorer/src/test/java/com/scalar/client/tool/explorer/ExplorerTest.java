@@ -31,16 +31,12 @@ import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.exception.ClientException;
 import com.scalar.dl.client.service.ClientService;
 import com.scalar.dl.ledger.model.ContractExecutionResult;
-import com.scalar.dl.ledger.model.LedgerValidationResult;
 import com.scalar.dl.ledger.service.StatusCode;
-import com.scalar.dl.rpc.ContractExecutionResponse;
-
 import java.io.StringReader;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -53,10 +49,8 @@ public class ExplorerTest {
   private static String ASSET_ID = "xyz";
   @Mock private ClientConfig clientConfig;
   @Mock private ClientService clientService;
-  @Mock private ContractExecutionResponse contractExecutionResponseOK;
   @Mock private ContractExecutionResult contractExecutionResultOK;
   @Mock private ClientException clientException;
-  @Mock private LedgerValidationResult resultValidation;
   private Explorer explorer;
   private ClientException clientExceptionCertificateNotFound;
   private ClientException clientExceptionContractNotFound;
@@ -67,27 +61,29 @@ public class ExplorerTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
 
-    clientExceptionCertificateNotFound = new ClientException("Certificate not found", StatusCode.CERTIFICATE_NOT_FOUND);
-    clientExceptionContractNotFound = new ClientException("contract not found", StatusCode.CONTRACT_NOT_FOUND);
-
+    clientExceptionCertificateNotFound =
+            new ClientException("Certificate not found", StatusCode.CERTIFICATE_NOT_FOUND);
+    clientExceptionContractNotFound =
+            new ClientException("contract not found", StatusCode.CONTRACT_NOT_FOUND);
     explorer = new Explorer(clientService, clientConfig);
+
     when(clientConfig.getCertHolderId()).thenReturn(HOLDER_ID);
   }
 
   @Test
   public void get_CertificateAndContractNotRegistered_ShouldSucceed() {
     // Arrange
-    Optional<JsonObject> jsonObject = Optional.of(Json.createObjectBuilder().add("status", StatusCode.OK.get()).build());
-    when(contractExecutionResultOK.getResult()).thenReturn(jsonObject);
+    JsonObject expected = Json.createObjectBuilder().add("status", StatusCode.OK.get()).build();
+    when(contractExecutionResultOK.getResult()).thenReturn(Optional.of(expected));
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
         .thenReturn(contractExecutionResultOK);
+
     // Act
-    JsonObject result = explorer.get(ASSET_ID);
+    JsonObject actual = explorer.get(ASSET_ID);
 
     // Assert
-    verify(clientService)
-        .executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class));
-    assertThat(result).isEqualTo(jsonObject.get());
+    verify(clientService).executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class));
+    assertThat(actual).isEqualTo(expected);
   }
 
   @Test
@@ -95,7 +91,7 @@ public class ExplorerTest {
     // Arrange
     when(clientService.executeContract(eq( HOLDER_ID + "GET"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
-    doAnswer((i) -> { return null;} ).when(clientService).registerCertificate();
+    doNothing().when(clientService).registerCertificate();
 
     // Act-assert
     assertThatThrownBy(() -> explorer.get(ASSET_ID))
@@ -116,24 +112,23 @@ public class ExplorerTest {
   }
 
   @Test
-  public void scan_ThrowExceptionOnlyOneTime_ShouldReturnSuccess() {
+  public void scan_ShouldReturnSuccess() {
     // Arrange
-    Optional<JsonObject> jsonObject = Optional.of(Json.createReader(
-                    new StringReader("{\"status\":\"OK\",\"history\":[{\"id\":\"bar\",\"age\":0,\"data\":{}}]}"))
-                    .readObject());
-    when(contractExecutionResultOK.getResult())
-        .thenReturn(jsonObject);
+    JsonObject expected = Json.createReader(
+            new StringReader("{\"status\":\"OK\"," +
+                    "\"history\":[{\"id\":\"bar\",\"age\":0,\"data\":{}}]}"))
+            .readObject();
+    when(contractExecutionResultOK.getResult()).thenReturn(Optional.of(expected));
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenReturn(contractExecutionResultOK);
 
     // Act
-    JsonArray result = explorer.scan(ASSET_ID, Json.createObjectBuilder().build());
+    JsonArray actual = explorer.scan(ASSET_ID, Json.createObjectBuilder().build());
 
     // Assert
-    verify(clientService)
-        .executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class));
-    assertThat(result.getJsonObject(0).getString("id")).isEqualTo("bar");
-    assertThat(result.getJsonObject(0).getInt("age")).isEqualTo(0);
+    verify(clientService).executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class));
+    assertThat(actual.getJsonObject(0).getString("id")).isEqualTo("bar");
+    assertThat(actual.getJsonObject(0).getInt("age")).isEqualTo(0);
   }
 
   @Test
@@ -141,7 +136,7 @@ public class ExplorerTest {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
-    doAnswer((i) -> { return null;} ).when(clientService).registerCertificate();
+    doNothing().when(clientService).registerCertificate();
 
     // Act-assert
     assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
@@ -150,7 +145,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void get_ContractNotFoundTwice_ShouldThrowExplorerException() {
+  public void get_ContractNotFound_ShouldThrowExplorerException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
@@ -160,8 +155,9 @@ public class ExplorerTest {
             .isInstanceOf(ExplorerException.class)
             .hasMessage("404 contract not found");
   }
+
   @Test
-  public void scan_ContractNotFoundTwice_ShouldThrowsExplorerException() {
+  public void scan_ContractNotFound_ShouldThrowsExplorerException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
@@ -171,8 +167,9 @@ public class ExplorerTest {
             .isInstanceOf(ExplorerException.class)
             .hasMessage("404 contract not found");
   }
+
   @Test
-  public void scan_CertificateNotFoundTwice_ShouldThrowExplorerException() {
+  public void scan_CertificateNotFound_ShouldThrowExplorerException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
