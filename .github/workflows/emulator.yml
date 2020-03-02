@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Clone Scalardl-tool repository
+    - name: Clone scalardl-tools repository
       uses: actions/checkout@v2
 
     - name: Set up JDK 1.8
