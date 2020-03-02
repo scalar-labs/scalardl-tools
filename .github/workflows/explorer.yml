@@ -1,6 +1,9 @@
 name: Explorer-CI
 
-on: [push]
+on:
+  push:
+    paths:
+      - 'explorer/**'
 
 jobs:
   Explorer:
