@@ -49,6 +49,7 @@ public class NestedInvocationTest {
 
     registerContract("caller", "Caller");
     registerContract("callee", "Callee");
+    System.out.println("test");
   }
 
   private void registerContract(String id, String name) {

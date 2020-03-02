@@ -88,7 +88,6 @@ public class ExplorerTest {
     when(contractExecutionResponseContractNotFound.getStatus())
         .thenReturn(StatusCode.CONTRACT_NOT_FOUND.get());
     when(contractExecutionResponseContractNotFound.getMessage()).thenReturn("contract not found");
-    System.out.println("Test");
   }
 
   @Test
