@@ -1,6 +1,9 @@
 name: Emulator-CI
 
-on: [push]
+on:
+  push:
+    paths:
+      - 'emulator/**'
 
 jobs:
   Emulator:
