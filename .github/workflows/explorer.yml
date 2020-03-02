@@ -18,12 +18,12 @@ jobs:
       with:
         java-version: 1.8
 
-    - name: Build Emulator
+    - name: Build Explorer
       run: |
         cd explorer
         ./gradlew assemble
 
-    - name: Test Emulator
+    - name: Test Explorer
       run: |
         cd explorer
         ./gradlew test
