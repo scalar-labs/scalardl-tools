@@ -71,7 +71,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void get_CertificateAndContractNotRegistered_ShouldSucceed() {
+  public void get_ShouldSucceed() {
     // Arrange
     JsonObject expected = Json.createObjectBuilder().add("status", StatusCode.OK.get()).build();
     when(contractExecutionResultOK.getResult()).thenReturn(Optional.of(expected));
