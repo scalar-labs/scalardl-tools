@@ -35,6 +35,7 @@ import com.scalar.client.tool.emulator.command.Register;
 import com.scalar.client.tool.emulator.command.RegisterFunction;
 import com.scalar.client.tool.emulator.command.Scan;
 import com.scalar.client.tool.emulator.command.ScanWithSingleParameter;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -43,8 +44,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Stack;
 import java.util.stream.Stream;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -204,8 +204,7 @@ public class EmulatorTerminal implements Runnable {
     for (CommandLine command : commands) {
       if (line.startsWith(command.getCommandName())) {
         String params = line.replaceFirst(command.getCommandName(), "").trim();
-        String[] paramsArray =
-            params.isEmpty() ? new String[] {} : getParamsArray(params, command.getCommandName());
+        String[] paramsArray = params.isEmpty() ? new String[] {} : paramsParser(params);
         command.parseWithHandlers(
             new CommandLine.RunFirst(),
             new CommandExceptionHandler(terminal.getTerminal().writer()),
@@ -216,19 +215,32 @@ public class EmulatorTerminal implements Runnable {
     return false;
   }
 
-  private String[] getParamsArray(String params, String commandName) {
-    if (commandName.matches("register[\\w-]*")) {
-      return params.split(" ");
-    }
-    List<String> allMatches = new ArrayList<String>();
-    Pattern pattern = Pattern.compile("(\".+?\"|[\\w.-]*)(\\s.+|.*)");
-    Matcher matcher = pattern.matcher(params);
-    matcher.find();
-    for (int i = 1; i <= matcher.groupCount(); i++) {
-      if (!matcher.group(i).isEmpty()) {
-        allMatches.add(matcher.group(i).replaceAll("^\"|\"$", ""));
+  private String[] paramsParser(String params) {
+    Stack<String> stack = new Stack<String>();
+    List<String> paramsList = new ArrayList<String>();
+    ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
+
+    for (int i = 0; i < params.length(); i++) {
+      String character = Character.valueOf(params.charAt(i)).toString();
+      if (character.matches("[{\"}]")) {
+        if (!stack.empty()) {
+          if ((character.equals("\"") && stack.peek().equals("\""))
+              || (character.equals("}") && stack.peek().equals("{"))) {
+            stack.pop();
+          } else {
+            stack.push(character);
+          }
+        } else {
+          stack.push(character);
+        }
+      }
+
+      byteArray.write(params.charAt(i));
+      if ((character.matches(" ") && stack.empty()) || i == params.length() - 1) {
+        paramsList.add(byteArray.toString().trim());
+        byteArray.reset();
       }
     }
-    return allMatches.toArray(new String[0]);
+    return paramsList.toArray(new String[0]);
   }
 }
