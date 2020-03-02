@@ -19,7 +19,9 @@ jobs:
         java-version: 1.8
 
     - name: Build Emulator
+      cd emulator
       run: ./gradlew assemble
 
     - name: Test Emulator
+      cd emulator
       run: ./gradlew test
