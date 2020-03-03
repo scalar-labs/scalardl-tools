@@ -6,7 +6,9 @@ execute get {"asset_id": "X"}
 execute scan {"asset_id": "X"}
 execute scan {"asset_id": "X", "start": 1}
 execute scan {"asset_id": "X", "limit": 1, "asc_order": true}
-register state-updater com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
+register state-updater-contract com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
 list-contracts
 execute state-updater {"asset_id": "Y", "state": 1}
 execute get {"asset_id": "Y"}
+register-function state-updater-function com.scalar.client.tool.emulator.function.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/function/StateUpdater.class
+execute state-updater-contract {"asset_id":"Y","state":1,"_functions_":["state-updater-function"]} -fa {"asset_id":"Y","state":1}
