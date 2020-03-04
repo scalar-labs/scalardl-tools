@@ -55,9 +55,6 @@ public class Explorer {
       registerGetContract();
       registerScanContract();
     }
-    if (!(clientException.getStatusCode().equals(StatusCode.OK))) {
-      throw clientException;
-    }
   }
 
   private void registerCertificate() {
@@ -101,17 +98,18 @@ public class Explorer {
   public void validate(String assetId) {
     try {
       clientService.validateLedger(assetId);
-    } catch (ClientException ex) {
-      fallback(ex);
+    } catch (ClientException clientException) {
+      fallback(clientException);
+      throw clientException;
     }
   }
 
   public JsonObject listContracts() {
     try {
       return clientService.listContracts(null);
-    } catch (ClientException ex) {
-      fallback(ex);
-      return string2Json(ex.getMessage());
+    } catch (ClientException clientException) {
+      fallback(clientException);
+      throw clientException;
     }
   }
 
@@ -133,9 +131,9 @@ public class Explorer {
       ContractExecutionResult result = clientService.executeContract(id, argument);
 
       return result.getResult().get();
-    } catch (ClientException ex) {
-      fallback(ex);
-      return string2Json(ex.getMessage());
+    } catch (ClientException clientException) {
+      fallback(clientException);
+      throw clientException;
     }
   }
 
