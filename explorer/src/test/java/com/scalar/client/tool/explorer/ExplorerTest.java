@@ -21,8 +21,7 @@
 
 package com.scalar.client.tool.explorer;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -71,7 +70,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void get_ShouldSucceed() {
+  public void get_ProperArgumentGiven_ShouldSucceed() {
     // Arrange
     JsonObject expected = Json.createObjectBuilder().add("status", StatusCode.OK.get()).build();
     when(contractExecutionResultOK.getResult()).thenReturn(Optional.of(expected));
@@ -93,10 +92,13 @@ public class ExplorerTest {
         .thenThrow(clientExceptionCertificateNotFound);
     doNothing().when(clientService).registerCertificate();
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.get(ASSET_ID); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.get(ASSET_ID))
-        .isInstanceOf(ExplorerException.class)
-        .hasMessage("403 Certificate not found");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
   }
 
   @Test
@@ -105,19 +107,27 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.get(ASSET_ID); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.get(ASSET_ID))
-        .isInstanceOf(ExplorerException.class)
-        .hasMessage("403 Certificate not found");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
   }
 
   @Test
-  public void scan_ShouldReturnSuccess() {
+  public void scan_ProperArgumentGiven_ShouldReturnSuccess() {
     // Arrange
-    JsonObject expected = Json.createReader(
-            new StringReader("{\"status\":\"OK\"," +
-                    "\"history\":[{\"id\":\"bar\",\"age\":0,\"data\":{}}]}"))
-            .readObject();
+    JsonObject expected = Json.createObjectBuilder()
+            .add("status", StatusCode.OK.toString())
+            .add("history", Json.createArrayBuilder()
+                    .add(Json.createObjectBuilder()
+                            .add("id", "bar")
+                            .add("age", 0)
+                            .add("data", Json.createObjectBuilder()))
+                    .build())
+            .build();
     when(contractExecutionResultOK.getResult()).thenReturn(Optional.of(expected));
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenReturn(contractExecutionResultOK);
@@ -127,21 +137,23 @@ public class ExplorerTest {
 
     // Assert
     verify(clientService).executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class));
-    assertThat(actual.getJsonObject(0).getString("id")).isEqualTo("bar");
-    assertThat(actual.getJsonObject(0).getInt("age")).isEqualTo(0);
+    assertThat(actual).isEqualTo(expected.getJsonArray("history"));
   }
 
-  @Test
+  @Test //(expected = ClientException.class)
   public void scan_FailedResponseWhenRegisteringCertificate_ShouldThrowExplorerException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
     doNothing().when(clientService).registerCertificate();
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.scan(ASSET_ID, Json.createObjectBuilder().build()); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
-        .isInstanceOf(ExplorerException.class)
-        .hasMessage("403 Certificate not found");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
   }
 
   @Test
@@ -150,10 +162,13 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.get(ASSET_ID); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.get(ASSET_ID))
-            .isInstanceOf(ExplorerException.class)
-            .hasMessage("404 contract not found");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CONTRACT_NOT_FOUND);
   }
 
   @Test
@@ -162,10 +177,13 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.scan(ASSET_ID, Json.createObjectBuilder().build()); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
-            .isInstanceOf(ExplorerException.class)
-            .hasMessage("404 contract not found");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CONTRACT_NOT_FOUND);
   }
 
   @Test
@@ -174,10 +192,13 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.scan(ASSET_ID, Json.createObjectBuilder().build()); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.scan(ASSET_ID, Json.createObjectBuilder().build()))
-        .isInstanceOf(ExplorerException.class)
-        .hasMessage("403 Certificate not found");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
   }
 
   @Test
@@ -187,10 +208,13 @@ public class ExplorerTest {
     when(clientException.getMessage()).thenReturn("message");
     when(clientService.validateLedger(ASSET_ID)).thenThrow(clientException);
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.validate(ASSET_ID); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.validate(ASSET_ID))
-        .isInstanceOf(ExplorerException.class)
-        .hasMessage("500 message");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.DATABASE_ERROR);
   }
 
   @Test
@@ -200,9 +224,12 @@ public class ExplorerTest {
     when(clientException.getMessage()).thenReturn("message");
     when(clientService.listContracts(null)).thenThrow(clientException);
 
+    //Act
+    Throwable thrown = catchThrowable(() -> { explorer.listContracts(); });
+
     // Act-assert
-    assertThatThrownBy(() -> explorer.listContracts())
-            .isInstanceOf(ExplorerException.class)
-            .hasMessage("500 message");
+    assertThat(thrown).isInstanceOf(ClientException.class);
+    ClientException clientException = (ClientException) thrown;
+    assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.DATABASE_ERROR);
   }
 }

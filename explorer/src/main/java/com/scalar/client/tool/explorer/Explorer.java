@@ -56,15 +56,15 @@ public class Explorer {
       registerScanContract();
     }
     if (!(clientException.getStatusCode().equals(StatusCode.OK))) {
-      throw new ExplorerException(clientException.getStatusCode().get() + " " + clientException.getMessage());
+      throw clientException;
     }
   }
 
   private void registerCertificate() {
     try {
       clientService.registerCertificate();
-    } catch (ClientException ex) {
-      throw new ExplorerException(ex.getStatusCode().get() + " " + ex.getMessage());
+    } catch (ClientException clientException) {
+      throw clientException;
     }
   }
 
@@ -90,11 +90,11 @@ public class Explorer {
       Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
       try {
         clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
-      } catch (ClientException ex) {
-        throw new ExplorerException(ex.getStatusCode().get() + " " + ex.getMessage());
+      } catch (ClientException clientException) {
+        throw clientException;
       }
     } catch (IOException e) {
-      throw new ExplorerException(e.getMessage());
+      throw new ExplorerException("Contract not found", StatusCode.CONTRACT_NOT_FOUND);
     }
   }
 
