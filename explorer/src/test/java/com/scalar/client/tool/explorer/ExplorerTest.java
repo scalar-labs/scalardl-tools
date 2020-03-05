@@ -92,10 +92,10 @@ public class ExplorerTest {
         .thenThrow(clientExceptionCertificateNotFound);
     doNothing().when(clientService).registerCertificate();
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.get(ASSET_ID); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
@@ -107,10 +107,10 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.get(ASSET_ID); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
@@ -147,10 +147,10 @@ public class ExplorerTest {
         .thenThrow(clientExceptionCertificateNotFound);
     doNothing().when(clientService).registerCertificate();
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.scan(ASSET_ID, Json.createObjectBuilder().build()); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
@@ -162,10 +162,10 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.get(ASSET_ID); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CONTRACT_NOT_FOUND);
@@ -177,10 +177,10 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.scan(ASSET_ID, Json.createObjectBuilder().build()); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CONTRACT_NOT_FOUND);
@@ -192,10 +192,10 @@ public class ExplorerTest {
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.scan(ASSET_ID, Json.createObjectBuilder().build()); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.CERTIFICATE_NOT_FOUND);
@@ -208,10 +208,10 @@ public class ExplorerTest {
     when(clientException.getMessage()).thenReturn("message");
     when(clientService.validateLedger(ASSET_ID)).thenThrow(clientException);
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.validate(ASSET_ID); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.DATABASE_ERROR);
@@ -224,10 +224,10 @@ public class ExplorerTest {
     when(clientException.getMessage()).thenReturn("message");
     when(clientService.listContracts(null)).thenThrow(clientException);
 
-    //Act
+    // Act
     Throwable thrown = catchThrowable(() -> { explorer.listContracts(); });
 
-    // Act-assert
+    // Assert
     assertThat(thrown).isInstanceOf(ClientException.class);
     ClientException clientException = (ClientException) thrown;
     assertThat(clientException.getStatusCode()).isEqualTo(StatusCode.DATABASE_ERROR);
