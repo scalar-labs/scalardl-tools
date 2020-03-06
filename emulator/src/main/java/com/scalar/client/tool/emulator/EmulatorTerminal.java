@@ -35,6 +35,7 @@ import com.scalar.client.tool.emulator.command.Register;
 import com.scalar.client.tool.emulator.command.RegisterFunction;
 import com.scalar.client.tool.emulator.command.Scan;
 import com.scalar.client.tool.emulator.command.ScanWithSingleParameter;
+import com.scalar.client.tool.emulator.command.SetCertificate;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -99,7 +100,8 @@ public class EmulatorTerminal implements Runnable {
             new CommandLine(injector.getInstance(Register.class)),
             new CommandLine(injector.getInstance(ScanWithSingleParameter.class)),
             new CommandLine(injector.getInstance(Scan.class)),
-            new CommandLine(injector.getInstance(Database.class)));
+            new CommandLine(injector.getInstance(Database.class)),
+            new CommandLine(injector.getInstance(SetCertificate.class)));
 
     CommandLine.run(injector.getInstance(EmulatorTerminal.class), args);
   }

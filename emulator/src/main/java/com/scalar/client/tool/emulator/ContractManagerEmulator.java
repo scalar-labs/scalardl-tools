@@ -24,12 +24,14 @@ import javassist.CtNewMethod;
 import javassist.Modifier;
 import javax.json.Json;
 import javax.json.JsonObject;
+import org.apache.commons.lang3.reflect.FieldUtils;
 
 public class ContractManagerEmulator {
 
   private final ContractRegistry registry;
   private final Map<String, Contract> cache;
   public ContractManagerEmulator that;
+  private CertificateEntry.Key emulatedCertificateKey;
 
   public ContractManagerEmulator(ContractRegistry registry) {
     this.registry = registry;
@@ -67,11 +69,16 @@ public class ContractManagerEmulator {
         e.printStackTrace();
       }
     }
+    emulateCertificateKey(contract);
     return contract;
   }
 
   public List<ContractEntry> scan() {
     return registry.scan("emulator_user");
+  }
+
+  public void setEmulatedCertificateKey(CertificateEntry.Key emulatedCertificateKey) {
+    this.emulatedCertificateKey = emulatedCertificateKey;
   }
 
   /** Thes method is used to delegate contract's invoke. */
@@ -133,5 +140,21 @@ public class ContractManagerEmulator {
     Method m = contract.getClass().getMethod("setHiddenManager", this.getClass());
     m.invoke(contract, this);
     return contract;
+  }
+
+  /**
+   * Emulate the certificate holderId and version for the given Contract instance
+   *
+   * @param contract the contract in which the certificate will be emulated
+   */
+  private void emulateCertificateKey(Contract contract) {
+    if (emulatedCertificateKey == null) {
+      return;
+    }
+    try {
+      FieldUtils.writeField(contract, "certificateKey", emulatedCertificateKey, true);
+    } catch (IllegalAccessException e) {
+      e.printStackTrace();
+    }
   }
 }
