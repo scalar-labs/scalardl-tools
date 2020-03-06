@@ -23,6 +23,7 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testCompile 'org.assertj:assertj-core:3.11.1'
     testCompile group: 'org.mockito', name: 'mockito-core', version: '2.1.0'
+    compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.9'
 }
 
 sourceCompatibility = 1.8
