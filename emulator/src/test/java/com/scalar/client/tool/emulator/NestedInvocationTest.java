@@ -76,6 +76,8 @@ public class NestedInvocationTest {
 
     // Act assert
     assertThat(result.getBoolean("caller_is_called")).isTrue();
+    assertThat(result.getBoolean("caller_is_root")).isTrue();
     assertThat(result.getBoolean("callee_is_called")).isTrue();
+    assertThat(result.getBoolean("callee_is_root")).isFalse();
   }
 }

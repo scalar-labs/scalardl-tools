@@ -38,6 +38,7 @@ public class Caller extends Contract {
 
     JsonObjectBuilder builder = Json.createObjectBuilder(resultFromCallee);
     builder.add("caller_is_called", true);
+    builder.add("caller_is_root", isRoot());
 
     return builder.build();
   }
