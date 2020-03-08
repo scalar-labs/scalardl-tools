@@ -20,6 +20,7 @@
  */
 package com.scalar.client.tool.emulator;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
@@ -215,7 +216,8 @@ public class EmulatorTerminal implements Runnable {
     return false;
   }
 
-  private String[] paramsParser(String params) {
+  @VisibleForTesting
+  String[] paramsParser(String params) {
     Stack<String> stack = new Stack<String>();
     List<String> paramsList = new ArrayList<String>();
     ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
