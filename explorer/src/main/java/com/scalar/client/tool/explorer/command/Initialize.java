@@ -2,7 +2,7 @@ package com.scalar.client.tool.explorer.command;
 
 import picocli.CommandLine;
 
-@CommandLine.Command(name = "initialize", description = "Initialize the asset management application")
+@CommandLine.Command(name = "initialize", description = "Initialize explorer certificate and contracts")
 public class Initialize implements Runnable {
   @CommandLine.Option(
       names = {"-f", "--file"},
