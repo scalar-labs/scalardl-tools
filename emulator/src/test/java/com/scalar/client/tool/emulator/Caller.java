@@ -35,18 +35,15 @@ public class Caller extends Contract {
     String contractId = argument.getString(CONTRACT_ID_ATTRIBUTE_NAME);
 
     JsonObject resultFromCallee = invoke(contractId, ledger, Json.createObjectBuilder().build());
+    JsonObjectBuilder result = Json.createObjectBuilder(resultFromCallee);
+    JsonObjectBuilder callerCertificate =
+        Json.createObjectBuilder()
+            .add("holder_id", getCertificateKey().getHolderId())
+            .add("version", getCertificateKey().getVersion());
+    result.add("caller_certificate", callerCertificate);
+    result.add("caller_is_called", true);
+    result.add("caller_is_root", isRoot());
 
-    JsonObjectBuilder builder = Json.createObjectBuilder(resultFromCallee);
-    if (getCertificateKey() != null) {
-      JsonObjectBuilder callerCertificate =
-          Json.createObjectBuilder()
-              .add("holder_id", getCertificateKey().getHolderId())
-              .add("version", getCertificateKey().getVersion());
-      builder.add("caller_certificate", callerCertificate);
-    }
-    builder.add("caller_is_called", true);
-    builder.add("caller_is_root", isRoot());
-
-    return builder.build();
+    return result.build();
   }
 }

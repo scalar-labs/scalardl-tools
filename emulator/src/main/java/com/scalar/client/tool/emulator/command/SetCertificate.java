@@ -37,7 +37,8 @@ import picocli.CommandLine;
     descriptionHeading = "%n@|bold,underline Description|@:%n",
     description =
         "This is used to emulate which user is executing the registered contract by setting the 'holder_id' and 'version' values "
-            + "of the CertificateEntry.Key object returned when a contract invokes the 'getCertificate()' method.",
+            + "of the CertificateEntry.Key object returned when a contract invokes the 'getCertificate()' method.\n\n"
+            + "By default, the emulator will set the holderId value to 'default_holder_id' and the version to '1'.",
     parameterListHeading = "%n@|bold,underline Parameters|@:%n",
     optionListHeading = "%n@|bold,underline Options|@:%n",
     footerHeading = "%n",

@@ -27,7 +27,8 @@ import javax.json.JsonObject;
 import org.apache.commons.lang3.reflect.FieldUtils;
 
 public class ContractManagerEmulator {
-
+  public static final CertificateEntry.Key defaultCertificateKey =
+      new CertificateEntry.Key("default_holder_id", 1);
   private final ContractRegistry registry;
   private final Map<String, Contract> cache;
   public ContractManagerEmulator that;
@@ -36,6 +37,7 @@ public class ContractManagerEmulator {
   public ContractManagerEmulator(ContractRegistry registry) {
     this.registry = registry;
     this.cache = new HashMap<String, Contract>();
+    this.emulatedCertificateKey = defaultCertificateKey;
     that = this;
   }
 
@@ -154,9 +156,6 @@ public class ContractManagerEmulator {
    * @param contract the contract in which the certificate will be emulated
    */
   private void emulateCertificateKey(Contract contract) {
-    if (emulatedCertificateKey == null) {
-      return;
-    }
     try {
       FieldUtils.writeField(contract, "certificateKey", emulatedCertificateKey, true);
     } catch (IllegalAccessException e) {

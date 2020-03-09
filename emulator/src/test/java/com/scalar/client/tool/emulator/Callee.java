@@ -31,15 +31,14 @@ public class Callee extends Contract {
   @Override
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
     JsonObjectBuilder result = Json.createObjectBuilder();
-    if (getCertificateKey() != null) {
-      JsonObjectBuilder calleeCertificate =
-          Json.createObjectBuilder()
-              .add("holder_id", getCertificateKey().getHolderId())
-              .add("version", getCertificateKey().getVersion());
-      result.add("callee_certificate", calleeCertificate);
-    }
-    return result.add("callee_is_called", true)
-        .add("callee_is_root", isRoot())
-        .build();
+    JsonObjectBuilder calleeCertificate =
+        Json.createObjectBuilder()
+            .add("holder_id", getCertificateKey().getHolderId())
+            .add("version", getCertificateKey().getVersion());
+    result.add("callee_certificate", calleeCertificate);
+    result.add("callee_is_called", true);
+    result.add("callee_is_root", isRoot());
+
+    return result.build();
   }
 }

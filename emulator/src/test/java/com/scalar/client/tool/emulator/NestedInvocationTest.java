@@ -31,7 +31,6 @@ import com.scalar.dl.ledger.emulator.AssetbaseEmulator;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -80,7 +79,10 @@ public class NestedInvocationTest {
     assertThat(result.getBoolean("caller_is_root")).isTrue();
     assertThat(result.getBoolean("callee_is_called")).isTrue();
     assertThat(result.getBoolean("callee_is_root")).isFalse();
-    assertThat(result.containsKey("callee_certificate")).isFalse();
+    assertCertificate(
+        result.getJsonObject("callee_certificate"), ContractManagerEmulator.defaultCertificateKey);
+    assertCertificate(
+        result.getJsonObject("caller_certificate"), ContractManagerEmulator.defaultCertificateKey);
   }
 
   @Test
@@ -89,22 +91,22 @@ public class NestedInvocationTest {
     CertificateEntry.Key certificate = new CertificateEntry.Key("foo", 3);
     contractManager.setEmulatedCertificateKey(certificate);
     ContractEntry.Key key =
-            new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
+        new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
     Contract contract = contractManager.getInstance(key.getId());
     JsonObject argument =
-            Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
+        Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
 
     // Act
     JsonObject result = contract.invoke(ledger, argument, Optional.empty());
 
     // Assert
-    JsonObject callerCertificate = result.getJsonObject("caller_certificate");
-    JsonObject calleeCertificate = result.getJsonObject("callee_certificate");
-    assertThat(callerCertificate).isNotNull();
-    assertThat(calleeCertificate).isNotNull();
-    for (JsonObject certificateResult : Arrays.asList(calleeCertificate, callerCertificate)) {
-      assertThat(certificateResult.getString("holder_id")).isEqualTo(certificate.getHolderId());
-      assertThat(certificateResult.getInt("version")).isEqualTo(certificate.getVersion());
-    }
+    assertCertificate(result.getJsonObject("callee_certificate"), certificate);
+    assertCertificate(result.getJsonObject("caller_certificate"), certificate);
+  }
+
+  private void assertCertificate(JsonObject result, CertificateEntry.Key expected) {
+    assertThat(result).isNotNull();
+    assertThat(result.getString("holder_id")).isEqualTo(expected.getHolderId());
+    assertThat(result.getInt("version")).isEqualTo(expected.getVersion());
   }
 }
