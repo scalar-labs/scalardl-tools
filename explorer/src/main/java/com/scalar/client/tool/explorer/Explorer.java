@@ -47,14 +47,10 @@ public class Explorer {
     this.clientConfig = clientConfig;
   }
 
-  private void fallback(ClientException clientException) {
-    if (clientException.getStatusCode().equals(StatusCode.CERTIFICATE_NOT_FOUND)) {
+  public void initialize() {
       registerCertificate();
-    }
-    if (clientException.getStatusCode().equals(StatusCode.CONTRACT_NOT_FOUND)) {
       registerGetContract();
       registerScanContract();
-    }
   }
 
   private void registerCertificate() {
@@ -99,7 +95,6 @@ public class Explorer {
     try {
       clientService.validateLedger(assetId);
     } catch (ClientException clientException) {
-      fallback(clientException);
       throw clientException;
     }
   }
@@ -108,7 +103,6 @@ public class Explorer {
     try {
       return clientService.listContracts(null);
     } catch (ClientException clientException) {
-      fallback(clientException);
       throw clientException;
     }
   }
@@ -132,7 +126,6 @@ public class Explorer {
 
       return result.getResult().get();
     } catch (ClientException clientException) {
-      fallback(clientException);
       throw clientException;
     }
   }

@@ -22,6 +22,7 @@ By default Scalar DL Explorer looks for the `client.properties` in the project d
 
 Scalar DL Explorer has four commands:
 
+- `explorer initialize`: used to register your certificate and contracts(GetContract, ScanContract). You have to execute this command one time only.
 - `explorer get`: used to retrieve the current value of the specified asset id
 - `explorer scan`: used to retrieve the history of the specified asset id
 - `explorer validate`: used to validate if the value of the specified asset id has been tampered or not

@@ -45,7 +45,7 @@ import picocli.CommandLine;
     name = "explorer",
     description = "Scalar DL Explorer",
     version = "1.0",
-    subcommands = {Get.class, Scan.class, Validate.class, ListContracts.class})
+    subcommands = {Initialize.class, Get.class, Scan.class, Validate.class, ListContracts.class})
 public class Explorer implements Runnable {
 
   @CommandLine.Option(
