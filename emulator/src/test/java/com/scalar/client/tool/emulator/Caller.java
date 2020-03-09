@@ -45,6 +45,7 @@ public class Caller extends Contract {
       builder.add("caller_certificate", callerCertificate);
     }
     builder.add("caller_is_called", true);
+    builder.add("caller_is_root", isRoot());
 
     return builder.build();
   }

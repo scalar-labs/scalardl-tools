@@ -77,8 +77,9 @@ public class NestedInvocationTest {
 
     // Assert
     assertThat(result.getBoolean("caller_is_called")).isTrue();
+    assertThat(result.getBoolean("caller_is_root")).isTrue();
     assertThat(result.getBoolean("callee_is_called")).isTrue();
-    assertThat(result.containsKey("caller_certificate")).isFalse();
+    assertThat(result.getBoolean("callee_is_root")).isFalse();
     assertThat(result.containsKey("callee_certificate")).isFalse();
   }
 
@@ -88,10 +89,10 @@ public class NestedInvocationTest {
     CertificateEntry.Key certificate = new CertificateEntry.Key("foo", 3);
     contractManager.setEmulatedCertificateKey(certificate);
     ContractEntry.Key key =
-        new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
+            new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
     Contract contract = contractManager.getInstance(key.getId());
     JsonObject argument =
-        Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
+            Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
 
     // Act
     JsonObject result = contract.invoke(ledger, argument, Optional.empty());

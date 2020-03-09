@@ -38,6 +38,8 @@ public class Callee extends Contract {
               .add("version", getCertificateKey().getVersion());
       result.add("callee_certificate", calleeCertificate);
     }
-    return result.add("callee_is_called", true).build();
+    return result.add("callee_is_called", true)
+        .add("callee_is_root", isRoot())
+        .build();
   }
 }

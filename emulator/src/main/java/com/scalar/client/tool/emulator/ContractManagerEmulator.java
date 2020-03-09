@@ -88,6 +88,9 @@ public class ContractManagerEmulator {
       Object o = field.get(this);
       Method m = o.getClass().getDeclaredMethod("getInstance", String.class);
       Contract contract = (Contract) m.invoke(o, id);
+
+      // Set isRoot to `false`
+      FieldUtils.writeField(contract, "isRoot", false, true);
       return contract.invoke(ledger, argument, Optional.empty());
     } catch (Exception e) {
       e.printStackTrace();
@@ -139,6 +142,9 @@ public class ContractManagerEmulator {
     Contract contract = (Contract) contractClass.toClass().newInstance();
     Method m = contract.getClass().getMethod("setHiddenManager", this.getClass());
     m.invoke(contract, this);
+
+    // Set isRoot to `true`
+    FieldUtils.writeField(contract, "isRoot", true, true);
     return contract;
   }
 
