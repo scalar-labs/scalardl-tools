@@ -20,6 +20,7 @@
  */
 package com.scalar.client.tool.emulator;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
@@ -36,13 +37,16 @@ import com.scalar.client.tool.emulator.command.RegisterFunction;
 import com.scalar.client.tool.emulator.command.Scan;
 import com.scalar.client.tool.emulator.command.ScanWithSingleParameter;
 import com.scalar.client.tool.emulator.command.SetCertificate;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Stack;
 import java.util.stream.Stream;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -203,7 +207,7 @@ public class EmulatorTerminal implements Runnable {
     for (CommandLine command : commands) {
       if (line.startsWith(command.getCommandName())) {
         String params = line.replaceFirst(command.getCommandName(), "").trim();
-        String[] paramsArray = params.isEmpty() ? new String[] {} : params.split(" ");
+        String[] paramsArray = params.isEmpty() ? new String[] {} : paramsParser(params);
         command.parseWithHandlers(
             new CommandLine.RunFirst(),
             new CommandExceptionHandler(terminal.getTerminal().writer()),
@@ -212,5 +216,35 @@ public class EmulatorTerminal implements Runnable {
       }
     }
     return false;
+  }
+
+  @VisibleForTesting
+  String[] paramsParser(String params) {
+    Stack<String> stack = new Stack<>();
+    List<String> paramsList = new ArrayList<>();
+    ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
+
+    for (int i = 0; i < params.length(); i++) {
+      String character = Character.valueOf(params.charAt(i)).toString();
+      if (character.matches("[{\"}]")) {
+        if (!stack.empty()) {
+          if ((character.equals("\"") && stack.peek().equals("\""))
+              || (character.equals("}") && stack.peek().equals("{"))) {
+            stack.pop();
+          } else {
+            stack.push(character);
+          }
+        } else {
+          stack.push(character);
+        }
+      }
+
+      byteArray.write(params.charAt(i));
+      if ((character.matches(" ") && stack.empty()) || i == params.length() - 1) {
+        paramsList.add(byteArray.toString().trim().replaceAll("^\"|\"$", ""));
+        byteArray.reset();
+      }
+    }
+    return paramsList.toArray(new String[0]);
   }
 }
