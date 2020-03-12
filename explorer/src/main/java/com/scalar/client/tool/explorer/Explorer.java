@@ -45,9 +45,9 @@ public class Explorer {
   }
 
   public void initialize() {
-      registerCertificate();
-      registerGetContract();
-      registerScanContract();
+    registerCertificate();
+    registerGetContract();
+    registerScanContract();
   }
 
   private void registerCertificate() {
