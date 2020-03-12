@@ -31,7 +31,6 @@ import com.scalar.dl.client.exception.ClientException;
 import com.scalar.dl.client.service.ClientService;
 import com.scalar.dl.ledger.model.ContractExecutionResult;
 import com.scalar.dl.ledger.service.StatusCode;
-import java.io.StringReader;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonArray;
@@ -86,7 +85,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void get_FailedToRegisterCertificate_ShouldThrowExplorerException() {
+  public void get_FailedToRegisterCertificate_ShouldThrowClientException() {
     // Arrange
     when(clientService.executeContract(eq( HOLDER_ID + "GET"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
@@ -102,7 +101,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void get_CertificateNotFound_ShouldThrowExplorerException() {
+  public void get_CertificateNotFound_ShouldThrowClientException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
@@ -141,7 +140,7 @@ public class ExplorerTest {
   }
 
   @Test //(expected = ClientException.class)
-  public void scan_FailedResponseWhenRegisteringCertificate_ShouldThrowExplorerException() {
+  public void scan_FailedResponseWhenRegisteringCertificate_ShouldThrowClientException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
@@ -157,7 +156,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void get_ContractNotFound_ShouldThrowExplorerException() {
+  public void get_ContractNotFound_ShouldThrowClientException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "GET"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
@@ -172,7 +171,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void scan_ContractNotFound_ShouldThrowsExplorerException() {
+  public void scan_ContractNotFound_ShouldThrowsClientException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
             .thenThrow(clientExceptionContractNotFound);
@@ -187,7 +186,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void scan_CertificateNotFound_ShouldThrowExplorerException() {
+  public void scan_CertificateNotFound_ShouldThrowClientException() {
     // Arrange
     when(clientService.executeContract(eq(HOLDER_ID + "SCAN"), any(JsonObject.class)))
         .thenThrow(clientExceptionCertificateNotFound);
@@ -202,7 +201,7 @@ public class ExplorerTest {
   }
 
   @Test
-  public void validate_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
+  public void validate_ErrorStatusCodeReturned_ShouldThrowClientException() {
     // Arrange
     when(clientException.getStatusCode()).thenReturn(StatusCode.DATABASE_ERROR);
     when(clientException.getMessage()).thenReturn("message");
@@ -218,11 +217,11 @@ public class ExplorerTest {
   }
 
   @Test
-  public void contracts_ErrorStatusCodeReturned_ShouldThrowExplorerException() {
+  public void contracts_ErrorStatusCodeReturned_ShouldThrowClientException() {
     // Arrange
     when(clientException.getStatusCode()).thenReturn(StatusCode.DATABASE_ERROR);
     when(clientException.getMessage()).thenReturn("message");
-    when(clientService.listContracts(null)).thenThrow(clientException);
+    when(clientService.listContracts("")).thenThrow(clientException);
 
     // Act
     Throwable thrown = catchThrowable(() -> { explorer.listContracts(); });

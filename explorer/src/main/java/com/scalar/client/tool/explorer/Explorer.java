@@ -22,21 +22,18 @@
 package com.scalar.client.tool.explorer;
 
 import com.scalar.dl.client.config.ClientConfig;
-import com.scalar.dl.client.exception.ClientException;
 import com.scalar.dl.client.service.ClientService;
 import com.scalar.dl.ledger.model.ContractExecutionResult;
 import com.scalar.dl.ledger.service.StatusCode;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
-import javax.json.JsonReader;
 
 public class Explorer {
   private final ClientService clientService;
@@ -54,11 +51,7 @@ public class Explorer {
   }
 
   private void registerCertificate() {
-    try {
-      clientService.registerCertificate();
-    } catch (ClientException clientException) {
-      throw clientException;
-    }
+    clientService.registerCertificate();
   }
 
   private void registerGetContract() {
@@ -81,30 +74,18 @@ public class Explorer {
       File tmp = File.createTempFile("a_contract", ".class");
       tmp.deleteOnExit();
       Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
-      try {
-        clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
-      } catch (ClientException clientException) {
-        throw clientException;
-      }
+      clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
     } catch (IOException e) {
       throw new ExplorerException("Contract not found", StatusCode.CONTRACT_NOT_FOUND);
     }
   }
 
   public void validate(String assetId) {
-    try {
-      clientService.validateLedger(assetId);
-    } catch (ClientException clientException) {
-      throw clientException;
-    }
+    clientService.validateLedger(assetId);
   }
 
   public JsonObject listContracts() {
-    try {
-      return clientService.listContracts(null);
-    } catch (ClientException clientException) {
-      throw clientException;
-    }
+    return clientService.listContracts("");
   }
 
   public JsonObject get(String assetId) {
@@ -121,19 +102,7 @@ public class Explorer {
   }
 
   private JsonObject executeContract(String id, JsonObject argument) {
-    try {
-      ContractExecutionResult result = clientService.executeContract(id, argument);
-
-      return result.getResult().get();
-    } catch (ClientException clientException) {
-      throw clientException;
-    }
-  }
-
-  private JsonObject string2Json(String s) {
-    JsonReader reader = Json.createReader(new StringReader(s));
-    JsonObject json = reader.readObject();
-    reader.close();
-    return json;
+    ContractExecutionResult result = clientService.executeContract(id, argument);
+    return result.getResult().get();
   }
 }
