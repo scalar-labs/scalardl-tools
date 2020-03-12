@@ -221,7 +221,7 @@ public class EmulatorTerminal implements Runnable {
   @VisibleForTesting
   String[] paramsParser(String params) {
     Stack<String> stack = new Stack<>();
-    List<String> paramsList = new ArrayList<String>();
+    List<String> paramsList = new ArrayList<>();
     ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
 
     for (int i = 0; i < params.length(); i++) {
