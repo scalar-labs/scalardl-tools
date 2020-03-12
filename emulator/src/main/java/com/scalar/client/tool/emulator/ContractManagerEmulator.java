@@ -27,14 +27,17 @@ import javax.json.JsonObject;
 import org.apache.commons.lang3.reflect.FieldUtils;
 
 public class ContractManagerEmulator {
-
+  public static final CertificateEntry.Key defaultCertificateKey =
+      new CertificateEntry.Key("default_holder_id", 1);
   private final ContractRegistry registry;
   private final Map<String, Contract> cache;
   public ContractManagerEmulator that;
+  private CertificateEntry.Key emulatedCertificateKey;
 
   public ContractManagerEmulator(ContractRegistry registry) {
     this.registry = registry;
     this.cache = new HashMap<String, Contract>();
+    this.emulatedCertificateKey = defaultCertificateKey;
     that = this;
   }
 
@@ -68,11 +71,16 @@ public class ContractManagerEmulator {
         e.printStackTrace();
       }
     }
+    emulateCertificateKey(contract);
     return contract;
   }
 
   public List<ContractEntry> scan() {
     return registry.scan("emulator_user");
+  }
+
+  public void setEmulatedCertificateKey(CertificateEntry.Key emulatedCertificateKey) {
+    this.emulatedCertificateKey = emulatedCertificateKey;
   }
 
   /** Thes method is used to delegate contract's invoke. */
@@ -140,5 +148,18 @@ public class ContractManagerEmulator {
     // Set isRoot to `true`
     FieldUtils.writeField(contract, "isRoot", true, true);
     return contract;
+  }
+
+  /**
+   * Emulate the certificate holderId and version for the given Contract instance
+   *
+   * @param contract the contract in which the certificate will be emulated
+   */
+  private void emulateCertificateKey(Contract contract) {
+    try {
+      FieldUtils.writeField(contract, "certificateKey", emulatedCertificateKey, true);
+    } catch (IllegalAccessException e) {
+      e.printStackTrace();
+    }
   }
 }

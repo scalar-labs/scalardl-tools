@@ -25,13 +25,20 @@ import com.scalar.dl.ledger.database.Ledger;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
 
 public class Callee extends Contract {
   @Override
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
-    return Json.createObjectBuilder()
-        .add("callee_is_called", true)
-        .add("callee_is_root", isRoot())
-        .build();
+    JsonObjectBuilder result = Json.createObjectBuilder();
+    JsonObjectBuilder calleeCertificate =
+        Json.createObjectBuilder()
+            .add("holder_id", getCertificateKey().getHolderId())
+            .add("version", getCertificateKey().getVersion());
+    result.add("callee_certificate", calleeCertificate);
+    result.add("callee_is_called", true);
+    result.add("callee_is_root", isRoot());
+
+    return result.build();
   }
 }

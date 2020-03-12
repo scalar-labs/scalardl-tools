@@ -34,16 +34,16 @@ import java.nio.file.Paths;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
-import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class NestedInvocationTest {
   private static final String CONTRACT_ID_ATTRIBUTE_NAME = "contract_id";
-  private Ledger ledger;
-  private ContractManagerEmulator contractManager;
+  private static Ledger ledger;
+  private static ContractManagerEmulator contractManager;
 
-  @Before
-  public void setUp() {
+  @BeforeClass
+  public static void setUp() {
     ledger = new AssetLedger(new AssetbaseEmulator());
     contractManager = new ContractManagerEmulator(new ContractRegistryEmulator());
 
@@ -51,7 +51,7 @@ public class NestedInvocationTest {
     registerContract("callee", "Callee");
   }
 
-  private void registerContract(String id, String name) {
+  public static void registerContract(String id, String name) {
     Path parent =
         Paths.get(
             "build", "classes", "java", "test", "com", "scalar", "client", "tool", "emulator");
@@ -63,7 +63,7 @@ public class NestedInvocationTest {
   }
 
   @Test
-  public void invoke_NestedInvocation_ShouldExecuteBothContracts() {
+  public void invoke_NestedInvocationWithoutSettingCertificate_ShouldExecuteBothContracts() {
     // Arrange
     ContractEntry.Key key =
         new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
@@ -71,13 +71,42 @@ public class NestedInvocationTest {
     JsonObject argument =
         Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
 
-    // Action
+    // Act
     JsonObject result = contract.invoke(ledger, argument, Optional.empty());
 
-    // Act assert
+    // Assert
     assertThat(result.getBoolean("caller_is_called")).isTrue();
     assertThat(result.getBoolean("caller_is_root")).isTrue();
     assertThat(result.getBoolean("callee_is_called")).isTrue();
     assertThat(result.getBoolean("callee_is_root")).isFalse();
+    assertCertificate(
+        result.getJsonObject("callee_certificate"), ContractManagerEmulator.defaultCertificateKey);
+    assertCertificate(
+        result.getJsonObject("caller_certificate"), ContractManagerEmulator.defaultCertificateKey);
+  }
+
+  @Test
+  public void invoke_NestedInvocationWithSettingCertificate_ShouldExecuteBothContracts() {
+    // Arrange
+    CertificateEntry.Key certificate = new CertificateEntry.Key("foo", 3);
+    contractManager.setEmulatedCertificateKey(certificate);
+    ContractEntry.Key key =
+        new ContractEntry.Key("caller", new CertificateEntry.Key("emulator_user", 0));
+    Contract contract = contractManager.getInstance(key.getId());
+    JsonObject argument =
+        Json.createObjectBuilder().add(CONTRACT_ID_ATTRIBUTE_NAME, "callee").build();
+
+    // Act
+    JsonObject result = contract.invoke(ledger, argument, Optional.empty());
+
+    // Assert
+    assertCertificate(result.getJsonObject("callee_certificate"), certificate);
+    assertCertificate(result.getJsonObject("caller_certificate"), certificate);
+  }
+
+  private void assertCertificate(JsonObject result, CertificateEntry.Key expected) {
+    assertThat(result).isNotNull();
+    assertThat(result.getString("holder_id")).isEqualTo(expected.getHolderId());
+    assertThat(result.getInt("version")).isEqualTo(expected.getVersion());
   }
 }
