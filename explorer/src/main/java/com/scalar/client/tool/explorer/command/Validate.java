@@ -22,6 +22,7 @@
 package com.scalar.client.tool.explorer.command;
 
 import com.scalar.client.tool.explorer.command.Explorer.ExplorerExecutor;
+import com.scalar.dl.ledger.service.StatusCode;
 import picocli.CommandLine;
 import picocli.CommandLine.ParentCommand;
 
@@ -53,8 +54,11 @@ public class Validate implements Runnable {
         explorer -> {
           try {
             for (String assetId : assetIds) {
-              explorer.validate(assetId);
-              System.out.println(assetId + " is not tampered");
+              if(explorer.validate(assetId).getCode().equals(StatusCode.OK)) {
+                  System.out.println(assetId + " is not tampered");
+              } else {
+                  System.out.println(assetId + " not found");
+              }
             }
           } catch (Exception e) {
             System.err.println(e.getMessage());

@@ -24,6 +24,7 @@ package com.scalar.client.tool.explorer;
 import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.service.ClientService;
 import com.scalar.dl.ledger.model.ContractExecutionResult;
+import com.scalar.dl.ledger.model.LedgerValidationResult;
 import com.scalar.dl.ledger.service.StatusCode;
 import java.io.File;
 import java.io.IOException;
@@ -80,8 +81,8 @@ public class Explorer {
     }
   }
 
-  public void validate(String assetId) {
-    clientService.validateLedger(assetId);
+  public LedgerValidationResult validate(String assetId) {
+    return clientService.validateLedger(assetId);
   }
 
   public JsonObject listContracts() {
