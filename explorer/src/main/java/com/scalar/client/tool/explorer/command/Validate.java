@@ -50,14 +50,20 @@ public class Validate implements Runnable {
   @ParentCommand private Explorer parent;
 
   public void run() {
+
     ExplorerExecutor executor =
         explorer -> {
+          StatusCode statusCode;
           try {
             for (String assetId : assetIds) {
-              if(explorer.validate(assetId).getCode().equals(StatusCode.OK)) {
+              statusCode = explorer.validate(assetId).getCode();
+
+              if(statusCode.equals(StatusCode.OK)) {
                   System.out.println(assetId + " is not tampered");
-              } else {
-                  System.out.println(assetId + " not found");
+              } else if (statusCode.equals(StatusCode.ASSET_NOT_FOUND)) {
+                  System.out.println(assetId + " does not exist");
+              } else{
+                  System.out.println(statusCode + " : Validation error");
               }
             }
           } catch (Exception e) {
