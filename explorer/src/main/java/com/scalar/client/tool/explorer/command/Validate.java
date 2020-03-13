@@ -50,7 +50,6 @@ public class Validate implements Runnable {
   @ParentCommand private Explorer parent;
 
   public void run() {
-
     ExplorerExecutor executor =
         explorer -> {
           StatusCode statusCode;
