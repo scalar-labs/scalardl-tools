@@ -27,9 +27,9 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.scalar.client.config.ClientConfig;
-import com.scalar.client.service.ClientModule;
-import com.scalar.client.service.ClientService;
+import com.scalar.dl.client.config.ClientConfig;
+import com.scalar.dl.client.service.ClientModule;
+import com.scalar.dl.client.service.ClientService;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.HashMap;
@@ -45,7 +45,7 @@ import picocli.CommandLine;
     name = "explorer",
     description = "Scalar DL Explorer",
     version = "1.0",
-    subcommands = {Get.class, Scan.class, Validate.class, ListContracts.class})
+    subcommands = {Initialize.class, Get.class, Scan.class, Validate.class, ListContracts.class})
 public class Explorer implements Runnable {
 
   @CommandLine.Option(

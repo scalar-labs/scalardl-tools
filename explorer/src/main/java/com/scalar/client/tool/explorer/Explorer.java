@@ -21,23 +21,20 @@
 
 package com.scalar.client.tool.explorer;
 
-import com.scalar.client.config.ClientConfig;
-import com.scalar.client.service.ClientService;
-import com.scalar.client.service.StatusCode;
-import com.scalar.rpc.ContractExecutionResponse;
-import com.scalar.rpc.LedgerServiceResponse;
-import com.scalar.rpc.LedgerValidationResponse;
+import com.scalar.dl.client.config.ClientConfig;
+import com.scalar.dl.client.service.ClientService;
+import com.scalar.dl.ledger.model.ContractExecutionResult;
+import com.scalar.dl.ledger.model.LedgerValidationResult;
+import com.scalar.dl.ledger.service.StatusCode;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
-import javax.json.JsonReader;
 
 public class Explorer {
   private final ClientService clientService;
@@ -48,28 +45,14 @@ public class Explorer {
     this.clientConfig = clientConfig;
   }
 
-  private ClientServiceResponse fallback(ClientServiceRequester requester) {
-    ClientServiceResponse response = requester.request();
-    if (response.getStatus() == StatusCode.CERTIFICATE_NOT_FOUND.get()) {
-      registerCertificate();
-      response = requester.request();
-    }
-    if (response.getStatus() == StatusCode.CONTRACT_NOT_FOUND.get()) {
-      registerGetContract();
-      registerScanContract();
-      response = requester.request();
-    }
-    if (response.getStatus() != StatusCode.OK.get()) {
-      throw new ExplorerException(response.getStatus() + " " + response.getMessage());
-    }
-    return response;
+  public void initialize() {
+    registerCertificate();
+    registerGetContract();
+    registerScanContract();
   }
 
   private void registerCertificate() {
-    LedgerServiceResponse response = clientService.registerCertificate();
-    if (response.getStatus() != StatusCode.OK.get()) {
-      throw new ExplorerException(response.getStatus() + " " + response.getMessage());
-    }
+    clientService.registerCertificate();
   }
 
   private void registerGetContract() {
@@ -92,27 +75,18 @@ public class Explorer {
       File tmp = File.createTempFile("a_contract", ".class");
       tmp.deleteOnExit();
       Files.copy(inputStream, tmp.toPath(), StandardCopyOption.REPLACE_EXISTING);
-      LedgerServiceResponse response =
-          clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
-      if (response.getStatus() != StatusCode.OK.get()) {
-        throw new ExplorerException(response.getStatus() + " " + response.getMessage());
-      }
+      clientService.registerContract(contractId, contractName, tmp.getPath(), Optional.empty());
     } catch (IOException e) {
-      throw new ExplorerException(e.getMessage());
+      throw new ExplorerException("Contract not found", StatusCode.CONTRACT_NOT_FOUND);
     }
   }
 
-  public void validate(String assetId) {
-    ClientServiceRequester requester =
-        () -> new ClientServiceResponse(clientService.validateLedger(assetId));
-    fallback(requester);
+  public LedgerValidationResult validate(String assetId) {
+    return clientService.validateLedger(assetId);
   }
 
   public JsonObject listContracts() {
-    ClientServiceRequester requester =
-        () -> new ClientServiceResponse(clientService.listContracts(null));
-    ClientServiceResponse response = fallback(requester);
-    return string2Json(response.getMessage());
+    return clientService.listContracts(null);
   }
 
   public JsonObject get(String assetId) {
@@ -129,57 +103,7 @@ public class Explorer {
   }
 
   private JsonObject executeContract(String id, JsonObject argument) {
-    ClientServiceRequester requester =
-        () -> new ClientServiceResponse(clientService.executeContract(id, argument));
-    ClientServiceResponse response = fallback(requester);
-    return string2Json(response.getResult());
-  }
-
-  private JsonObject string2Json(String s) {
-    JsonReader reader = Json.createReader(new StringReader(s));
-    JsonObject json = reader.readObject();
-    reader.close();
-    return json;
-  }
-
-  @FunctionalInterface
-  interface ClientServiceRequester {
-    ClientServiceResponse request();
-  }
-
-  class ClientServiceResponse {
-    private final int status;
-    private final String message;
-    private final String result;
-
-    ClientServiceResponse(LedgerValidationResponse r) {
-      status = r.getStatus();
-      message = r.getMessage();
-      result = "";
-    }
-
-    ClientServiceResponse(LedgerServiceResponse r) {
-      status = r.getStatus();
-      message = r.getMessage();
-      result = "";
-    }
-
-    ClientServiceResponse(ContractExecutionResponse r) {
-      status = r.getStatus();
-      message = r.getMessage();
-      result = r.getResult();
-    }
-
-    int getStatus() {
-      return status;
-    }
-
-    String getMessage() {
-      return message;
-    }
-
-    String getResult() {
-      return result;
-    }
+    ContractExecutionResult result = clientService.executeContract(id, argument);
+    return result.getResult().get();
   }
 }

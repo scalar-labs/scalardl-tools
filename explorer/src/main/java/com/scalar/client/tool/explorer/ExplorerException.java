@@ -21,8 +21,22 @@
 
 package com.scalar.client.tool.explorer;
 
+import com.scalar.dl.ledger.service.StatusCode;
+
 public class ExplorerException extends RuntimeException {
-  public ExplorerException(String message) {
+  private final StatusCode code;
+
+  public ExplorerException(String message, StatusCode code) {
     super(message);
+    this.code = code;
+  }
+
+  public ExplorerException(String message, Throwable cause, StatusCode code) {
+    super(message, cause);
+    this.code = code;
+  }
+
+  public StatusCode getStatusCode() {
+    return this.code;
   }
 }
