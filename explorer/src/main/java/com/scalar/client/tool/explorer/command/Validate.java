@@ -52,17 +52,14 @@ public class Validate implements Runnable {
   public void run() {
     ExplorerExecutor executor =
         explorer -> {
-          StatusCode statusCode;
           try {
             for (String assetId : assetIds) {
-              statusCode = explorer.validate(assetId).getCode();
+              StatusCode statusCode = explorer.validate(assetId).getCode();
 
-              if(statusCode.equals(StatusCode.OK)) {
+              if (statusCode.equals(StatusCode.OK)) {
                   System.out.println(assetId + " is not tampered");
-              } else if (statusCode.equals(StatusCode.ASSET_NOT_FOUND)) {
-                  System.out.println(assetId + " does not exist");
-              } else{
-                  System.out.println(statusCode + " : Validation error");
+              } else {
+                  System.out.println("validation failed: "  + statusCode);
               }
             }
           } catch (Exception e) {
