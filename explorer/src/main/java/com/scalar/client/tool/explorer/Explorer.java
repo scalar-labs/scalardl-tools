@@ -86,7 +86,7 @@ public class Explorer {
   }
 
   public JsonObject listContracts() {
-    return clientService.listContracts(null);
+    return clientService.listContracts((String) null);
   }
 
   public JsonObject get(String assetId) {
