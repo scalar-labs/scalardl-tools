@@ -221,7 +221,7 @@ public class ExplorerTest {
     // Arrange
     when(clientException.getStatusCode()).thenReturn(StatusCode.DATABASE_ERROR);
     when(clientException.getMessage()).thenReturn("message");
-    when(clientService.listContracts("")).thenThrow(clientException);
+    when(clientService.listContracts((String) null)).thenThrow(clientException);
 
     // Act
     Throwable thrown = catchThrowable(() -> { explorer.listContracts(); });
