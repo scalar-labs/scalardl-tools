@@ -91,4 +91,109 @@ public class EmulatorTerminalTest {
     // Assert
     Assert.assertArrayEquals(paramsArray, mockedParamsArray);
   }
+
+  @Test
+  public void get_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "get \"key with space\"";
+    String[] mockedParamsArray = { "get", "key with space" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void getJ_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "get \"key with space\"";
+    String[] mockedParamsArray = { "get", "key with space" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void get_curlyBracket_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "get { \"asset_id \": \"key with space\"}";
+    String[] mockedParamsArray = { "get", "{ \"asset_id \": \"key with space\"}" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void scan_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "scan \"key with space\"";
+    String[] mockedParamsArray = { "scan", "key with space" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void scanJ_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "scan -j \"key with space\"";
+    String[] mockedParamsArray = { "scan", "-j", "key with space" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void scan_curlyBracket_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "scan { \"asset_id \": \"X\"}";
+    String[] mockedParamsArray = { "scan", "{ \"asset_id \": \"X\"}" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void listContract_withoutAnyParameter_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "list-contract";
+    String[] mockedParamsArray = { "list-contract" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
+  @Test
+  public void setCertificate_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+    // Arrange
+    String input = "set-certificate foo 1";
+    String[] mockedParamsArray = { "set-certificate", "foo", "1" };
+
+    // Action
+    String[] paramsArray = emulatorTerminal.paramsParser(input);
+
+    // Assert
+    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
+  }
+
 }
