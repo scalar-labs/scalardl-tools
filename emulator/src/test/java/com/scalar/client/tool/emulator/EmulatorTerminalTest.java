@@ -38,7 +38,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_curlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void input_CurlyBracket_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "put {\"asset_id\": \"X\", \"data\": {\"alice\": 100, \"bob\": 0}}";
     String[] mockedParamsArray = {
@@ -53,7 +53,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_withSpacesInput_ShouldReturnProperParamsArrayProperly() {
+  public void input_WithSpacesInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "put \"key with space\" {\"alice\": 100, \"bob\": 0}";
     String[] mockedParamsArray = {"put", "key with space", "{\"alice\": 100, \"bob\": 0}"};
@@ -66,7 +66,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_withSpacesForFlagInput_ShouldReturnProperParamsArrayProperly() {
+  public void input_WithSpacesForFlagInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input =
         "database -c clusterKey -p \"partition key\" -v \"value with space\" "
@@ -93,7 +93,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void get_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+  public void get_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "get \"key with space\"";
     String[] mockedParamsArray = { "get", "key with space" };
@@ -106,7 +106,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void getJ_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+  public void getJ_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "get \"key with space\"";
     String[] mockedParamsArray = { "get", "key with space" };
@@ -119,7 +119,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void get_curlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void get_CurlyBracket_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "get { \"asset_id \": \"key with space\"}";
     String[] mockedParamsArray = { "get", "{ \"asset_id \": \"key with space\"}" };
@@ -132,7 +132,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void scan_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+  public void scan_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "scan \"key with space\"";
     String[] mockedParamsArray = { "scan", "key with space" };
@@ -145,7 +145,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void scanJ_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+  public void scanJ_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "scan -j \"key with space\"";
     String[] mockedParamsArray = { "scan", "-j", "key with space" };
@@ -158,7 +158,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void scan_curlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void scan_CurlyBracket_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "scan { \"asset_id \": \"X\"}";
     String[] mockedParamsArray = { "scan", "{ \"asset_id \": \"X\"}" };
@@ -171,7 +171,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void listContract_withoutAnyParameter_ShouldReturnProperParamsArrayProperly() {
+  public void listContract_WithoutAnyParameter_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "list-contract";
     String[] mockedParamsArray = { "list-contract" };
@@ -184,7 +184,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void setCertificate_withSpacesForInput_ShouldReturnProperParamsArrayProperly() {
+  public void setCertificate_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "set-certificate foo 1";
     String[] mockedParamsArray = { "set-certificate", "foo", "1" };
