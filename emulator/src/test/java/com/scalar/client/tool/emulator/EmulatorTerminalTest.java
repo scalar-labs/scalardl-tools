@@ -38,7 +38,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_CurlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void input_WithJsonInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "put {\"asset_id\": \"X\", \"data\": {\"alice\": 100, \"bob\": 0}}";
     String[] mockedParamsArray = {
@@ -119,7 +119,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void get_CurlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void get_WithJsonInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "get { \"asset_id \": \"key with space\"}";
     String[] mockedParamsArray = { "get", "{ \"asset_id \": \"key with space\"}" };
@@ -158,7 +158,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void scan_CurlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void scan_WithJsonInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "scan { \"asset_id \": \"X\"}";
     String[] mockedParamsArray = { "scan", "{ \"asset_id \": \"X\"}" };
