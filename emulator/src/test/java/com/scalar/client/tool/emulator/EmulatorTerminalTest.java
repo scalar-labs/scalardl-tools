@@ -108,8 +108,8 @@ public class EmulatorTerminalTest {
   @Test
   public void getJ_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
-    String input = "get \"key with space\"";
-    String[] mockedParamsArray = { "get", "key with space" };
+    String input = "get -j \"key with space\"";
+    String[] mockedParamsArray = { "get", "-j", "key with space" };
 
     // Action
     String[] paramsArray = emulatorTerminal.paramsParser(input);
@@ -123,45 +123,6 @@ public class EmulatorTerminalTest {
     // Arrange
     String input = "get { \"asset_id \": \"key with space\"}";
     String[] mockedParamsArray = { "get", "{ \"asset_id \": \"key with space\"}" };
-
-    // Action
-    String[] paramsArray = emulatorTerminal.paramsParser(input);
-
-    // Assert
-    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
-  }
-
-  @Test
-  public void scan_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
-    // Arrange
-    String input = "scan \"key with space\"";
-    String[] mockedParamsArray = { "scan", "key with space" };
-
-    // Action
-    String[] paramsArray = emulatorTerminal.paramsParser(input);
-
-    // Assert
-    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
-  }
-
-  @Test
-  public void scanJ_WithSpacesForInput_ShouldReturnProperParamsArrayProperly() {
-    // Arrange
-    String input = "scan -j \"key with space\"";
-    String[] mockedParamsArray = { "scan", "-j", "key with space" };
-
-    // Action
-    String[] paramsArray = emulatorTerminal.paramsParser(input);
-
-    // Assert
-    Assert.assertArrayEquals(paramsArray, mockedParamsArray);
-  }
-
-  @Test
-  public void scan_WithJsonInput_ShouldReturnProperParamsArrayProperly() {
-    // Arrange
-    String input = "scan { \"asset_id \": \"X\"}";
-    String[] mockedParamsArray = { "scan", "{ \"asset_id \": \"X\"}" };
 
     // Action
     String[] paramsArray = emulatorTerminal.paramsParser(input);
