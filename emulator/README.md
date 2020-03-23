@@ -109,6 +109,7 @@ Available commands:
  - register-function
  - scan
  - scan -j
+ - set-certificate
  - help
  - exit
 Type '<command> -h' to display help for the command.

@@ -6,6 +6,7 @@ execute get {"asset_id": "X"}
 execute scan {"asset_id": "X"}
 execute scan {"asset_id": "X", "start": 1}
 execute scan {"asset_id": "X", "limit": 1, "asc_order": true}
+set-certificate foo 1
 register state-updater-contract com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
 list-contracts
 execute state-updater {"asset_id": "Y", "state": 1}

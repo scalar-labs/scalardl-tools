@@ -24,7 +24,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
-import com.scalar.client.tool.emulator.command.CommandExceptionHandler;
 import com.scalar.client.tool.emulator.command.Database;
 import com.scalar.client.tool.emulator.command.Execute;
 import com.scalar.client.tool.emulator.command.Get;
@@ -208,10 +207,13 @@ public class EmulatorTerminal implements Runnable {
       if (line.startsWith(command.getCommandName())) {
         String params = line.replaceFirst(command.getCommandName(), "").trim();
         String[] paramsArray = params.isEmpty() ? new String[] {} : paramsParser(params);
-        command.parseWithHandlers(
-            new CommandLine.RunFirst(),
-            new CommandExceptionHandler(terminal.getTerminal().writer()),
-            paramsArray);
+        try {
+          command.parseWithHandler(
+                  new CommandLine.RunFirst(),
+                  paramsArray);
+        } catch (Exception e) {
+          terminal.println("Invalid command or arguments");
+        }
         return true;
       }
     }

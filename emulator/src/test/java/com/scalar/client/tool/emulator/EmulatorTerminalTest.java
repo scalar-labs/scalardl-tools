@@ -38,7 +38,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_curlyBracket_ShouldReturnProperParamsArrayProperly() {
+  public void input_WithJsonInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "put {\"asset_id\": \"X\", \"data\": {\"alice\": 100, \"bob\": 0}}";
     String[] mockedParamsArray = {
@@ -53,7 +53,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_withSpacesInput_ShouldReturnProperParamsArrayProperly() {
+  public void input_WithSpacesInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input = "put \"key with space\" {\"alice\": 100, \"bob\": 0}";
     String[] mockedParamsArray = {"put", "key with space", "{\"alice\": 100, \"bob\": 0}"};
@@ -66,7 +66,7 @@ public class EmulatorTerminalTest {
   }
 
   @Test
-  public void input_withSpacesForFlagInput_ShouldReturnProperParamsArrayProperly() {
+  public void input_WithSpacesForFlagInput_ShouldReturnProperParamsArrayProperly() {
     // Arrange
     String input =
         "database -c clusterKey -p \"partition key\" -v \"value with space\" "
