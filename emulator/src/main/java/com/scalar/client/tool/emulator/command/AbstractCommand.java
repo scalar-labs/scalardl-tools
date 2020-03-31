@@ -103,9 +103,7 @@ public abstract class AbstractCommand implements Runnable {
 
       return convertJsonParameter(text);
     } catch (IOException e) {
-      terminal.println("Error parsing json parameter: " + text);
-      terminal.println(e.toString());
+      return convertJsonParameter(text);
     }
-    return null;
   }
 }
