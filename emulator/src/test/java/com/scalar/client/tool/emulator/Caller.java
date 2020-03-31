@@ -33,6 +33,7 @@ public class Caller extends Contract {
   @Override
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
     String contractId = argument.getString(CONTRACT_ID_ATTRIBUTE_NAME);
+    JsonObject realProperties = properties.orElse(Json.createObjectBuilder().build());
 
     JsonObject resultFromCallee = invoke(contractId, ledger, Json.createObjectBuilder().build());
     JsonObjectBuilder result = Json.createObjectBuilder(resultFromCallee);
@@ -43,6 +44,7 @@ public class Caller extends Contract {
     result.add("caller_certificate", callerCertificate);
     result.add("caller_is_called", true);
     result.add("caller_is_root", isRoot());
+    result.add("caller_properties", realProperties);
 
     return result.build();
   }
