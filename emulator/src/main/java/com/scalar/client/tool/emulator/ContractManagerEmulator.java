@@ -71,6 +71,8 @@ public class ContractManagerEmulator {
         e.printStackTrace();
       }
     }
+
+    emulateIsRoot(contract, true);
     emulateCertificateKey(contract);
     return contract;
   }
@@ -145,8 +147,6 @@ public class ContractManagerEmulator {
     Method m = contract.getClass().getMethod("setHiddenManager", this.getClass());
     m.invoke(contract, this);
 
-    // Set isRoot to `true`
-    FieldUtils.writeField(contract, "isRoot", true, true);
     return contract;
   }
 
@@ -158,6 +158,14 @@ public class ContractManagerEmulator {
   private void emulateCertificateKey(Contract contract) {
     try {
       FieldUtils.writeField(contract, "certificateKey", emulatedCertificateKey, true);
+    } catch (IllegalAccessException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private void emulateIsRoot(Contract contract, boolean isRoot) {
+    try {
+      FieldUtils.writeField(contract, "isRoot", isRoot, true);
     } catch (IllegalAccessException e) {
       e.printStackTrace();
     }
