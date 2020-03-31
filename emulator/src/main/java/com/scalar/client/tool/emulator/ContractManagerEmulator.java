@@ -93,9 +93,16 @@ public class ContractManagerEmulator {
       Method m = o.getClass().getDeclaredMethod("getInstance", String.class);
       Contract contract = (Contract) m.invoke(o, id);
 
+      // find the properties
+      ContractEntry.Key key =
+          new ContractEntry.Key(id, new CertificateEntry.Key("emulator_user", 0));
+      m = o.getClass().getDeclaredMethod("get", ContractEntry.Key.class);
+      ContractEntry entry = (ContractEntry) m.invoke(o, key);
+      Optional<JsonObject> properties = entry.getProperties();
+
       // Set isRoot to `false`
       FieldUtils.writeField(contract, "isRoot", false, true);
-      return contract.invoke(ledger, argument, Optional.empty());
+      return contract.invoke(ledger, argument, properties);
     } catch (Exception e) {
       e.printStackTrace();
     }

@@ -31,6 +31,8 @@ public class Callee extends Contract {
   @Override
   public JsonObject invoke(Ledger ledger, JsonObject argument, Optional<JsonObject> properties) {
     JsonObjectBuilder result = Json.createObjectBuilder();
+    JsonObject realProperties = properties.orElse(Json.createObjectBuilder().build());
+
     JsonObjectBuilder calleeCertificate =
         Json.createObjectBuilder()
             .add("holder_id", getCertificateKey().getHolderId())
@@ -38,6 +40,7 @@ public class Callee extends Contract {
     result.add("callee_certificate", calleeCertificate);
     result.add("callee_is_called", true);
     result.add("callee_is_root", isRoot());
+    result.add("callee_properties", realProperties);
 
     return result.build();
   }

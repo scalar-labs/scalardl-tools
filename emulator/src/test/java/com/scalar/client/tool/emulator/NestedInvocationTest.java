@@ -55,11 +55,12 @@ public class NestedInvocationTest {
     Path parent =
         Paths.get(
             "build", "classes", "java", "test", "com", "scalar", "client", "tool", "emulator");
+    JsonObject properties = Json.createObjectBuilder().add("id", id).build();
     contractManager.register(
         id,
         "com.scalar.client.tool.emulator." + name,
         new File(parent.toFile(), name + ".class"),
-        null);
+        properties);
   }
 
   @Test
@@ -83,6 +84,7 @@ public class NestedInvocationTest {
         result.getJsonObject("callee_certificate"), ContractManagerEmulator.defaultCertificateKey);
     assertCertificate(
         result.getJsonObject("caller_certificate"), ContractManagerEmulator.defaultCertificateKey);
+    assertThat(result.getJsonObject("callee_properties").getString("id")).isEqualTo("callee");
   }
 
   @Test
