@@ -142,9 +142,11 @@ For example: 'execute get {"asset_id": "foo"}'
 
 A history of executed commands is saved to `.scalardl_emulator_history` in your home directory.
 
-## Any questions?
+## Contributing 
+This library is mainly maintained by the Scalar Engineering Team, but of course we appreciate any help.
 
-If you have any questions please [contact us](https://scalar-labs.com/contact_us/).
+* For asking questions, finding answers and helping other users, please go to [scalardl-user](https://groups.google.com/forum/#!forum/scalardl-user).
+* For filing bugs, suggesting improvements, or requesting new features, help us out by opening an issue.
 
 ## License
 
