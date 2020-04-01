@@ -2,7 +2,9 @@
 
 Scalar DL Emulator is an interactive command line interface to run Scalar DL on a local mutable in-memory ledger and database. The emulator may be used to quickly and easily test Scalar DL contracts. It does, however, lack any of the tamper-evident features found in the actual Scalar DL.
 
-## Generate an executable
+## Usage
+
+### Generate an executable
 
 Execute
 
@@ -12,7 +14,7 @@ Execute
 
 After a successful run the `emulator` executable may be found in `/build/install/emulator/bin`.
 
-## Run
+### Run
 
 To run the emulator
 
@@ -29,7 +31,7 @@ this will run the commands contained in [cmds.txt](./cmds.txt)
 
 Exit the emulator with `exit` or by ctrl-d (EOF).
 
-## Preregistered contracts
+### Preregistered contracts
 
  There are three predefined and preregistered contracts, with corresponding commands, to `put`, `get`, and `scan` assets. These contracts may be found in the `contract` subdirectory
 
@@ -37,7 +39,7 @@ Exit the emulator with `exit` or by ctrl-d (EOF).
  src/main/java/com/scalar/client/tool/emulator/contract
  ```
 
-## Build a contract
+### Build a contract
 
 Write a contract and save it in the `contract` subdirectory
 
@@ -47,7 +49,7 @@ Write a contract and save it in the `contract` subdirectory
 
 Run `./gradlew build` to compile the contract.
 
-## Register a contract
+### Register a contract
 
 `register` command will register the specified contract with the specified contract id and binary name.
 
@@ -57,7 +59,7 @@ Run `./gradlew build` to compile the contract.
 scalar> register state-updater-contract com.scalar.client.tool.emulator.contract.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/contract/StateUpdater.class
 ```
 
-## Execute a contract
+### Execute a contract
 
 `execute` command will execute the specified contract.
 
@@ -67,7 +69,7 @@ For example, the `state-updater-contract` can be executed as follows.
 scalar> execute state-updater-contract {"asset_id": "Y", "state": 1}
 ```
 
-## Register a user-defined function
+### Register a user-defined function
 
 User-defined function is a business logic to update the mutable database in the Scalar DL network. The
 `register-function` command will register the specified function with the specified id and binary name.
@@ -78,7 +80,7 @@ For example, the function `com.scalar.client.tool.emulator.function.StateUpdater
 scalar> register-function state-updater-function com.scalar.client.tool.emulator.function.StateUpdater ./build/classes/java/main/com/scalar/client/tool/emulator/function/StateUpdater.class
 ```
 
-## Execute a function
+### Execute a function
 
 Registered functions can only be executed with a registered contract, and the user can specify which functions to execute using the `_functions_` key in the contract argument.
 
@@ -91,7 +93,7 @@ scalar> execute state-updater-contract {"asset_id":"Y","state":1,"_functions_":[
 NOTE:
 You can use the `database` command to see what is stored by functions.
 
-## Help
+### Help
 
 Type `help` to display the list of available commands inside the interactive terminal.
 
@@ -138,7 +140,7 @@ Options:
 For example: 'execute get {"asset_id": "foo"}'
 ```
 
-## Command history
+### Command history
 
 A history of executed commands is saved to `.scalardl_emulator_history` in your home directory.
 
