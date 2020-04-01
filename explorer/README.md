@@ -2,7 +2,9 @@
 
 Scalar DL Explorer is an interactive command line interface to explore and validate assets in a Scalar DL instance.
 
-## Generate an executable
+## Usage
+
+### Generate an executable
 
 Execute
 
@@ -12,7 +14,7 @@ Execute
 
 After a successful run the `explorer` executable may be found in `/build/install/explorer/bin`.
 
-## How to use the command-line interface
+### How to use the command-line interface
 
 The first thing you will need to do is to create a `client.properties` file. The `client.properties` is used to specify the configuration of a Scalar DL server and the user's information. Most likely you have already used Scalar DL, in which case you already have a `client.properties` file. Simply use it here.
 
