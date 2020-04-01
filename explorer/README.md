@@ -32,9 +32,11 @@ Scalar DL Explorer has four commands:
 
 To get help with any of the commands pass the `-h` option to the command, e.g. `explorer get -h`. To get help with explorer in general pass the `-h` option as in `explorer -h`. 
 
-## Any questions?
+## Contributing 
+This library is mainly maintained by the Scalar Engineering Team, but of course we appreciate any help.
 
-If you have any questions please [contact us](https://scalar-labs.com/contact_us/).
+* For asking questions, finding answers and helping other users, please go to [scalardl-user](https://groups.google.com/forum/#!forum/scalardl-user).
+* For filing bugs, suggesting improvements, or requesting new features, help us out by opening an issue.
 
 ## License
 
