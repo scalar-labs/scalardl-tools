@@ -2,6 +2,7 @@ package com.scalar.dl.tools.scan.cosmos;
 
 import com.azure.cosmos.models.FeedRange;
 import com.google.common.hash.Hashing;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Serializes FeedRange to a stable string ID for use in file names and checkpoint keys.
@@ -17,7 +18,7 @@ class FeedRangeSerializer {
   public static String toId(FeedRange feedRange) {
     String json = feedRange.toString();
     // Use a hash to produce a fixed-length filesystem-safe identifier
-    return Hashing.sha256().hashUnencodedChars(json).toString();
+    return Hashing.sha256().hashString(json, StandardCharsets.UTF_8).toString();
   }
 
   /** Convert a FeedRange to its JSON string for persistence. */

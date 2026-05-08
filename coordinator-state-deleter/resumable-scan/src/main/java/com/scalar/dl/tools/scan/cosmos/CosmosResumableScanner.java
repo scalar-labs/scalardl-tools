@@ -7,6 +7,7 @@ import com.azure.cosmos.models.FeedRange;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.Result;
 import com.scalar.db.api.TableMetadata;
@@ -132,33 +133,36 @@ public final class CosmosResumableScanner implements ResumableScanner {
       return new ScanResult(0);
     }
 
-    // Shut down previous executor if scan() is called for multiple tables sequentially
-    shutdownExecutorIfExists(scanExecutor);
     int threadCount = Math.min(feedRanges.size(), MAX_SCAN_THREADS);
-    scanExecutor = Executors.newFixedThreadPool(threadCount);
-
-    List<Future<Long>> futures = new ArrayList<>();
-    for (FeedRange feedRange : feedRanges) {
-      String feedRangeId = FeedRangeSerializer.toId(feedRange);
-      String continuationToken =
-          checkpointManager.loadContinuationToken(qualifiedTableName, feedRangeId);
-
-      CosmosScanWorker worker =
-          new CosmosScanWorker(
-              container,
-              feedRange,
-              feedRangeId,
-              qualifiedTableName,
-              continuationToken,
-              recordConsumer,
-              resultInterpreter,
-              checkpointManager);
-
-      futures.add(scanExecutor.submit(worker));
-    }
-
-    // Wait for all workers, collecting all errors, then always shut down the executor
+    scanExecutor =
+        Executors.newFixedThreadPool(
+            threadCount,
+            new ThreadFactoryBuilder()
+                .setNameFormat("cosmos-scan-" + qualifiedTableName + "-%d")
+                .setDaemon(true)
+                .build());
     try {
+      List<Future<Long>> futures = new ArrayList<>();
+      for (FeedRange feedRange : feedRanges) {
+        String feedRangeId = FeedRangeSerializer.toId(feedRange);
+        String continuationToken =
+            checkpointManager.loadContinuationToken(qualifiedTableName, feedRangeId);
+
+        CosmosScanWorker worker =
+            new CosmosScanWorker(
+                container,
+                feedRange,
+                feedRangeId,
+                qualifiedTableName,
+                continuationToken,
+                recordConsumer,
+                resultInterpreter,
+                checkpointManager);
+
+        futures.add(scanExecutor.submit(worker));
+      }
+
+      // Wait for all workers, collecting all errors
       long totalScanned = 0;
       Throwable firstFailure = null;
       for (Future<Long> future : futures) {
