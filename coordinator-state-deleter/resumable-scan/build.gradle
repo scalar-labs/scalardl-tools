@@ -1,0 +1,74 @@
+import com.github.spotbugs.snom.Confidence
+import com.github.spotbugs.snom.Effort
+
+plugins {
+    id 'java-library'
+    id 'net.ltgt.errorprone' version "${errorpronePluginVersion}"
+    id "com.github.spotbugs" version "${spotbugsPluginVersion}"
+}
+
+sourceSets {
+    integrationTest {
+        java.srcDir file('src/integration-test/java')
+        resources.srcDir file('src/integration-test/resources')
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    api "com.azure:azure-cosmos:$azureCosmosVersion"
+    api "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
+    implementation "com.scalar-labs:scalardb:$scalarDbVersion"
+
+    errorprone "com.google.errorprone:error_prone_core:${errorproneVersion}"
+    spotbugs "com.github.spotbugs:spotbugs:${spotbugsVersion}"
+    compileOnly "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
+    testCompileOnly "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
+
+    integrationTestImplementation sourceSets.main.output
+    integrationTestImplementation sourceSets.test.output
+}
+
+tasks.register('cosmosIntegrationTest', Test) {
+    useJUnitPlatform()
+    description 'Runs the Cosmos DB integration tests. Requires a real Cosmos DB instance.'
+    group 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    outputs.upToDateWhen { false }
+    shouldRunAfter test
+    // Forward scalardb.cosmos.* system properties to the test JVM
+    options {
+        systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)
+    }
+    maxHeapSize '6g'
+    jvmArgs '-XX:MaxDirectMemorySize=4g'
+}
+
+spotless {
+    java {
+        target 'src/*/java/**/*.java'
+        importOrder()
+        removeUnusedImports()
+        googleJavaFormat(googleJavaFormatVersion)
+    }
+}
+
+spotbugs {
+    ignoreFailures = false
+    showStackTraces = true
+    showProgress = true
+    effort = Effort.valueOf('DEFAULT')
+    reportLevel = Confidence.valueOf('DEFAULT')
+    maxHeapSize = '1g'
+    extraArgs = ['-nested:false']
+    jvmArgs = ['-Duser.language=en']
+}
+
+spotbugsMain { reports.create('html') { required = true } }
+spotbugsTest { reports.create('html') { required = true } }
+spotbugsIntegrationTest { reports.create('html') { required = true } }
