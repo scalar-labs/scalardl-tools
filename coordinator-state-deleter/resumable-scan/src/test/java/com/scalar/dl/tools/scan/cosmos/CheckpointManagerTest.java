@@ -281,7 +281,8 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void clearTable_shouldRemoveTableDirectoryButKeepCheckpointDirectory() throws IOException {
+  void clearCheckpointFor_shouldRemoveTableDirectoryButKeepCheckpointDirectory()
+      throws IOException {
     // Arrange
     Path dir = tempDir.resolve("checkpoint").resolve("ns.table");
     Files.createDirectories(dir);
@@ -289,7 +290,7 @@ class CheckpointManagerTest {
     Files.write(dir.resolve("feed_ranges.json"), "[]".getBytes(StandardCharsets.UTF_8));
 
     // Act
-    manager.clearTable("ns.table");
+    manager.clearCheckpointFor("ns.table");
 
     // Assert
     Path checkpointPath = tempDir.resolve("checkpoint");
@@ -298,7 +299,7 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void clearTable_shouldNotAffectOtherTables() throws IOException {
+  void clearCheckpointFor_shouldNotAffectOtherTables() throws IOException {
     // Arrange
     Path tableADir = tempDir.resolve("checkpoint").resolve("ns.tableA");
     Path tableBDir = tempDir.resolve("checkpoint").resolve("ns.tableB");
@@ -308,7 +309,7 @@ class CheckpointManagerTest {
     Files.write(tableBDir.resolve("range1.token"), "tokenB".getBytes(StandardCharsets.UTF_8));
 
     // Act
-    manager.clearTable("ns.tableA");
+    manager.clearCheckpointFor("ns.tableA");
 
     // Assert
     assertThat(tableADir).doesNotExist();
@@ -320,10 +321,10 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void clearTable_whenTableDirDoesNotExist_shouldNotThrowException() {
+  void clearCheckpointFor_whenTableDirDoesNotExist_shouldNotThrowException() {
     // Arrange
 
     // Act & Assert
-    assertThatCode(() -> manager.clearTable("ns.nonexistent")).doesNotThrowAnyException();
+    assertThatCode(() -> manager.clearCheckpointFor("ns.nonexistent")).doesNotThrowAnyException();
   }
 }

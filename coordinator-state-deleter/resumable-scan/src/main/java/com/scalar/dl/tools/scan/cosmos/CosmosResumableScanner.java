@@ -95,7 +95,7 @@ public final class CosmosResumableScanner implements ResumableScanner {
     try {
       ScanResult result = doScan(namespace, tableName, recordConsumer);
       String qualifiedTableName = ScalarDbUtils.getFullTableName(namespace, tableName);
-      checkpointManager.clearTable(qualifiedTableName);
+      checkpointManager.clearCheckpointFor(qualifiedTableName);
       return result;
     } catch (RuntimeException e) {
       // Re-throw directly to avoid wrapping in the catch-all below

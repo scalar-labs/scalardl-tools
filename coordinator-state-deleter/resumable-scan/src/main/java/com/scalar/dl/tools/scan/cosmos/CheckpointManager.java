@@ -105,7 +105,7 @@ class CheckpointManager {
   }
 
   /** Delete checkpoint files for the given table, keeping the checkpoint directory itself. */
-  public void clearTable(String tableName) {
+  public void clearCheckpointFor(String tableName) {
     Path tableDir = checkpointDir.resolve(tableName);
     if (!Files.exists(tableDir)) {
       return;

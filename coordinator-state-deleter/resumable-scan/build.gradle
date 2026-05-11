@@ -20,8 +20,8 @@ configurations {
 }
 
 dependencies {
-    api "com.azure:azure-cosmos:$azureCosmosVersion"
-    api "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
+    implementation "com.azure:azure-cosmos:$azureCosmosVersion"
+    implementation "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
     implementation "com.scalar-labs:scalardb:$scalarDbVersion"
 
     errorprone "com.google.errorprone:error_prone_core:${errorproneVersion}"

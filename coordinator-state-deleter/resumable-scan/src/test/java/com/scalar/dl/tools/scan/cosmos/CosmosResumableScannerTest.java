@@ -283,7 +283,7 @@ class CosmosResumableScannerTest {
     }
 
     // Assert
-    verify(checkpointManager).clearTable(QUALIFIED_TABLE);
+    verify(checkpointManager).clearCheckpointFor(QUALIFIED_TABLE);
   }
 
   @Test
@@ -300,7 +300,7 @@ class CosmosResumableScannerTest {
     }
 
     // Assert
-    verify(checkpointManager, never()).clearTable(anyString());
+    verify(checkpointManager, never()).clearCheckpointFor(anyString());
   }
 
   @Test
