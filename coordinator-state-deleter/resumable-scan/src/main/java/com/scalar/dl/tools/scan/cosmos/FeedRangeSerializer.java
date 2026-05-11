@@ -16,9 +16,8 @@ class FeedRangeSerializer {
 
   /** Convert a FeedRange to a stable, filesystem-safe identifier. */
   public static String toId(FeedRange feedRange) {
-    String json = feedRange.toString();
     // Use a hash to produce a fixed-length filesystem-safe identifier
-    return Hashing.sha256().hashString(json, StandardCharsets.UTF_8).toString();
+    return Hashing.sha256().hashString(toJson(feedRange), StandardCharsets.UTF_8).toString();
   }
 
   /** Convert a FeedRange to its JSON string for persistence. */
