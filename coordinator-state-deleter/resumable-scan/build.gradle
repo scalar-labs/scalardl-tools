@@ -20,9 +20,9 @@ configurations {
 }
 
 dependencies {
-    implementation "com.azure:azure-cosmos:$azureCosmosVersion"
-    implementation "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
-    implementation "com.scalar-labs:scalardb:$scalarDbVersion"
+    implementation "com.azure:azure-cosmos:${azureCosmosVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.scalar-labs:scalardb:${scalarDbVersion}"
 
     errorprone "com.google.errorprone:error_prone_core:${errorproneVersion}"
     spotbugs "com.github.spotbugs:spotbugs:${spotbugsVersion}"

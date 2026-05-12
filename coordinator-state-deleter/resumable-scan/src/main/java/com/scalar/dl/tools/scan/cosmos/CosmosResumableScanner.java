@@ -45,16 +45,23 @@ public final class CosmosResumableScanner implements ResumableScanner {
 
   private static final Logger logger = LoggerFactory.getLogger(CosmosResumableScanner.class);
   private static final ObjectMapper mapper = new ObjectMapper();
-  private static final int MAX_SCAN_THREADS = 32;
+  private static final int DEFAULT_MAX_WORKER_THREADS = 32;
 
   private final CosmosClient cosmosClient;
   private final CheckpointManager checkpointManager;
   private final DistributedStorageAdmin storageAdmin;
+  private final int maxWorkerThreads;
   private ExecutorService scanExecutor;
 
   public CosmosResumableScanner(DatabaseConfig databaseConfig, Path checkpointDir) {
+    this(databaseConfig, checkpointDir, DEFAULT_MAX_WORKER_THREADS);
+  }
+
+  public CosmosResumableScanner(
+      DatabaseConfig databaseConfig, Path checkpointDir, int maxWorkerThreads) {
     cosmosClient = CosmosUtils.buildCosmosClient(new CosmosConfig(databaseConfig));
     this.checkpointManager = new CheckpointManager(checkpointDir);
+    this.maxWorkerThreads = maxWorkerThreads;
 
     try {
       this.storageAdmin = StorageFactory.create(databaseConfig.getProperties()).getStorageAdmin();
@@ -69,9 +76,19 @@ public final class CosmosResumableScanner implements ResumableScanner {
       CosmosClient cosmosClient,
       CheckpointManager checkpointManager,
       DistributedStorageAdmin storageAdmin) {
+    this(cosmosClient, checkpointManager, storageAdmin, DEFAULT_MAX_WORKER_THREADS);
+  }
+
+  @VisibleForTesting
+  CosmosResumableScanner(
+      CosmosClient cosmosClient,
+      CheckpointManager checkpointManager,
+      DistributedStorageAdmin storageAdmin,
+      int maxWorkerThreads) {
     this.cosmosClient = cosmosClient;
     this.checkpointManager = checkpointManager;
     this.storageAdmin = storageAdmin;
+    this.maxWorkerThreads = maxWorkerThreads;
   }
 
   private static void shutdownExecutorIfExists(ExecutorService executor) {
@@ -134,7 +151,7 @@ public final class CosmosResumableScanner implements ResumableScanner {
       return new ScanResult(0);
     }
 
-    int threadCount = Math.min(feedRanges.size(), MAX_SCAN_THREADS);
+    int threadCount = Math.min(feedRanges.size(), maxWorkerThreads);
     scanExecutor =
         Executors.newFixedThreadPool(
             threadCount,
@@ -184,12 +201,11 @@ public final class CosmosResumableScanner implements ResumableScanner {
           throw e;
         }
       }
-      if (firstFailure instanceof RuntimeException) {
-        throw (RuntimeException) firstFailure;
-      } else if (firstFailure instanceof Exception) {
-        throw (Exception) firstFailure;
+      if (firstFailure instanceof Error) {
+        throw (Error) firstFailure;
       } else if (firstFailure != null) {
-        throw new RuntimeException(firstFailure);
+        assert firstFailure instanceof Exception;
+        throw (Exception) firstFailure;
       }
 
       logger.info("Scan complete for {}: {} records", qualifiedTableName, totalScanned);

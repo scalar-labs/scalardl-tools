@@ -27,6 +27,8 @@ import com.scalar.dl.tools.scan.ScanResult;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -301,6 +303,37 @@ class CosmosResumableScannerTest {
 
     // Assert
     verify(checkpointManager, never()).clearCheckpointFor(anyString());
+  }
+
+  @Test
+  void scan_withCustomMaxWorkerThreads_shouldLimitThreadCount() {
+    // Arrange
+    FeedRange range1 = createMockFeedRange("r1");
+    FeedRange range2 = createMockFeedRange("r2");
+    FeedRange range3 = createMockFeedRange("r3");
+    List<FeedRange> feedRanges = Arrays.asList(range1, range2, range3);
+    int maxWorkerThreads = 1;
+
+    List<Record> records = CosmosMockHelper.createMockRecords(2);
+    FeedResponse<Record> page = CosmosMockHelper.createMockPage(records, null);
+    CosmosPagedIterable<Record> iterable =
+        CosmosMockHelper.createMockPagedIterable(Collections.singletonList(page));
+
+    when(cosmosContainer.queryItems(anyString(), any(), eq(Record.class))).thenReturn(iterable);
+    when(cosmosContainer.getFeedRanges()).thenReturn(feedRanges);
+    setupNoCheckpoint();
+
+    Set<String> threadNames = ConcurrentHashMap.newKeySet();
+
+    // Act
+    try (CosmosResumableScanner scanner =
+        new CosmosResumableScanner(
+            cosmosClient, checkpointManager, storageAdmin, maxWorkerThreads)) {
+      scanner.scan(NAMESPACE, TABLE, r -> threadNames.add(Thread.currentThread().getName()));
+    }
+
+    // Assert
+    assertThat(threadNames).hasSize(maxWorkerThreads);
   }
 
   @Test
