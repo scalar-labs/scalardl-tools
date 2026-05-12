@@ -78,6 +78,7 @@ class CheckpointManagerTest {
   @Test
   void persistContinuationToken_shouldWriteToken() throws IOException {
     // Arrange
+    manager.initCheckpointFor("ns.table");
 
     // Act
     manager.persistContinuationToken("ns.table", "range1", "token-abc");
@@ -105,20 +106,21 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void persistContinuationToken_shouldCreateDirectoryStructureIfNotExists() {
+  void initCheckpointFor_shouldCreateDirectoryStructure() {
     // Arrange
 
     // Act
-    manager.persistContinuationToken("ns.table", "range1", "token");
+    manager.initCheckpointFor("ns.table");
 
     // Assert
-    Path tokenPath = tempDir.resolve("checkpoint").resolve("ns.table").resolve("range1.token");
-    assertThat(tokenPath).exists();
+    Path tableDir = tempDir.resolve("checkpoint").resolve("ns.table");
+    assertThat(tableDir).isDirectory();
   }
 
   @Test
   void persistContinuationToken_shouldNotLeaveTemporaryFile() {
     // Arrange
+    manager.initCheckpointFor("ns.table");
 
     // Act
     manager.persistContinuationToken("ns.table", "range1", "token");
@@ -132,6 +134,8 @@ class CheckpointManagerTest {
   void persistContinuationToken_shouldStoreTokensIndependentlyPerRangeAndTable()
       throws IOException {
     // Arrange
+    manager.initCheckpointFor("ns.table");
+    manager.initCheckpointFor("ns.table2");
 
     // Act
     manager.persistContinuationToken("ns.table", "rangeA", "tokenA");
@@ -175,6 +179,7 @@ class CheckpointManagerTest {
   @Test
   void persistFeedRanges_shouldWriteFeedRanges() throws IOException {
     // Arrange
+    manager.initCheckpointFor("ns.table");
 
     // Act
     manager.persistFeedRanges("ns.table", "[\"range1\",\"range2\"]");
@@ -202,20 +207,18 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void persistFeedRanges_shouldCreateDirectoryStructureIfNotExists() {
+  void initCheckpointFor_calledTwice_shouldNotThrowException() {
     // Arrange
+    manager.initCheckpointFor("ns.table");
 
-    // Act
-    manager.persistFeedRanges("ns.table", "[]");
-
-    // Assert
-    Path path = tempDir.resolve("checkpoint").resolve("ns.table").resolve("feed_ranges.json");
-    assertThat(path).exists();
+    // Act & Assert
+    assertThatCode(() -> manager.initCheckpointFor("ns.table")).doesNotThrowAnyException();
   }
 
   @Test
   void persistFeedRanges_shouldNotLeaveTemporaryFile() {
     // Arrange
+    manager.initCheckpointFor("ns.table");
 
     // Act
     manager.persistFeedRanges("ns.table", "[]");

@@ -36,10 +36,6 @@ class CheckpointManager {
       value = "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE",
       justification = "target.getFileName() is never null for our use cases (non-root paths)")
   private static void writeAtomic(Path target, byte[] content) throws IOException {
-    Path parent = target.getParent();
-    if (parent != null) {
-      Files.createDirectories(parent);
-    }
     Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
     try {
       Files.write(tmp, content);
@@ -101,6 +97,17 @@ class CheckpointManager {
       writeAtomic(feedRangesPath, feedRangesJson.getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
       throw new RuntimeException("Failed to persist feed ranges for " + tableName, e);
+    }
+  }
+
+  /** Create the checkpoint directory for the given table. Called before scanning. */
+  public void initCheckpointFor(String tableName) {
+    Path tableDir = checkpointDir.resolve(tableName);
+    try {
+      Files.createDirectories(tableDir);
+    } catch (IOException e) {
+      throw new RuntimeException(
+          "Failed to create checkpoint directory for " + tableName + " in " + checkpointDir, e);
     }
   }
 
