@@ -1,0 +1,97 @@
+plugins {
+    id("com.diffplug.spotless") version "8.4.0"
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'eclipse'
+    apply plugin: 'idea'
+    apply plugin: 'jacoco'
+    apply plugin: 'com.diffplug.spotless'
+
+    project.version = '1.0.0-SNAPSHOT'
+
+    ext {
+        guavaVersion = '33.6.0-jre'
+        slf4jVersion = '2.0.17'
+        log4jVersion = '2.25.4'
+        jacksonVersion = '2.21.3'
+        scalarDbVersion = '3.17.3'
+        assertjVersion = '3.27.7'
+        junitVersion = '5.14.4'
+        junitPlatformVersion = '1.14.4'
+        mockitoVersion = '5.23.0'
+        errorproneVersion = '2.49.0'
+        errorpronePluginVersion = '5.1.0'
+        spotbugsVersion = '4.9.8'
+        spotbugsPluginVersion = '6.5.1'
+        googleJavaFormatVersion = '1.35.0'
+        // azureCosmosVersion is resolved dynamically from ScalarDB's transitive dependencies
+    }
+
+    repositories {
+        mavenCentral()
+        maven { url uri('https://central.sonatype.com/repository/maven-snapshots/') }
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/scalar-labs/scalardl")
+            credentials {
+                username = project.findProperty("gprUsername") ?: System.getenv("GPR_USERNAME")
+                password = project.findProperty("gprPassword") ?: System.getenv("GPR_PASSWORD")
+            }
+        }
+    }
+
+    // Resolve azure-cosmos version from ScalarDB's transitive dependencies
+    ext.azureCosmosVersion = {
+        def cfg = configurations.detachedConfiguration(
+            dependencies.create("com.scalar-labs:scalardb:$scalarDbVersion")
+        )
+        cfg.resolvedConfiguration.resolvedArtifacts
+            .find { it.moduleVersion.id.group == 'com.azure' && it.moduleVersion.id.name == 'azure-cosmos' }
+            ?.moduleVersion?.id?.version
+    }()
+    if (azureCosmosVersion == null) {
+        throw new GradleException("Could not resolve azure-cosmos version from ScalarDB $scalarDbVersion")
+    }
+
+    dependencies {
+        implementation group: 'org.slf4j', name: 'slf4j-api', version: "${slf4jVersion}"
+        implementation(group: 'org.apache.logging.log4j', name: 'log4j-core', version: "${log4jVersion}") {
+            exclude group: 'com.github.spotbugs', module: 'spotbugs-annotations'
+        }
+        implementation(group: 'org.apache.logging.log4j', name: 'log4j-slf4j2-impl', version: "${log4jVersion}") {
+            exclude group: 'com.github.spotbugs', module: 'spotbugs-annotations'
+        }
+        implementation group: 'com.google.guava', name: 'guava', version: "${guavaVersion}"
+        implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: "${jacksonVersion}"
+        testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: "${junitVersion}"
+        testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: "${junitVersion}"
+        testRuntimeOnly group: 'org.junit.platform', name: 'junit-platform-launcher', version: "${junitPlatformVersion}"
+        testImplementation group: 'org.assertj', name: 'assertj-core', version: "${assertjVersion}"
+        testImplementation group: 'org.mockito', name: 'mockito-core', version: "${mockitoVersion}"
+    }
+
+    tasks.withType(Test).configureEach {
+        maxHeapSize "512m"
+        testLogging.showStandardStreams = true
+        useJUnitPlatform()
+    }
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.release = 8
+    }
+
+    tasks.withType(Javadoc).configureEach {
+        options.encoding = 'UTF-8'
+        options.addStringOption('Xdoclint:none', '-quiet')
+        failOnError = false
+    }
+
+    group = "com.scalar-labs"
+}
