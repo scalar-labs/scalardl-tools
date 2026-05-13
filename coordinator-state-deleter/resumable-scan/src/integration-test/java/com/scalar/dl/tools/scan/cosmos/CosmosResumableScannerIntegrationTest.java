@@ -145,22 +145,23 @@ class CosmosResumableScannerIntegrationTest {
    * @param container the Cosmos DB container to monitor
    * @param previousCount the FeedRange count before the expected split
    * @param timeoutSeconds maximum time to wait for the split
-   * @return the new FeedRange count, or {@code previousCount} if the timeout is reached
+   * @return the new FeedRange count, or the last observed count if the timeout is reached
    */
   @SuppressWarnings("BusyWait")
   private static int waitForPartitionSplit(
       CosmosContainer container, int previousCount, long timeoutSeconds)
       throws InterruptedException {
     long deadline = System.currentTimeMillis() + timeoutSeconds * 1_000L;
-    while (System.currentTimeMillis() < deadline) {
-      int count = container.getFeedRanges().size();
+    int count;
+    do {
+      count = container.getFeedRanges().size();
       if (count > previousCount) {
         return count;
       }
       logger.info("Waiting for physical partition split (current FeedRanges: {})...", count);
       Thread.sleep(10_000); // Sleep 10 seconds before retrying
-    }
-    return previousCount;
+    } while (System.currentTimeMillis() < deadline);
+    return count;
   }
 
   /**
@@ -203,9 +204,10 @@ class CosmosResumableScannerIntegrationTest {
    * @throws RuntimeException when the number of processed records reaches the threshold
    */
   private static Consumer<Result> interruptingConsumerAfter(Set<String> recordIds, int threshold) {
+    AtomicLong count = new AtomicLong();
     return r -> {
       recordIds.add(recordId(r));
-      if (recordIds.size() >= threshold) {
+      if (count.incrementAndGet() >= threshold) {
         throw new RuntimeException("Simulated interruption");
       }
     };
@@ -455,8 +457,8 @@ class CosmosResumableScannerIntegrationTest {
         }
       }
 
-      // Trigger partition split by increasing throughput. Cosmos DB performs splits asynchronously,
-      // and it can take some minutes in practice, so we use a long timeout (10m).
+      // Trigger partition split by increasing throughput. Cosmos DB performs splits
+      // asynchronously, and it can take some minutes in practice, so we use a long timeout (10m).
       container.replaceThroughput(
           ThroughputProperties.createManualThroughput(HIGHER_THROUGHPUT_RU));
       newFeedRangeCount = waitForPartitionSplit(container, initialFeedRangeCount, 600);
