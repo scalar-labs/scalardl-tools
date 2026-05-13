@@ -1,6 +1,7 @@
 package com.scalar.dl.tools.scan.cosmos;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -35,6 +36,7 @@ final class CosmosMockHelper {
   static CosmosPagedIterable<Record> createMockPagedIterable(List<FeedResponse<Record>> pages) {
     CosmosPagedIterable<Record> iterable = mock(CosmosPagedIterable.class);
     when(iterable.iterableByPage()).thenReturn(pages);
+    when(iterable.iterableByPage(anyInt())).thenReturn(pages);
     return iterable;
   }
 
@@ -47,7 +49,9 @@ final class CosmosMockHelper {
       List<FeedResponse<Record>> pages, List<FeedResponse<Record>> resumePages) {
     CosmosPagedIterable<Record> iterable = mock(CosmosPagedIterable.class);
     when(iterable.iterableByPage()).thenReturn(pages);
+    when(iterable.iterableByPage(anyInt())).thenReturn(pages);
     when(iterable.iterableByPage(anyString())).thenReturn(resumePages);
+    when(iterable.iterableByPage(anyString(), anyInt())).thenReturn(resumePages);
     return iterable;
   }
 

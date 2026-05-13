@@ -3,6 +3,7 @@ package com.scalar.dl.tools.scan.cosmos;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -29,6 +30,7 @@ class CosmosScanWorkerTest {
 
   private static final String TABLE_NAME = "ns.table";
   private static final String RANGE_ID = "range1";
+  private static final int DEFAULT_MAX_ITEM_COUNT = 100;
 
   @SuppressWarnings("unchecked")
   private final Consumer<Result> consumer = mock(Consumer.class);
@@ -46,6 +48,10 @@ class CosmosScanWorkerTest {
   }
 
   private CosmosScanWorker createWorker(String continuationToken) {
+    return createWorker(continuationToken, DEFAULT_MAX_ITEM_COUNT);
+  }
+
+  private CosmosScanWorker createWorker(String continuationToken, int maxItemCount) {
     return new CosmosScanWorker(
         container,
         feedRange,
@@ -54,7 +60,8 @@ class CosmosScanWorkerTest {
         continuationToken,
         consumer,
         resultInterpreter,
-        checkpointManager);
+        checkpointManager,
+        maxItemCount);
   }
 
   @Test
@@ -159,8 +166,8 @@ class CosmosScanWorkerTest {
 
     // Assert
     assertThat(count).isEqualTo(1);
-    verify(iterable).iterableByPage("resume-token");
-    verify(iterable, never()).iterableByPage();
+    verify(iterable).iterableByPage("resume-token", DEFAULT_MAX_ITEM_COUNT);
+    verify(iterable, never()).iterableByPage(anyInt());
   }
 
   @Test
@@ -175,8 +182,8 @@ class CosmosScanWorkerTest {
     createWorker(null).call();
 
     // Assert
-    verify(iterable).iterableByPage();
-    verify(iterable, never()).iterableByPage(anyString());
+    verify(iterable).iterableByPage(DEFAULT_MAX_ITEM_COUNT);
+    verify(iterable, never()).iterableByPage(anyString(), anyInt());
   }
 
   @Test
@@ -196,6 +203,22 @@ class CosmosScanWorkerTest {
 
     // Assert
     verify(consumer).accept(mockResult);
+  }
+
+  @Test
+  void call_withCustomMaxItemCount_shouldPassMaxItemCountToIterableByPage() throws Exception {
+    // Arrange
+    int maxItemCount = 50;
+    FeedResponse<Record> page = CosmosMockHelper.createMockPage(Collections.emptyList(), null);
+    CosmosPagedIterable<Record> iterable =
+        CosmosMockHelper.createMockPagedIterable(Collections.singletonList(page));
+    container = CosmosMockHelper.createMockContainer(iterable, Collections.emptyList());
+
+    // Act
+    createWorker(null, maxItemCount).call();
+
+    // Assert
+    verify(iterable).iterableByPage(maxItemCount);
   }
 
   @Test

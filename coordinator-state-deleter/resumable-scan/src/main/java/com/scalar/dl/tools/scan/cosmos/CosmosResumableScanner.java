@@ -46,22 +46,25 @@ public final class CosmosResumableScanner implements ResumableScanner {
   private static final Logger logger = LoggerFactory.getLogger(CosmosResumableScanner.class);
   private static final ObjectMapper mapper = new ObjectMapper();
   private static final int DEFAULT_MAX_WORKER_THREADS = 32;
+  private static final int DEFAULT_MAX_ITEM_COUNT = 100;
 
   private final CosmosClient cosmosClient;
   private final CheckpointManager checkpointManager;
   private final DistributedStorageAdmin storageAdmin;
   private final int maxWorkerThreads;
+  private final int maxItemCount;
   private ExecutorService scanExecutor;
 
   public CosmosResumableScanner(DatabaseConfig databaseConfig, Path checkpointDir) {
-    this(databaseConfig, checkpointDir, DEFAULT_MAX_WORKER_THREADS);
+    this(databaseConfig, checkpointDir, DEFAULT_MAX_WORKER_THREADS, DEFAULT_MAX_ITEM_COUNT);
   }
 
   public CosmosResumableScanner(
-      DatabaseConfig databaseConfig, Path checkpointDir, int maxWorkerThreads) {
+      DatabaseConfig databaseConfig, Path checkpointDir, int maxWorkerThreads, int maxItemCount) {
     cosmosClient = CosmosUtils.buildCosmosClient(new CosmosConfig(databaseConfig));
     this.checkpointManager = new CheckpointManager(checkpointDir);
     this.maxWorkerThreads = maxWorkerThreads;
+    this.maxItemCount = maxItemCount;
 
     try {
       this.storageAdmin = StorageFactory.create(databaseConfig.getProperties()).getStorageAdmin();
@@ -76,7 +79,12 @@ public final class CosmosResumableScanner implements ResumableScanner {
       CosmosClient cosmosClient,
       CheckpointManager checkpointManager,
       DistributedStorageAdmin storageAdmin) {
-    this(cosmosClient, checkpointManager, storageAdmin, DEFAULT_MAX_WORKER_THREADS);
+    this(
+        cosmosClient,
+        checkpointManager,
+        storageAdmin,
+        DEFAULT_MAX_WORKER_THREADS,
+        DEFAULT_MAX_ITEM_COUNT);
   }
 
   @VisibleForTesting
@@ -84,11 +92,13 @@ public final class CosmosResumableScanner implements ResumableScanner {
       CosmosClient cosmosClient,
       CheckpointManager checkpointManager,
       DistributedStorageAdmin storageAdmin,
-      int maxWorkerThreads) {
+      int maxWorkerThreads,
+      int maxItemCount) {
     this.cosmosClient = cosmosClient;
     this.checkpointManager = checkpointManager;
     this.storageAdmin = storageAdmin;
     this.maxWorkerThreads = maxWorkerThreads;
+    this.maxItemCount = maxItemCount;
   }
 
   private static void shutdownExecutorIfExists(ExecutorService executor) {
@@ -175,7 +185,8 @@ public final class CosmosResumableScanner implements ResumableScanner {
                 continuationToken,
                 recordConsumer,
                 resultInterpreter,
-                checkpointManager);
+                checkpointManager,
+                maxItemCount);
 
         futures.add(scanExecutor.submit(worker));
       }

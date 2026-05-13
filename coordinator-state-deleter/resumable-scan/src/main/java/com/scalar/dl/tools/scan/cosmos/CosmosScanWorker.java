@@ -35,6 +35,7 @@ class CosmosScanWorker implements Callable<Long> {
   private final Consumer<Result> recordConsumer;
   private final ResultInterpreter resultInterpreter;
   private final CheckpointManager checkpointManager;
+  private final int maxItemCount;
 
   CosmosScanWorker(
       CosmosContainer container,
@@ -44,7 +45,8 @@ class CosmosScanWorker implements Callable<Long> {
       @Nullable String continuationToken,
       Consumer<Result> recordConsumer,
       ResultInterpreter resultInterpreter,
-      CheckpointManager checkpointManager) {
+      CheckpointManager checkpointManager,
+      int maxItemCount) {
     this.container = container;
     this.feedRange = feedRange;
     this.feedRangeId = feedRangeId;
@@ -53,6 +55,7 @@ class CosmosScanWorker implements Callable<Long> {
     this.recordConsumer = recordConsumer;
     this.resultInterpreter = resultInterpreter;
     this.checkpointManager = checkpointManager;
+    this.maxItemCount = maxItemCount;
   }
 
   @Override
@@ -69,9 +72,9 @@ class CosmosScanWorker implements Callable<Long> {
     Iterable<FeedResponse<Record>> pages;
     if (continuationToken != null) {
       // Resume from the last checkpointed continuation token
-      pages = iterable.iterableByPage(continuationToken);
+      pages = iterable.iterableByPage(continuationToken, maxItemCount);
     } else {
-      pages = iterable.iterableByPage();
+      pages = iterable.iterableByPage(maxItemCount);
     }
 
     for (FeedResponse<Record> page : pages) {

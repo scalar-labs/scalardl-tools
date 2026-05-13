@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -198,7 +199,7 @@ class CosmosResumableScannerTest {
       // Assert
       assertThat(result.getTotalScanned()).isEqualTo(1);
     }
-    verify(iterable).iterableByPage("resume-token");
+    verify(iterable).iterableByPage(eq("resume-token"), anyInt());
   }
 
   @Test
@@ -313,6 +314,7 @@ class CosmosResumableScannerTest {
     FeedRange range3 = createMockFeedRange("r3");
     List<FeedRange> feedRanges = Arrays.asList(range1, range2, range3);
     int maxWorkerThreads = 1;
+    int maxItemCount = 100;
 
     List<Record> records = CosmosMockHelper.createMockRecords(2);
     FeedResponse<Record> page = CosmosMockHelper.createMockPage(records, null);
@@ -328,12 +330,40 @@ class CosmosResumableScannerTest {
     // Act
     try (CosmosResumableScanner scanner =
         new CosmosResumableScanner(
-            cosmosClient, checkpointManager, storageAdmin, maxWorkerThreads)) {
+            cosmosClient, checkpointManager, storageAdmin, maxWorkerThreads, maxItemCount)) {
       scanner.scan(NAMESPACE, TABLE, r -> threadNames.add(Thread.currentThread().getName()));
     }
 
     // Assert
     assertThat(threadNames).hasSize(maxWorkerThreads);
+  }
+
+  @Test
+  void scan_withCustomMaxItemCount_shouldPassMaxItemCountToWorkers() {
+    // Arrange
+    int maxWorkerThreads = 32;
+    int maxItemCount = 50;
+    FeedRange feedRange = createMockFeedRange("full");
+    List<FeedRange> feedRanges = Collections.singletonList(feedRange);
+
+    List<Record> records = CosmosMockHelper.createMockRecords(1);
+    FeedResponse<Record> page = CosmosMockHelper.createMockPage(records, null);
+    CosmosPagedIterable<Record> iterable =
+        CosmosMockHelper.createMockPagedIterable(Collections.singletonList(page));
+
+    when(cosmosContainer.queryItems(anyString(), any(), eq(Record.class))).thenReturn(iterable);
+    when(cosmosContainer.getFeedRanges()).thenReturn(feedRanges);
+    setupNoCheckpoint();
+
+    // Act
+    try (CosmosResumableScanner scanner =
+        new CosmosResumableScanner(
+            cosmosClient, checkpointManager, storageAdmin, maxWorkerThreads, maxItemCount)) {
+      scanner.scan(NAMESPACE, TABLE, consumer);
+    }
+
+    // Assert
+    verify(iterable).iterableByPage(maxItemCount);
   }
 
   @Test
