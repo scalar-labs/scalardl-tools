@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -57,6 +58,7 @@ class CosmosResumableScannerIntegrationTest {
   private static final String PARTITION_KEY = "pk";
   private static final String CLUSTERING_KEY = "ck";
   private static final String VALUE_COLUMN = "val";
+  private static final String FEED_RANGES_FILE = "feed_ranges.json";
 
   /**
    * Number of records for the shared test table. Each logical partition must have more than the
@@ -72,6 +74,8 @@ class CosmosResumableScannerIntegrationTest {
    * Throughput high enough to force at least 2 physical partitions (~10,000 RU/s per partition).
    */
   private static final int HIGH_THROUGHPUT_RU = 12_000;
+
+  private static final int HIGHER_THROUGHPUT_RU = 22_000;
 
   private static DatabaseConfig databaseConfig;
   private static DistributedStorageAdmin admin;
@@ -136,25 +140,27 @@ class CosmosResumableScannerIntegrationTest {
   }
 
   /**
-   * Polls until the container has at least 2 FeedRanges (physical partitions).
+   * Waits for a partition split by polling the container's FeedRange count.
    *
-   * @param container the CosmosContainer to check for FeedRanges
-   * @return the number of FeedRanges observed
+   * @param container the Cosmos DB container to monitor
+   * @param previousCount the FeedRange count before the expected split
+   * @param timeoutSeconds maximum time to wait for the split
+   * @return the new FeedRange count, or {@code previousCount} if the timeout is reached
    */
   @SuppressWarnings("BusyWait")
-  private static int waitForMultipleFeedRanges(CosmosContainer container)
+  private static int waitForPartitionSplit(
+      CosmosContainer container, int previousCount, long timeoutSeconds)
       throws InterruptedException {
-    long deadline = System.currentTimeMillis() + 120 * 1_000L; // 2 minutes
-    int count = 1;
+    long deadline = System.currentTimeMillis() + timeoutSeconds * 1_000L;
     while (System.currentTimeMillis() < deadline) {
-      count = container.getFeedRanges().size();
-      if (count >= 2) {
+      int count = container.getFeedRanges().size();
+      if (count > previousCount) {
         return count;
       }
       logger.info("Waiting for physical partition split (current FeedRanges: {})...", count);
-      Thread.sleep(1_000); // Sleep 1 second before retrying
+      Thread.sleep(10_000); // Sleep 10 seconds before retrying
     }
-    return count;
+    return previousCount;
   }
 
   /**
@@ -166,8 +172,7 @@ class CosmosResumableScannerIntegrationTest {
     try (CosmosClient cosmosClient =
         CosmosUtils.buildCosmosClient(new CosmosConfig(databaseConfig))) {
       CosmosDatabase database = cosmosClient.getDatabase(NAMESPACE);
-      CosmosContainer container =
-          database.getContainer(CosmosResumableScannerIntegrationTest.TABLE);
+      CosmosContainer container = database.getContainer(TABLE);
 
       // Save container properties before deletion
       CosmosContainerProperties containerProps = container.read().getProperties();
@@ -179,21 +184,31 @@ class CosmosResumableScannerIntegrationTest {
       logger.info("Recreated container with dedicated throughput of {} RU/s", HIGH_THROUGHPUT_RU);
 
       // Wait for Cosmos DB to allocate multiple physical partitions
-      container = database.getContainer(CosmosResumableScannerIntegrationTest.TABLE);
-      int feedRangeCount = waitForMultipleFeedRanges(container);
+      container = database.getContainer(TABLE);
+      int feedRangeCount = waitForPartitionSplit(container, 1, 120);
       assertThat(feedRangeCount).isGreaterThanOrEqualTo(2);
-      logger.info(
-          "Confirmed {} physical partitions for table {}",
-          feedRangeCount,
-          CosmosResumableScannerIntegrationTest.TABLE);
+      logger.info("Confirmed {} physical partitions for table {}", feedRangeCount, TABLE);
     }
 
     // Re-register stored procedures via ScalarDB's repairTable
-    admin.repairTable(
-        NAMESPACE,
-        CosmosResumableScannerIntegrationTest.TABLE,
-        createStandardMetadata(),
-        Collections.emptyMap());
+    admin.repairTable(NAMESPACE, TABLE, createStandardMetadata(), Collections.emptyMap());
+  }
+
+  /**
+   * Returns a consumer, simulating a scan interruption.
+   *
+   * @param recordIds the set to collect scanned record IDs into
+   * @param threshold the number of records after which to simulate an interruption
+   * @return a Consumer that can be passed to the scanner's scan method
+   * @throws RuntimeException when the number of processed records reaches the threshold
+   */
+  private static Consumer<Result> interruptingConsumerAfter(Set<String> recordIds, int threshold) {
+    return r -> {
+      recordIds.add(recordId(r));
+      if (recordIds.size() >= threshold) {
+        throw new RuntimeException("Simulated interruption");
+      }
+    };
   }
 
   @Test
@@ -260,20 +275,16 @@ class CosmosResumableScannerIntegrationTest {
     // Arrange 1
     // First scan interrupted halfway
     Set<String> firstScannedRecordIds = ConcurrentHashMap.newKeySet();
-    Consumer<Result> interruptingConsumer =
-        r -> {
-          firstScannedRecordIds.add(recordId(r));
-          if (firstScannedRecordIds.size() >= TEST_RECORD_COUNT / 2) {
-            throw new RuntimeException("Simulated interruption");
-          }
-        };
 
     try (CosmosResumableScanner scanner =
         new CosmosResumableScanner(databaseConfig, checkpointDir)) {
       try {
         // Act 1
         // First scan
-        scanner.scan(NAMESPACE, TABLE, interruptingConsumer);
+        scanner.scan(
+            NAMESPACE,
+            TABLE,
+            interruptingConsumerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2));
       } catch (Exception e) {
         // Ignore expected interruption
       }
@@ -283,7 +294,7 @@ class CosmosResumableScannerIntegrationTest {
     // Checkpoint files exist after interruption
     Path tableCheckpointDir = checkpointDir.resolve(NAMESPACE + "." + TABLE);
     assertThat(tableCheckpointDir).isDirectory();
-    assertThat(tableCheckpointDir.resolve("feed_ranges.json")).exists();
+    assertThat(tableCheckpointDir.resolve(FEED_RANGES_FILE)).exists();
     // At least one .token file must exist for the resume to actually use checkpoints
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(tableCheckpointDir, "*.token")) {
       assertThat(stream.iterator().hasNext()).isTrue();
@@ -319,18 +330,14 @@ class CosmosResumableScannerIntegrationTest {
     // First scan interrupted after scanning 3/4 of the records, ensuring multiple checkpoint files
     // are created.
     Set<String> firstScannedRecordIds = ConcurrentHashMap.newKeySet();
-    Consumer<Result> interruptingConsumer =
-        r -> {
-          firstScannedRecordIds.add(recordId(r));
-          if (firstScannedRecordIds.size() >= TEST_RECORD_COUNT * 3 / 4) {
-            throw new RuntimeException("Simulated interruption");
-          }
-        };
 
     try (CosmosResumableScanner scanner =
         new CosmosResumableScanner(databaseConfig, checkpointDir)) {
       try {
-        scanner.scan(NAMESPACE, TABLE, interruptingConsumer);
+        scanner.scan(
+            NAMESPACE,
+            TABLE,
+            interruptingConsumerAfter(firstScannedRecordIds, TEST_RECORD_COUNT * 3 / 4));
       } catch (Exception e) {
         // Ignore expected interruption
       }
@@ -381,18 +388,13 @@ class CosmosResumableScannerIntegrationTest {
       throws Exception {
     // Arrange
     // Interrupt a scan to leave checkpoint files
-    AtomicLong scannedCount = new AtomicLong();
-    Consumer<Result> interruptingConsumer =
-        r -> {
-          if (scannedCount.incrementAndGet() >= TEST_RECORD_COUNT / 2) {
-            throw new RuntimeException("Simulated interruption");
-          }
-        };
+    Set<String> scannedRecordIds = ConcurrentHashMap.newKeySet();
 
     try (CosmosResumableScanner scanner =
         new CosmosResumableScanner(databaseConfig, checkpointDir)) {
       try {
-        scanner.scan(NAMESPACE, TABLE, interruptingConsumer);
+        scanner.scan(
+            NAMESPACE, TABLE, interruptingConsumerAfter(scannedRecordIds, TEST_RECORD_COUNT / 2));
       } catch (Exception e) {
         // Ignore expected interruption
       }
@@ -405,9 +407,8 @@ class CosmosResumableScannerIntegrationTest {
       assertThat(stream.iterator().hasNext()).isTrue();
     }
 
-    // Arrange
     // Create a corrupted .token file for the first FeedRange
-    Path feedRangesPath = tableCheckpointDir.resolve("feed_ranges.json");
+    Path feedRangesPath = tableCheckpointDir.resolve(FEED_RANGES_FILE);
     ObjectMapper mapper = new ObjectMapper();
     List<String> rangeJsonList =
         mapper.readValue(Files.readAllBytes(feedRangesPath), new TypeReference<List<String>>() {});
@@ -426,5 +427,60 @@ class CosmosResumableScannerIntegrationTest {
               }
             })
         .isInstanceOf(RuntimeException.class);
+  }
+
+  @Test
+  void scan_resumedAfterPartitionSplit_shouldCoverAllRecordsUsingStaleFeedRanges(
+      @TempDir Path checkpointDir) throws Exception {
+    // Arrange
+    Set<String> firstScannedRecordIds = ConcurrentHashMap.newKeySet();
+    int initialFeedRangeCount;
+    int newFeedRangeCount;
+
+    try (CosmosClient cosmosClient =
+        CosmosUtils.buildCosmosClient(new CosmosConfig(databaseConfig))) {
+      CosmosContainer container = cosmosClient.getDatabase(NAMESPACE).getContainer(TABLE);
+      initialFeedRangeCount = container.getFeedRanges().size();
+
+      // First scan interrupted halfway
+      try (CosmosResumableScanner scanner =
+          new CosmosResumableScanner(databaseConfig, checkpointDir)) {
+        try {
+          scanner.scan(
+              NAMESPACE,
+              TABLE,
+              interruptingConsumerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2));
+        } catch (Exception e) {
+          // Ignore expected interruption
+        }
+      }
+
+      // Trigger partition split by increasing throughput. Cosmos DB performs splits asynchronously,
+      // and it can take some minutes in practice, so we use a long timeout (10m).
+      container.replaceThroughput(
+          ThroughputProperties.createManualThroughput(HIGHER_THROUGHPUT_RU));
+      newFeedRangeCount = waitForPartitionSplit(container, initialFeedRangeCount, 600);
+      Assumptions.assumeTrue(
+          newFeedRangeCount > initialFeedRangeCount,
+          "Partition split did not occur within the timeout; skipping test");
+    }
+
+    // Act
+    // Resume scan using stale (pre-split) feed ranges from checkpoint
+    Set<String> secondScannedRecordIds = ConcurrentHashMap.newKeySet();
+    try (CosmosResumableScanner scanner =
+        new CosmosResumableScanner(databaseConfig, checkpointDir)) {
+      scanner.scan(NAMESPACE, TABLE, r -> secondScannedRecordIds.add(recordId(r)));
+    }
+
+    // Assert
+    // Union of both runs covers all records
+    Set<String> allScannedRecordIds = ConcurrentHashMap.newKeySet();
+    allScannedRecordIds.addAll(firstScannedRecordIds);
+    allScannedRecordIds.addAll(secondScannedRecordIds);
+    assertThat(allScannedRecordIds).hasSize(TEST_RECORD_COUNT);
+    // The resumed scan skips already-checkpointed pages, so it processes fewer records than the
+    // full count.
+    assertThat(secondScannedRecordIds.size()).isLessThan(TEST_RECORD_COUNT);
   }
 }
