@@ -35,7 +35,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -462,9 +461,9 @@ class CosmosResumableScannerIntegrationTest {
       container.replaceThroughput(
           ThroughputProperties.createManualThroughput(HIGHER_THROUGHPUT_RU));
       newFeedRangeCount = waitForPartitionSplit(container, initialFeedRangeCount, 600);
-      Assumptions.assumeTrue(
-          newFeedRangeCount > initialFeedRangeCount,
-          "Partition split did not occur within the timeout; skipping test");
+      assertThat(newFeedRangeCount)
+          .as("Partition split did not occur within the timeout")
+          .isGreaterThan(initialFeedRangeCount);
     }
 
     // Act
