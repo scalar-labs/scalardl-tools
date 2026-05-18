@@ -48,7 +48,7 @@ class CosmosResumableScannerConfigTest {
   }
 
   @Test
-  void constructor_invalidIntegerValue_shouldThrowNumberFormatException() {
+  void constructor_invalidIntegerValue_shouldThrowIllegalArgumentException() {
     // Arrange
     Properties extra = new Properties();
     extra.setProperty(CosmosResumableScannerConfig.PROP_MAX_SCAN_THREADS, "not-a-number");
@@ -56,6 +56,33 @@ class CosmosResumableScannerConfigTest {
 
     // Act & Assert
     assertThatThrownBy(() -> new CosmosResumableScannerConfig(databaseConfig))
-        .isInstanceOf(NumberFormatException.class);
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(CosmosResumableScannerConfig.PROP_MAX_SCAN_THREADS);
+  }
+
+  @Test
+  void constructor_zeroValue_shouldThrowIllegalArgumentException() {
+    // Arrange
+    Properties extra = new Properties();
+    extra.setProperty(CosmosResumableScannerConfig.PROP_MAX_SCAN_THREADS, "0");
+    DatabaseConfig databaseConfig = createConfig(extra);
+
+    // Act & Assert
+    assertThatThrownBy(() -> new CosmosResumableScannerConfig(databaseConfig))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(CosmosResumableScannerConfig.PROP_MAX_SCAN_THREADS);
+  }
+
+  @Test
+  void constructor_negativeValue_shouldThrowIllegalArgumentException() {
+    // Arrange
+    Properties extra = new Properties();
+    extra.setProperty(CosmosResumableScannerConfig.PROP_SCAN_PAGE_SIZE, "-1");
+    DatabaseConfig databaseConfig = createConfig(extra);
+
+    // Act & Assert
+    assertThatThrownBy(() -> new CosmosResumableScannerConfig(databaseConfig))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(CosmosResumableScannerConfig.PROP_SCAN_PAGE_SIZE);
   }
 }

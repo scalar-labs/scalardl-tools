@@ -23,7 +23,7 @@ public final class ResumableScannerFactory {
    */
   public ResumableScanner create(Path checkpointDir) {
     String storage = databaseConfig.getStorage();
-    if (storage.equals(CosmosConfig.STORAGE_NAME)) {
+    if (CosmosConfig.STORAGE_NAME.equals(storage)) {
       return new CosmosResumableScanner(databaseConfig, checkpointDir);
     }
     throw new IllegalStateException(

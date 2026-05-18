@@ -1,6 +1,5 @@
 package com.scalar.dl.tools.common;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,12 +20,14 @@ public final class FileUtils {
    * @param target the path to write to
    * @param content the bytes to write
    * @throws IOException if the write or rename fails
+   * @throws IllegalArgumentException if the target path has no file name
    */
-  @SuppressFBWarnings(
-      value = "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE",
-      justification = "target.getFileName() is never null for our use cases (non-root paths)")
   public static void writeAtomic(Path target, byte[] content) throws IOException {
-    Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
+    Path fileName = target.getFileName();
+    if (fileName == null) {
+      throw new IllegalArgumentException("The target path must have a file name");
+    }
+    Path tmp = target.resolveSibling(fileName.toString() + ".tmp");
     try {
       Files.write(tmp, content);
       Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);

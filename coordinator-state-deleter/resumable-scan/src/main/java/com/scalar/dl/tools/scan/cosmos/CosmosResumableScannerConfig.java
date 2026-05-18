@@ -15,16 +15,28 @@ public final class CosmosResumableScannerConfig {
 
   public CosmosResumableScannerConfig(DatabaseConfig databaseConfig) {
     this.maxWorkerThreads =
-        getIntProperty(databaseConfig, PROP_MAX_SCAN_THREADS, DEFAULT_MAX_WORKER_THREADS);
-    this.maxItemCount = getIntProperty(databaseConfig, PROP_SCAN_PAGE_SIZE, DEFAULT_MAX_ITEM_COUNT);
+        getPositiveIntProperty(databaseConfig, PROP_MAX_SCAN_THREADS, DEFAULT_MAX_WORKER_THREADS);
+    this.maxItemCount =
+        getPositiveIntProperty(databaseConfig, PROP_SCAN_PAGE_SIZE, DEFAULT_MAX_ITEM_COUNT);
   }
 
-  private static int getIntProperty(DatabaseConfig config, String key, int defaultValue) {
+  private static int getPositiveIntProperty(DatabaseConfig config, String key, int defaultValue) {
     String value = config.getProperties().getProperty(key);
     if (value == null) {
       return defaultValue;
     }
-    return Integer.parseInt(value);
+    int parsed;
+    try {
+      parsed = Integer.parseInt(value);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          "The property '" + key + "' must be a valid integer: " + value, e);
+    }
+    if (parsed <= 0) {
+      throw new IllegalArgumentException(
+          "The property '" + key + "' must be a positive integer: " + value);
+    }
+    return parsed;
   }
 
   public int getMaxWorkerThreads() {
