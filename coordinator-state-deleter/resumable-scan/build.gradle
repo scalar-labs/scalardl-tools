@@ -20,6 +20,7 @@ configurations {
 }
 
 dependencies {
+    implementation project(':common')
     implementation "com.azure:azure-cosmos:${azureCosmosVersion}"
     implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     implementation "com.scalar-labs:scalardb:${scalarDbVersion}"

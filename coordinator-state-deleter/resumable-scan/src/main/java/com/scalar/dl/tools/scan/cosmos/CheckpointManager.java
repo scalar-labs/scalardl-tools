@@ -1,14 +1,13 @@
 package com.scalar.dl.tools.scan.cosmos;
 
+import com.scalar.dl.tools.common.FileUtils;
 import edu.umd.cs.findbugs.annotations.NonNull;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import javax.annotation.Nullable;
 
@@ -32,24 +31,6 @@ class CheckpointManager {
     this.checkpointDir = checkpointDir;
   }
 
-  @SuppressFBWarnings(
-      value = "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE",
-      justification = "target.getFileName() is never null for our use cases (non-root paths)")
-  private static void writeAtomic(Path target, byte[] content) throws IOException {
-    Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
-    try {
-      Files.write(tmp, content);
-      Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-    } catch (IOException e) {
-      try {
-        Files.deleteIfExists(tmp);
-      } catch (IOException suppressed) {
-        e.addSuppressed(suppressed);
-      }
-      throw e;
-    }
-  }
-
   /** Load continuation token for a given table and range, or null. */
   @Nullable
   public String loadContinuationToken(String tableName, String rangeId) {
@@ -69,7 +50,7 @@ class CheckpointManager {
   public void persistContinuationToken(String tableName, String rangeId, String token) {
     Path tokenPath = checkpointDir.resolve(tableName).resolve(rangeId + ".token");
     try {
-      writeAtomic(tokenPath, token.getBytes(StandardCharsets.UTF_8));
+      FileUtils.writeAtomic(tokenPath, token.getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
       throw new RuntimeException(
           "Failed to persist continuation token for " + tableName + "/" + rangeId, e);
@@ -94,7 +75,7 @@ class CheckpointManager {
   public void persistFeedRanges(String tableName, String feedRangesJson) {
     Path feedRangesPath = checkpointDir.resolve(tableName).resolve(FEED_RANGES_FILE);
     try {
-      writeAtomic(feedRangesPath, feedRangesJson.getBytes(StandardCharsets.UTF_8));
+      FileUtils.writeAtomic(feedRangesPath, feedRangesJson.getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
       throw new RuntimeException("Failed to persist feed ranges for " + tableName, e);
     }

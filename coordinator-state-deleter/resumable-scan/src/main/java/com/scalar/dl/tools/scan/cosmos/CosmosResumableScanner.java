@@ -45,8 +45,7 @@ public final class CosmosResumableScanner implements ResumableScanner {
 
   private static final Logger logger = LoggerFactory.getLogger(CosmosResumableScanner.class);
   private static final ObjectMapper mapper = new ObjectMapper();
-  private static final int DEFAULT_MAX_WORKER_THREADS = 32;
-  private static final int DEFAULT_MAX_ITEM_COUNT = 100;
+  private static final int SHUTDOWN_TIMEOUT_SECONDS = 30;
 
   private final CosmosClient cosmosClient;
   private final CheckpointManager checkpointManager;
@@ -56,15 +55,11 @@ public final class CosmosResumableScanner implements ResumableScanner {
   private ExecutorService scanExecutor;
 
   public CosmosResumableScanner(DatabaseConfig databaseConfig, Path checkpointDir) {
-    this(databaseConfig, checkpointDir, DEFAULT_MAX_WORKER_THREADS, DEFAULT_MAX_ITEM_COUNT);
-  }
-
-  public CosmosResumableScanner(
-      DatabaseConfig databaseConfig, Path checkpointDir, int maxWorkerThreads, int maxItemCount) {
+    CosmosResumableScannerConfig config = new CosmosResumableScannerConfig(databaseConfig);
     cosmosClient = CosmosUtils.buildCosmosClient(new CosmosConfig(databaseConfig));
     this.checkpointManager = new CheckpointManager(checkpointDir);
-    this.maxWorkerThreads = maxWorkerThreads;
-    this.maxItemCount = maxItemCount;
+    this.maxWorkerThreads = config.getMaxWorkerThreads();
+    this.maxItemCount = config.getMaxItemCount();
 
     try {
       this.storageAdmin = StorageFactory.create(databaseConfig.getProperties()).getStorageAdmin();
@@ -72,19 +67,6 @@ public final class CosmosResumableScanner implements ResumableScanner {
       cosmosClient.close();
       throw new RuntimeException("Failed to create DistributedStorageAdmin", e);
     }
-  }
-
-  @VisibleForTesting
-  CosmosResumableScanner(
-      CosmosClient cosmosClient,
-      CheckpointManager checkpointManager,
-      DistributedStorageAdmin storageAdmin) {
-    this(
-        cosmosClient,
-        checkpointManager,
-        storageAdmin,
-        DEFAULT_MAX_WORKER_THREADS,
-        DEFAULT_MAX_ITEM_COUNT);
   }
 
   @VisibleForTesting
@@ -109,8 +91,8 @@ public final class CosmosResumableScanner implements ResumableScanner {
     try {
       // 30 seconds is a conservative upper bound to allow in-flight Cosmos DB HTTP requests to
       // complete or time out after interruption.
-      if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
-        logger.warn("Scan executor did not terminate within 30 seconds");
+      if (!executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        logger.warn("Scan executor did not terminate within {} seconds", SHUTDOWN_TIMEOUT_SECONDS);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
