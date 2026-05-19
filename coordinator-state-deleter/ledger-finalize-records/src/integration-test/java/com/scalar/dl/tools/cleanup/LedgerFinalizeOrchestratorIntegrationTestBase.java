@@ -281,7 +281,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   }
 
   @Test
-  public void execute_SingleWorkerThreadGiven_shouldFinalizeAllNonTerminalRecords(
+  public void execute_singleWorkerThreadGiven_shouldFinalizeAllNonTerminalRecords(
       @TempDir Path checkpointDir) throws Exception {
     // Arrange
 
