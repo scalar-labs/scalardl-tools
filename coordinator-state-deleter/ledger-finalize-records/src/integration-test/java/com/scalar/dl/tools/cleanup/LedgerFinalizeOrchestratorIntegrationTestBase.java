@@ -249,6 +249,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
         }
       }
     }
+
+    // Wait for PREPARED/DELETED state is expired (15s~).
+    Thread.sleep(16_000);
   }
 
   private List<String> discoverAllTables() throws Exception {
