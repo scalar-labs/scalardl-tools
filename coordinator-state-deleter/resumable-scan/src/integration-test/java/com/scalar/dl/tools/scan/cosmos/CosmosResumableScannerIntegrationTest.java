@@ -201,7 +201,6 @@ class CosmosResumableScannerIntegrationTest {
    * @param threshold the number of records after which to simulate an interruption
    * @return a Consumer that collects record IDs into {@code recordIds} and throws a {@link
    *     RuntimeException} after being invoked {@code threshold} times
- 
    */
   private static Consumer<Result> interruptingConsumerAfter(Set<String> recordIds, int threshold) {
     AtomicLong count = new AtomicLong();
