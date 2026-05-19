@@ -19,14 +19,14 @@ public final class ResumableScannerFactory {
    *
    * @param checkpointDir directory for scan checkpoint state
    * @return a new scanner
-   * @throws IllegalStateException if the configured storage is not supported
+   * @throws IllegalArgumentException if the configured storage is not supported
    */
   public ResumableScanner create(Path checkpointDir) {
     String storage = databaseConfig.getStorage();
     if (CosmosConfig.STORAGE_NAME.equals(storage)) {
       return new CosmosResumableScanner(databaseConfig, checkpointDir);
     }
-    throw new IllegalStateException(
+    throw new IllegalArgumentException(
         "This tool only supports Cosmos DB. Configured storage: " + storage);
   }
 }
