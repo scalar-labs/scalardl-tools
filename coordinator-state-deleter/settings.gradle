@@ -2,3 +2,4 @@ rootProject.name = 'coordinator-state-deleter'
 
 include 'resumable-scan'
 include 'common'
+include 'ledger-finalize-records'
