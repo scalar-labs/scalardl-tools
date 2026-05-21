@@ -38,7 +38,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run check
-        run: ./gradlew :resumable-scan:check :ledger-finalize-records:check
+        run: ./gradlew :common:check :resumable-scan:check :ledger-finalize-records:check
 
       - name: Upload test reports
         if: always()
@@ -46,6 +46,7 @@ jobs:
         with:
           name: check-reports
           path: |
+            coordinator-state-deleter/common/build/reports/tests/test/
             coordinator-state-deleter/resumable-scan/build/reports/tests/test/
             coordinator-state-deleter/ledger-finalize-records/build/reports/tests/test/
 

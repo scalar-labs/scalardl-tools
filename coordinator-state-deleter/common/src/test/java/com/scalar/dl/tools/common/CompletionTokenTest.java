@@ -12,10 +12,11 @@ class CompletionTokenTest {
     // Arrange
 
     // Act
-    CompletionToken token = CompletionToken.create(CompletionToken.Server.LEDGER, 1745000000000L);
+    CompletionToken token =
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
 
     // Assert
-    assertThat(token.getServer()).isEqualTo(CompletionToken.Server.LEDGER);
+    assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
     assertThat(token.getStartedAtMs()).isEqualTo(1745000000000L);
     assertThat(token.getCrc32c()).isNotEmpty();
   }
@@ -25,8 +26,8 @@ class CompletionTokenTest {
     // Arrange
 
     // Act
-    CompletionToken t1 = CompletionToken.create(CompletionToken.Server.LEDGER, 1000L);
-    CompletionToken t2 = CompletionToken.create(CompletionToken.Server.LEDGER, 1000L);
+    CompletionToken t1 = CompletionToken.create(CompletionToken.ServerType.LEDGER, 1000L);
+    CompletionToken t2 = CompletionToken.create(CompletionToken.ServerType.LEDGER, 1000L);
 
     // Assert
     assertThat(t1.getCrc32c()).isEqualTo(t2.getCrc32c());
@@ -38,9 +39,9 @@ class CompletionTokenTest {
     // Arrange
 
     // Act
-    CompletionToken t1 = CompletionToken.create(CompletionToken.Server.LEDGER, 1000L);
-    CompletionToken t2 = CompletionToken.create(CompletionToken.Server.AUDITOR, 1000L);
-    CompletionToken t3 = CompletionToken.create(CompletionToken.Server.LEDGER, 2000L);
+    CompletionToken t1 = CompletionToken.create(CompletionToken.ServerType.LEDGER, 1000L);
+    CompletionToken t2 = CompletionToken.create(CompletionToken.ServerType.AUDITOR, 1000L);
+    CompletionToken t3 = CompletionToken.create(CompletionToken.ServerType.LEDGER, 2000L);
 
     // Assert
     assertThat(t1.getCrc32c()).isNotEqualTo(t2.getCrc32c());
@@ -50,7 +51,8 @@ class CompletionTokenTest {
   @Test
   void encode_shouldProduceShellSafeString() {
     // Arrange
-    CompletionToken token = CompletionToken.create(CompletionToken.Server.LEDGER, 1745000000000L);
+    CompletionToken token =
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
 
     // Act
     String encoded = token.encode();
@@ -64,14 +66,14 @@ class CompletionTokenTest {
   void decode_shouldDecodeEncodedTokenCorrectly() {
     // Arrange
     CompletionToken original =
-        CompletionToken.create(CompletionToken.Server.LEDGER, 1745000000000L);
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
     String encoded = original.encode();
 
     // Act
     CompletionToken decoded = CompletionToken.decode(encoded);
 
     // Assert
-    assertThat(decoded.getServer()).isEqualTo(original.getServer());
+    assertThat(decoded.getServerType()).isEqualTo(original.getServerType());
     assertThat(decoded.getStartedAtMs()).isEqualTo(original.getStartedAtMs());
     assertThat(decoded.getCrc32c()).isEqualTo(original.getCrc32c());
   }
@@ -79,7 +81,8 @@ class CompletionTokenTest {
   @Test
   void decode_corruptedCrcGiven_shouldThrowIllegalArgumentException() {
     // Arrange
-    CompletionToken token = CompletionToken.create(CompletionToken.Server.LEDGER, 1745000000000L);
+    CompletionToken token =
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
     String encoded = token.encode();
     // Corrupt one character
     char[] chars = encoded.toCharArray();
@@ -103,7 +106,8 @@ class CompletionTokenTest {
   @Test
   void decode_invalidJsonGiven_shouldThrowIllegalArgumentException() {
     // Arrange
-    CompletionToken token = CompletionToken.create(CompletionToken.Server.LEDGER, 1745000000000L);
+    CompletionToken token =
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
     String encoded = token.encode();
     String truncated = encoded.substring(0, encoded.length() / 2);
 

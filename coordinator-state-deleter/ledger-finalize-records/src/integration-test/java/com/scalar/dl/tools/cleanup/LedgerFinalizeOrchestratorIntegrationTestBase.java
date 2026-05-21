@@ -278,7 +278,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Assert
     assertThat(completionToken).isNotEmpty();
     CompletionToken token = CompletionToken.decode(completionToken);
-    assertThat(token.getServer()).isEqualTo(CompletionToken.Server.LEDGER);
+    assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
     assertThat(token.getStartedAtMs()).isGreaterThan(0);
     assertRecordsFinalized(TABLE_1, TABLE_2);
   }
@@ -296,7 +296,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Assert
     assertThat(completionToken).isNotEmpty();
     CompletionToken token = CompletionToken.decode(completionToken);
-    assertThat(token.getServer()).isEqualTo(CompletionToken.Server.LEDGER);
+    assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
     assertThat(token.getStartedAtMs()).isGreaterThan(0);
     assertRecordsFinalized(TABLE_1, TABLE_2);
   }

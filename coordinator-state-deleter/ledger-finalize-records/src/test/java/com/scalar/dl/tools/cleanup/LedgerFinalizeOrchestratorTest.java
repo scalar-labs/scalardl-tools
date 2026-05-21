@@ -91,7 +91,7 @@ class LedgerFinalizeOrchestratorTest {
     // Assert
     assertThat(completionToken).isNotEmpty();
     CompletionToken token = CompletionToken.decode(completionToken);
-    assertThat(token.getServer()).isEqualTo(CompletionToken.Server.LEDGER);
+    assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
     assertThat(token.getStartedAtMs()).isBetween(before, after);
 
     verify(scanner).scan(eq("ns1"), eq("tbl1"), any());

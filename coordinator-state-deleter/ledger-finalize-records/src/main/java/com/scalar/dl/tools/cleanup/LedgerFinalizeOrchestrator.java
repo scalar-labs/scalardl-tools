@@ -120,7 +120,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     }
 
     String completionToken =
-        CompletionToken.create(CompletionToken.Server.LEDGER, guaranteeTimestamp).encode();
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, guaranteeTimestamp).encode();
     logger.info("Completion token emitted successfully");
     return completionToken;
   }

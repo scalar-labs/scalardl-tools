@@ -23,12 +23,12 @@ import javax.annotation.concurrent.Immutable;
 public final class CompletionToken {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private final Server server;
+  private final ServerType serverType;
   private final long startedAtMs;
   private final String crc32c;
 
-  private CompletionToken(Server server, long startedAtMs, String crc32c) {
-    this.server = server;
+  private CompletionToken(ServerType serverType, long startedAtMs, String crc32c) {
+    this.serverType = serverType;
     this.startedAtMs = startedAtMs;
     this.crc32c = crc32c;
   }
@@ -36,13 +36,13 @@ public final class CompletionToken {
   /**
    * Creates a new completion token for the given server type and guarantee timestamp.
    *
-   * @param server the server type that performed the finalization
+   * @param serverType the server type that performed the finalization
    * @param startedAtMs the guarantee timestamp captured at the start of the finalization sweep
    * @return a new completion token with a computed CRC32C
    */
-  public static CompletionToken create(Server server, long startedAtMs) {
-    String crc = computeCrc32c(server.getValue(), startedAtMs);
-    return new CompletionToken(server, startedAtMs, crc);
+  public static CompletionToken create(ServerType serverType, long startedAtMs) {
+    String crc = computeCrc32c(serverType.getValue(), startedAtMs);
+    return new CompletionToken(serverType, startedAtMs, crc);
   }
 
   /**
@@ -56,8 +56,8 @@ public final class CompletionToken {
     try {
       byte[] bytes = Base64.getUrlDecoder().decode(encoded);
       JsonNode node = MAPPER.readTree(new String(bytes, StandardCharsets.UTF_8));
-      String serverValue = node.get("server").asText();
-      Server server = Server.fromValue(serverValue);
+      String serverValue = node.get("server_type").asText();
+      ServerType serverType = ServerType.fromValue(serverValue);
       long startedAtMs = node.get("started_at_ms").asLong();
       String crc = node.get("crc32c").asText();
 
@@ -66,7 +66,7 @@ public final class CompletionToken {
         throw new IllegalArgumentException(
             "CRC32C mismatch: expected " + expected + " but got " + crc);
       }
-      return new CompletionToken(server, startedAtMs, crc);
+      return new CompletionToken(serverType, startedAtMs, crc);
     } catch (IllegalArgumentException e) {
       throw e;
     } catch (Exception e) {
@@ -92,7 +92,7 @@ public final class CompletionToken {
   public String encode() {
     try {
       ObjectNode node = MAPPER.createObjectNode();
-      node.put("server", server.getValue());
+      node.put("server_type", serverType.getValue());
       node.put("started_at_ms", startedAtMs);
       node.put("crc32c", crc32c);
       byte[] json = MAPPER.writeValueAsBytes(node);
@@ -103,8 +103,8 @@ public final class CompletionToken {
   }
 
   /** Returns the server type that produced this token. */
-  public Server getServer() {
-    return server;
+  public ServerType getServerType() {
+    return serverType;
   }
 
   /** Returns the guarantee timestamp captured at the start of the finalization sweep. */
@@ -118,18 +118,18 @@ public final class CompletionToken {
   }
 
   /** The server type that produced the completion token. */
-  public enum Server {
+  public enum ServerType {
     LEDGER("ledger"),
     AUDITOR("auditor");
 
     private final String value;
 
-    Server(String value) {
+    ServerType(String value) {
       this.value = value;
     }
 
-    static Server fromValue(String value) {
-      for (Server s : values()) {
+    static ServerType fromValue(String value) {
+      for (ServerType s : values()) {
         if (s.value.equals(value)) {
           return s;
         }
