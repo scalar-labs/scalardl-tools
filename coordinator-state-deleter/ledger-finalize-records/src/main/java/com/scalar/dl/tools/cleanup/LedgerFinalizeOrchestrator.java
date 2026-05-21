@@ -1,10 +1,12 @@
 package com.scalar.dl.tools.cleanup;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.scalar.db.api.DistributedTransactionAdmin;
+import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScanner;
@@ -41,7 +43,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     RecordFinalizer create(DistributedTransactionManager txManager, int workerThreads);
   }
 
-  private final DistributedTransactionAdmin admin;
+  private final DistributedStorageAdmin admin;
   private final DistributedTransactionManager txManager;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
@@ -50,7 +52,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
   @VisibleForTesting
   LedgerFinalizeOrchestrator(
-      DistributedTransactionAdmin admin,
+      DistributedStorageAdmin admin,
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir,
@@ -60,7 +62,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
   @VisibleForTesting
   LedgerFinalizeOrchestrator(
-      DistributedTransactionAdmin admin,
+      DistributedStorageAdmin admin,
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir,
@@ -87,8 +89,8 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   public static LedgerFinalizeOrchestrator create(
       Properties props, Path checkpointDir, @Nullable Integer workerThreads) {
     DatabaseConfig dbConfig = new DatabaseConfig(props);
+    DistributedStorageAdmin admin = StorageFactory.create(props).getStorageAdmin();
     TransactionFactory factory = TransactionFactory.create(props);
-    DistributedTransactionAdmin admin = factory.getTransactionAdmin();
     DistributedTransactionManager txManager = factory.getTransactionManager();
 
     int resolvedWorkerThreads =
@@ -150,10 +152,15 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   }
 
   private List<String> discoverTables() throws Exception {
+    String coordinatorTable =
+        ScalarDbUtils.getFullTableName(Coordinator.NAMESPACE, Coordinator.TABLE);
     List<String> tables = new ArrayList<>();
     for (String namespace : admin.getNamespaceNames()) {
       for (String table : admin.getNamespaceTableNames(namespace)) {
-        tables.add(ScalarDbUtils.getFullTableName(namespace, table));
+        String qualifiedTable = ScalarDbUtils.getFullTableName(namespace, table);
+        if (!qualifiedTable.equals(coordinatorTable)) {
+          tables.add(qualifiedTable);
+        }
       }
     }
     return tables;
@@ -205,7 +212,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     try {
       admin.close();
     } catch (Exception e) {
-      logger.warn("Failed to close DistributedTransactionAdmin.", e);
+      logger.warn("Failed to close DistributedStorageAdmin.", e);
     }
     try {
       txManager.close();

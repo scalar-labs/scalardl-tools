@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.scalar.db.api.Delete;
 import com.scalar.db.api.DistributedStorage;
+import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransaction;
 import com.scalar.db.api.DistributedTransactionAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
@@ -54,6 +55,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
   private DatabaseConfig databaseConfig;
   private DistributedTransactionAdmin admin;
+  private DistributedStorageAdmin storageAdmin;
   private DistributedTransactionManager txManager;
   private DistributedStorage storage;
   private TwoPhaseCommitTransactionManager twoPhaseCommitTxManager;
@@ -65,10 +67,12 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     Properties props = getProperties();
 
     databaseConfig = new DatabaseConfig(props);
+    StorageFactory storageFactory = StorageFactory.create(props);
+    storageAdmin = storageFactory.getStorageAdmin();
+    storage = storageFactory.getStorage();
     TransactionFactory factory = TransactionFactory.create(props);
     admin = factory.getTransactionAdmin();
     txManager = factory.getTransactionManager();
-    storage = StorageFactory.create(props).getStorage();
     twoPhaseCommitTxManager = factory.getTwoPhaseCommitTransactionManager();
     assertThat(twoPhaseCommitTxManager).isNotNull();
 
@@ -90,6 +94,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       admin.dropCoordinatorTables(true);
     } finally {
       admin.close();
+      storageAdmin.close();
       txManager.close();
       storage.close();
       twoPhaseCommitTxManager.close();
@@ -272,7 +277,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            admin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -290,7 +295,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
     // Act
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, realScannerFactory(), checkpointDir, 1);
+        new LedgerFinalizeOrchestrator(
+            storageAdmin, txManager, realScannerFactory(), checkpointDir, 1);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -323,7 +329,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            admin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -362,7 +368,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            admin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
     String completionToken = orchestrator.execute();
 
     // Assert

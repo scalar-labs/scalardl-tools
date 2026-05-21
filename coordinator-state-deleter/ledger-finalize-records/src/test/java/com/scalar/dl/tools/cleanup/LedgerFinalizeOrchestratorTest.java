@@ -11,7 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.scalar.db.api.DistributedTransactionAdmin;
+import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.Result;
 import com.scalar.db.api.TransactionState;
@@ -39,14 +39,14 @@ class LedgerFinalizeOrchestratorTest {
 
   @TempDir Path tempDir;
 
-  private DistributedTransactionAdmin admin;
+  private DistributedStorageAdmin admin;
   private DistributedTransactionManager txManager;
   private ResumableScanner scanner;
   private ResumableScannerFactory scannerFactory;
 
   @BeforeEach
   void setUp() {
-    admin = mock(DistributedTransactionAdmin.class);
+    admin = mock(DistributedStorageAdmin.class);
     txManager = mock(DistributedTransactionManager.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
