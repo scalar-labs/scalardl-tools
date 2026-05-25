@@ -67,7 +67,7 @@ class CosmosResumableScannerTest {
   }
 
   private CosmosResumableScanner createScanner() {
-    return new CosmosResumableScanner(cosmosClient, checkpointManager, storageAdmin);
+    return new CosmosResumableScanner(cosmosClient, checkpointManager, storageAdmin, 32, 100);
   }
 
   private FeedRange createMockFeedRange(String label) {
