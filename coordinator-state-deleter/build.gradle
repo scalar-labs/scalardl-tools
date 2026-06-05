@@ -66,6 +66,7 @@ subprojects {
         implementation group: 'com.google.guava', name: 'guava', version: "${guavaVersion}"
         implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: "${jacksonVersion}"
         testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: "${junitVersion}"
+        testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: "${junitVersion}"
         testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: "${junitVersion}"
         testRuntimeOnly group: 'org.junit.platform', name: 'junit-platform-launcher', version: "${junitPlatformVersion}"
         testImplementation group: 'org.assertj', name: 'assertj-core', version: "${assertjVersion}"

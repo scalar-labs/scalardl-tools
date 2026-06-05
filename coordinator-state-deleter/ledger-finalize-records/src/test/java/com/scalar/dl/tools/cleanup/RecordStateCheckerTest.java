@@ -19,6 +19,8 @@ class RecordStateCheckerTest {
 
   private static final long GUARANTEE_TS = 1000L;
 
+  private final RecordStateChecker checker = new RecordStateChecker(GUARANTEE_TS);
+
   private Result createResult(TransactionState txState, long txPreparedAt) {
     Result result = mock(Result.class);
     Map<String, com.scalar.db.io.Column<?>> columns = new LinkedHashMap<>();
@@ -50,47 +52,32 @@ class RecordStateCheckerTest {
 
   @Test
   void needsFinalization_preparedBeforeGuaranteeGiven_shouldReturnTrue() {
-    // Arrange
-
     // Act & Assert
-    assertThat(RecordStateChecker.needsFinalization(createPreparedBeforeGuarantee(), GUARANTEE_TS))
-        .isTrue();
+    assertThat(checker.needsFinalization(createPreparedBeforeGuarantee())).isTrue();
   }
 
   @Test
   void needsFinalization_deletedBeforeGuaranteeGiven_shouldReturnTrue() {
-    // Arrange
-
     // Act & Assert
-    assertThat(RecordStateChecker.needsFinalization(createDeletedBeforeGuarantee(), GUARANTEE_TS))
-        .isTrue();
+    assertThat(checker.needsFinalization(createDeletedBeforeGuarantee())).isTrue();
   }
 
   @Test
   void needsFinalization_committedGiven_shouldReturnFalse() {
-    // Arrange
-
     // Act & Assert
-    assertThat(RecordStateChecker.needsFinalization(createCommitted(), GUARANTEE_TS)).isFalse();
+    assertThat(checker.needsFinalization(createCommitted())).isFalse();
   }
 
   @Test
   void needsFinalization_preparedAfterGuaranteeGiven_shouldReturnFalse() {
-    // Arrange
-
     // Act & Assert
-    assertThat(RecordStateChecker.needsFinalization(createPreparedAfterGuarantee(), GUARANTEE_TS))
-        .isFalse();
+    assertThat(checker.needsFinalization(createPreparedAfterGuarantee())).isFalse();
   }
 
   @Test
   void needsFinalization_preparedAtExactlyGuaranteeGiven_shouldReturnFalse() {
-    // Arrange
-
     // Act & Assert
-    assertThat(
-            RecordStateChecker.needsFinalization(
-                createResult(TransactionState.PREPARED, GUARANTEE_TS), GUARANTEE_TS))
+    assertThat(checker.needsFinalization(createResult(TransactionState.PREPARED, GUARANTEE_TS)))
         .isFalse();
   }
 
@@ -104,7 +91,7 @@ class RecordStateCheckerTest {
         .thenThrow(new IllegalArgumentException("The column tx_state does not exist"));
 
     // Act & Assert
-    assertThatThrownBy(() -> RecordStateChecker.needsFinalization(result, GUARANTEE_TS))
+    assertThatThrownBy(() -> checker.needsFinalization(result))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

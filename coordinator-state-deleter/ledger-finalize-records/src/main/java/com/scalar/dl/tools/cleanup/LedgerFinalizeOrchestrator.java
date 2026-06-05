@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Consumer;
-import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,14 +39,14 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   @VisibleForTesting
   @FunctionalInterface
   interface RecordFinalizerFactory {
-    RecordFinalizer create(DistributedTransactionManager txManager, int workerThreads);
+    RecordFinalizer create(
+        DistributedTransactionManager txManager, RecordStateChecker stateChecker);
   }
 
   private final DistributedStorageAdmin admin;
   private final DistributedTransactionManager txManager;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
-  private final int workerThreads;
   private final RecordFinalizerFactory recordFinalizerFactory;
 
   @VisibleForTesting
@@ -55,9 +54,8 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       DistributedStorageAdmin admin,
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
-      Path checkpointDir,
-      int workerThreads) {
-    this(admin, txManager, scannerFactory, checkpointDir, workerThreads, RecordFinalizer::new);
+      Path checkpointDir) {
+    this(admin, txManager, scannerFactory, checkpointDir, RecordFinalizer::new);
   }
 
   @VisibleForTesting
@@ -66,13 +64,11 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir,
-      int workerThreads,
       RecordFinalizerFactory recordFinalizerFactory) {
     this.admin = admin;
     this.txManager = txManager;
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
-    this.workerThreads = workerThreads;
     this.recordFinalizerFactory = recordFinalizerFactory;
   }
 
@@ -81,23 +77,27 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
    *
    * @param props properties containing ScalarDB database configuration information
    * @param checkpointDir root directory for checkpoint state
-   * @param workerThreads number of threads for finalizing non-terminal records ({@code null} =
-   *     number of available CPU cores)
    * @return a new orchestrator instance
    * @throws IllegalStateException if the configured storage is not supported
    */
-  public static LedgerFinalizeOrchestrator create(
-      Properties props, Path checkpointDir, @Nullable Integer workerThreads) {
-    DatabaseConfig dbConfig = new DatabaseConfig(props);
-    DistributedStorageAdmin admin = StorageFactory.create(props).getStorageAdmin();
-    TransactionFactory factory = TransactionFactory.create(props);
-    DistributedTransactionManager txManager = factory.getTransactionManager();
-
-    int resolvedWorkerThreads =
-        workerThreads != null ? workerThreads : Runtime.getRuntime().availableProcessors();
-    ResumableScannerFactory scannerFactory = new ResumableScannerFactory(dbConfig);
-    return new LedgerFinalizeOrchestrator(
-        admin, txManager, scannerFactory, checkpointDir, resolvedWorkerThreads);
+  public static LedgerFinalizeOrchestrator create(Properties props, Path checkpointDir) {
+    DistributedStorageAdmin admin = null;
+    DistributedTransactionManager txManager = null;
+    try {
+      admin = StorageFactory.create(props).getStorageAdmin();
+      txManager = TransactionFactory.create(props).getTransactionManager();
+      ResumableScannerFactory scannerFactory =
+          new ResumableScannerFactory(new DatabaseConfig(props));
+      return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, checkpointDir);
+    } catch (Exception e) {
+      if (txManager != null) {
+        txManager.close();
+      }
+      if (admin != null) {
+        admin.close();
+      }
+      throw e;
+    }
   }
 
   /**
@@ -112,13 +112,14 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     LedgerFinalizeState state = loadOrInitializeState(stateManager);
 
     long guaranteeTimestamp = state.getStartedAtMs();
+    RecordStateChecker stateChecker = new RecordStateChecker(guaranteeTimestamp);
 
     for (String qualifiedTable : state.getTableList()) {
       if (state.getCompletedTables().contains(qualifiedTable)) {
         logger.info("Skipping already completed table: {}", qualifiedTable);
         continue;
       }
-      processTable(stateManager, state, qualifiedTable, guaranteeTimestamp);
+      processTable(stateManager, state, qualifiedTable, stateChecker);
     }
 
     String completionToken =
@@ -167,14 +168,14 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   }
 
   /**
-   * Scans a single table using a resumable scanner, submits non-terminal records to the {@link
+   * Scans a single table using a resumable scanner, finalizes non-terminal records via the {@link
    * RecordFinalizer} for recovery, and marks the table as completed in the checkpoint state.
    */
   private void processTable(
       LedgerFinalizeStateManager stateManager,
       LedgerFinalizeState state,
       String qualifiedTable,
-      long guaranteeTimestamp)
+      RecordStateChecker stateChecker)
       throws Exception {
     Path scanCheckpointDir = stateManager.getStateDir();
     String[] parts = qualifiedTable.split("\\.", 2);
@@ -183,24 +184,27 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
     logger.info("Processing table: {}", qualifiedTable);
 
-    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir);
-        RecordFinalizer dispatcher = recordFinalizerFactory.create(txManager, workerThreads)) {
+    RecordFinalizer recordFinalizer = recordFinalizerFactory.create(txManager, stateChecker);
 
+    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
       Consumer<com.scalar.db.api.Result> consumer =
           result -> {
-            if (RecordStateChecker.needsFinalization(result, guaranteeTimestamp)) {
-              dispatcher.submit(namespace, tableName, result);
+            if (stateChecker.needsFinalization(result)) {
+              try {
+                recordFinalizer.execute(namespace, tableName, result);
+              } catch (Exception e) {
+                throw new RuntimeException(e);
+              }
             }
           };
 
       ScanResult scanResult = scanner.scan(namespace, tableName, consumer);
-      dispatcher.awaitCompletion();
 
       logger.info(
           "Table {} complete: scanned={}, finalized={}",
           qualifiedTable,
           scanResult.getTotalScanned(),
-          dispatcher.getFinalizedCount());
+          recordFinalizer.getFinalizedCount());
     }
 
     state.markTableCompleted(qualifiedTable);

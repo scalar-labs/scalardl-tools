@@ -47,8 +47,6 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   private static final String TABLE_EMPTY = "test_table_empty";
   private static final int RECORDS_PER_TABLE = 10; // must be divisible by 5
 
-  private static final int DEFAULT_WORKER_THREADS = 4;
-
   private static final String PARTITION_KEY = "pk";
   private static final String CLUSTERING_KEY = "ck";
   private static final String VALUE_COLUMN = "val";
@@ -277,26 +275,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
-    String completionToken = orchestrator.execute();
-
-    // Assert
-    assertThat(completionToken).isNotEmpty();
-    CompletionToken token = CompletionToken.decode(completionToken);
-    assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
-    assertThat(token.getStartedAtMs()).isGreaterThan(0);
-    assertRecordsFinalized(TABLE_1, TABLE_2);
-  }
-
-  @Test
-  public void execute_singleWorkerThreadGiven_shouldFinalizeAllNonTerminalRecords(
-      @TempDir Path checkpointDir) throws Exception {
-    // Arrange
-
-    // Act
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir, 1);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -329,7 +308,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -368,7 +347,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir, DEFAULT_WORKER_THREADS);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert

@@ -81,7 +81,7 @@ class LedgerFinalizeOrchestratorTest {
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir, 1);
+        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
 
     // Act
     long before = System.currentTimeMillis();
@@ -110,7 +110,7 @@ class LedgerFinalizeOrchestratorTest {
     when(admin.getNamespaceNames()).thenReturn(Collections.emptySet());
 
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir, 1);
+        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
 
     // Act
     String completionToken = orchestrator.execute();
@@ -130,7 +130,7 @@ class LedgerFinalizeOrchestratorTest {
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir, 1);
+        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -168,18 +168,16 @@ class LedgerFinalizeOrchestratorTest {
     RecordFinalizer mockFinalizer = mock(RecordFinalizer.class);
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            admin, txManager, scannerFactory, tempDir, 1, (mgr, threads) -> mockFinalizer);
+            admin, txManager, scannerFactory, tempDir, (mgr, checker) -> mockFinalizer);
 
     // Act
     orchestrator.execute();
 
     // Assert
-    // Only the PREPARED record within the guarantee window should be submitted
-    verify(mockFinalizer).submit("ns1", "tbl1", preparedInWindow);
-    verify(mockFinalizer, never()).submit(anyString(), anyString(), eq(committedRecord));
-    verify(mockFinalizer, never()).submit(anyString(), anyString(), eq(preparedOutsideWindow));
-    verify(mockFinalizer).awaitCompletion();
-    verify(mockFinalizer).close();
+    // Only the PREPARED record within the guarantee window should be finalized
+    verify(mockFinalizer).execute("ns1", "tbl1", preparedInWindow);
+    verify(mockFinalizer, never()).execute(anyString(), anyString(), eq(committedRecord));
+    verify(mockFinalizer, never()).execute(anyString(), anyString(), eq(preparedOutsideWindow));
   }
 
   @Test
@@ -199,7 +197,7 @@ class LedgerFinalizeOrchestratorTest {
 
     // Act & Assert 1
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir, 1);
+        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
     assertThatThrownBy(orchestrator::execute).isInstanceOf(RuntimeException.class);
 
     // Verify first table's completion was persisted
@@ -217,7 +215,7 @@ class LedgerFinalizeOrchestratorTest {
 
     // Act 2
     LedgerFinalizeOrchestrator orchestrator2 =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir, 1);
+        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
     String token = orchestrator2.execute();
 
     // Assert 2
@@ -234,7 +232,7 @@ class LedgerFinalizeOrchestratorTest {
   void close_shouldCloseAdminAndTxManager() {
     // Arrange
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir, 1);
+        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
 
     // Act
     orchestrator.close();

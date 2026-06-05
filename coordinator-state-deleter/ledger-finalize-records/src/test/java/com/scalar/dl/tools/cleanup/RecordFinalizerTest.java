@@ -1,10 +1,10 @@
 package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,7 +14,6 @@ import com.scalar.db.api.Get;
 import com.scalar.db.api.Result;
 import com.scalar.db.io.Key;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,10 +21,12 @@ import org.mockito.ArgumentCaptor;
 class RecordFinalizerTest {
 
   private DistributedTransactionManager manager;
+  private RecordStateChecker stateChecker;
 
   @BeforeEach
   void setUp() {
     manager = mock(DistributedTransactionManager.class);
+    stateChecker = mock(RecordStateChecker.class);
   }
 
   @SuppressWarnings("deprecation")
@@ -37,71 +38,81 @@ class RecordFinalizerTest {
   }
 
   @Test
-  void submitAndAwaitCompletion_shouldFinalizeAllSuccessfully() throws Exception {
+  void execute_shouldFinalizeAllSuccessfully() throws Exception {
     // Arrange
     DistributedTransaction tx = mock(DistributedTransaction.class);
     when(manager.begin()).thenReturn(tx);
     when(tx.get(any(Get.class))).thenReturn(Optional.empty());
 
-    try (RecordFinalizer dispatcher = new RecordFinalizer(manager, 2)) {
-      // Act
-      dispatcher.submit("ns", "tbl", createScanResult("pk1"));
-      dispatcher.submit("ns", "tbl", createScanResult("pk2"));
-      dispatcher.submit("ns", "tbl", createScanResult("pk3"));
-      dispatcher.awaitCompletion();
+    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
 
-      // Assert
-      assertThat(dispatcher.getFinalizedCount()).isEqualTo(3);
-    }
+    // Act
+    finalizer.execute("ns", "tbl", createScanResult("pk1"));
+    finalizer.execute("ns", "tbl", createScanResult("pk2"));
+    finalizer.execute("ns", "tbl", createScanResult("pk3"));
+
+    // Assert
+    verify(tx, times(3)).get(any(Get.class));
+    assertThat(finalizer.getFinalizedCount()).isEqualTo(3);
   }
 
   @Test
-  void submitAndAwaitCompletion_workerFailureGiven_shouldPropagateException() throws Exception {
+  void execute_recoveryCompletesAfterRetries_shouldFinalize() throws Exception {
+    // Arrange
+    DistributedTransaction tx = mock(DistributedTransaction.class);
+    when(manager.begin()).thenReturn(tx);
+
+    Result nonTerminalResult = mock(Result.class);
+    when(stateChecker.needsFinalization(nonTerminalResult)).thenReturn(true, true, false);
+    when(tx.get(any(Get.class)))
+        .thenReturn(Optional.of(nonTerminalResult))
+        .thenReturn(Optional.of(nonTerminalResult))
+        .thenReturn(Optional.of(nonTerminalResult));
+
+    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+
+    // Act
+    finalizer.execute("ns", "tbl", createScanResult("pk1"));
+
+    // Assert
+    verify(tx, times(3)).get(any(Get.class));
+    assertThat(finalizer.getFinalizedCount()).isEqualTo(1);
+  }
+
+  @Test
+  void execute_recoveryNeverCompletes_shouldThrowException() throws Exception {
+    // Arrange
+    DistributedTransaction tx = mock(DistributedTransaction.class);
+    when(manager.begin()).thenReturn(tx);
+
+    Result nonTerminalResult = mock(Result.class);
+    when(stateChecker.needsFinalization(nonTerminalResult)).thenReturn(true);
+    when(tx.get(any(Get.class))).thenReturn(Optional.of(nonTerminalResult));
+
+    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+
+    // Act & Assert
+    assertThatThrownBy(() -> finalizer.execute("ns", "tbl", createScanResult("pk1")))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("not finalized");
+  }
+
+  @Test
+  void execute_dbFailureGiven_shouldPropagateException() throws Exception {
     // Arrange
     when(manager.begin()).thenThrow(new RuntimeException("DB unavailable"));
 
-    try (RecordFinalizer dispatcher = new RecordFinalizer(manager, 1)) {
-      // Act
-      dispatcher.submit("ns", "tbl", createScanResult("pk1"));
+    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
 
-      // Assert
-      assertThatThrownBy(dispatcher::awaitCompletion)
-          .isInstanceOf(RuntimeException.class)
-          .hasMessageContaining("DB unavailable");
-    }
-  }
-
-  @Test
-  void submitAndAwaitCompletion_multipleWorkerFailuresGiven_shouldAccumulateSuppressedExceptions()
-      throws Exception {
-    // Arrange
-    // Use thenAnswer to create a new exception instance per call; thenThrow reuses the same
-    // instance, which causes self-suppression to be silently ignored by addSuppressed.
-    when(manager.begin())
-        .thenAnswer(
-            invocation -> {
-              throw new RuntimeException("DB unavailable");
-            });
-
-    try (RecordFinalizer dispatcher = new RecordFinalizer(manager, 2)) {
-      // Act
-      dispatcher.submit("ns", "tbl", createScanResult("pk1"));
-      dispatcher.submit("ns", "tbl", createScanResult("pk2"));
-
-      // Assert
-      assertThatThrownBy(dispatcher::awaitCompletion)
-          .isInstanceOf(RuntimeException.class)
-          .satisfies(
-              e -> {
-                assertThat(e.getSuppressed()).hasSize(1);
-                assertThat(e.getSuppressed()[0]).isInstanceOf(RuntimeException.class);
-              });
-    }
+    // Act & Assert
+    assertThatThrownBy(() -> finalizer.execute("ns", "tbl", createScanResult("pk1")))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("DB unavailable");
   }
 
   @Test
   @SuppressWarnings("deprecation")
-  void submit_noClusteringKeyGiven_shouldExecuteGetWithoutClusteringKey() throws Exception {
+  void execute_noClusteringKeyGiven_shouldConstructCorrectGet() throws Exception {
     // Arrange
     DistributedTransaction tx = mock(DistributedTransaction.class);
     when(manager.begin()).thenReturn(tx);
@@ -111,44 +122,18 @@ class RecordFinalizerTest {
     when(scanResult.getPartitionKey()).thenReturn(Optional.of(Key.ofText("id", "pk1")));
     when(scanResult.getClusteringKey()).thenReturn(Optional.empty());
 
-    try (RecordFinalizer dispatcher = new RecordFinalizer(manager, 1)) {
-      // Act
-      dispatcher.submit("ns", "tbl", scanResult);
-      dispatcher.awaitCompletion();
+    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
 
-      // Assert
-      ArgumentCaptor<Get> captor = ArgumentCaptor.forClass(Get.class);
-      verify(tx).get(captor.capture());
-      assertThat(captor.getValue().getClusteringKey()).isEmpty();
-    }
-  }
+    // Act
+    finalizer.execute("ns", "tbl", scanResult);
 
-  @Test
-  void awaitCompletion_noSubmissionsGiven_shouldNotThrow() {
-    // Arrange
-    try (RecordFinalizer dispatcher = new RecordFinalizer(manager, 2)) {
-      // Act & Assert
-      assertThatCode(dispatcher::awaitCompletion).doesNotThrowAnyException();
-      assertThat(dispatcher.getFinalizedCount()).isEqualTo(0);
-    }
-  }
-
-  @Test
-  void close_inFlightTasksGiven_shouldInterruptWorkersAndReturnWithoutException() throws Exception {
-    // Arrange
-    // Make begin() block so the worker stays in-flight
-    CountDownLatch blocked = new CountDownLatch(1);
-    when(manager.begin())
-        .thenAnswer(
-            invocation -> {
-              blocked.await(); // block until interrupted by shutdownNow()
-              return null;
-            });
-
-    RecordFinalizer dispatcher = new RecordFinalizer(manager, 1);
-    dispatcher.submit("ns", "tbl", createScanResult("pk1"));
-
-    // Act & Assert
-    assertThatCode(dispatcher::close).doesNotThrowAnyException();
+    // Assert
+    ArgumentCaptor<Get> captor = ArgumentCaptor.forClass(Get.class);
+    verify(tx).get(captor.capture());
+    Get captured = captor.getValue();
+    assertThat(captured.forNamespace()).hasValue("ns");
+    assertThat(captured.forTable()).hasValue("tbl");
+    assertThat((Object) captured.getPartitionKey()).isEqualTo(Key.ofText("id", "pk1"));
+    assertThat(captured.getClusteringKey()).isEmpty();
   }
 }
