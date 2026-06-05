@@ -184,7 +184,8 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
               Coordinator.NAMESPACE,
               Coordinator.TABLE,
               result -> {
-                if (result.getBigInt(Attribute.CREATED_AT) < deletableBeforeMs) {
+                if (!result.isNull(Attribute.CREATED_AT)
+                    && result.getBigInt(Attribute.CREATED_AT) < deletableBeforeMs) {
                   try {
                     deleter.submit(result);
                   } catch (Exception e) {

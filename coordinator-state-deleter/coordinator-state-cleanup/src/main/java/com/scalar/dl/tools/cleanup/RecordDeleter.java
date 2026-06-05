@@ -52,18 +52,7 @@ public final class RecordDeleter implements AutoCloseable {
    * completes.
    */
   public void submit(Result scanResult) throws Exception {
-    Key partitionKey =
-        scanResult
-            .getPartitionKey()
-            .orElseThrow(
-                () -> new IllegalArgumentException("Partition key not found in scan result"));
-
-    Delete delete =
-        Delete.newBuilder()
-            .namespace(Coordinator.NAMESPACE)
-            .table(Coordinator.TABLE)
-            .partitionKey(partitionKey)
-            .build();
+    throwIfFailed();
 
     permits.acquire();
     boolean submitted = false;
@@ -71,7 +60,7 @@ public final class RecordDeleter implements AutoCloseable {
       executor.execute(
           () -> {
             try {
-              storage.delete(delete);
+              storage.delete(createDelete(scanResult));
               deletedCount.incrementAndGet();
             } catch (Exception e) {
               errors.add(e);
@@ -108,6 +97,20 @@ public final class RecordDeleter implements AutoCloseable {
       first.addSuppressed(e);
     }
     throw first;
+  }
+
+  private Delete createDelete(Result result) {
+    Key partitionKey =
+        result
+            .getPartitionKey()
+            .orElseThrow(
+                () -> new IllegalArgumentException("Partition key not found in scan result"));
+
+    return Delete.newBuilder()
+        .namespace(Coordinator.NAMESPACE)
+        .table(Coordinator.TABLE)
+        .partitionKey(partitionKey)
+        .build();
   }
 
   /** Returns the count of successfully deleted records. */
