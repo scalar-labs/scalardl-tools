@@ -10,8 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.scalar.db.api.Delete;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.Result;
+import com.scalar.db.io.Key;
 import com.scalar.db.transaction.consensuscommit.Attribute;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -19,6 +21,7 @@ import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +30,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 
 class CoordinatorCleanupOrchestratorTest {
 
@@ -97,34 +101,54 @@ class CoordinatorCleanupOrchestratorTest {
             });
 
     RecordDeleter mockDeleter = mock(RecordDeleter.class);
-    when(mockDeleter.getDeletedCount()).thenReturn(2L);
 
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
             storage,
             scannerFactory,
             tempDir,
-            1,
+            Coordinator.NAMESPACE,
             ledgerToken,
             auditorToken,
-            (s, threads) -> mockDeleter);
+            mockDeleter);
 
     // Act
-    long deletedCount = orchestrator.execute();
+    orchestrator.execute();
 
     // Assert
-    assertThat(deletedCount).isEqualTo(2);
     verify(scanner).scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any());
-    verify(mockDeleter).submit(deletable1);
-    verify(mockDeleter).submit(deletable2);
-    verify(mockDeleter, never()).submit(notDeletable1);
-    verify(mockDeleter, never()).submit(notDeletable2);
-    verify(mockDeleter).awaitCompletion();
-    verify(mockDeleter).close();
+    verify(mockDeleter).execute(deletable1);
+    verify(mockDeleter).execute(deletable2);
+    verify(mockDeleter, never()).execute(notDeletable1);
+    verify(mockDeleter, never()).execute(notDeletable2);
 
     CoordinatorCleanupState state = new CoordinatorCleanupStateManager(tempDir).load();
     assertThat(state).isNotNull();
     assertThat(state.getDeletableBeforeMs()).isEqualTo(2000L);
+    assertThat(state.isCompleted()).isTrue();
+  }
+
+  @Test
+  void execute_alreadyCompletedStateGiven_shouldSkipScanning() throws Exception {
+    // Arrange
+    CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(tempDir);
+    CoordinatorCleanupState completedState = new CoordinatorCleanupState(500L);
+    completedState.markCompleted();
+    stateManager.persist(completedState);
+
+    RecordDeleter mockDeleter = mock(RecordDeleter.class);
+
+    CoordinatorCleanupOrchestrator orchestrator =
+        new CoordinatorCleanupOrchestrator(
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, null, null, mockDeleter);
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    verify(scannerFactory, never()).create(any());
+    verify(scanner, never()).scan(any(), any(), any());
+    verify(mockDeleter, never()).execute(any());
   }
 
   @ParameterizedTest
@@ -139,17 +163,16 @@ class CoordinatorCleanupOrchestratorTest {
         .thenReturn(new ScanResult(0));
 
     RecordDeleter mockDeleter = mock(RecordDeleter.class);
-    when(mockDeleter.getDeletedCount()).thenReturn(0L);
 
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
             storage,
             scannerFactory,
             tempDir,
-            1,
+            Coordinator.NAMESPACE,
             ledgerToken,
             auditorToken,
-            (s, threads) -> mockDeleter);
+            mockDeleter);
 
     // Act
     orchestrator.execute();
@@ -167,7 +190,7 @@ class CoordinatorCleanupOrchestratorTest {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, tempDir, 1, ledgerToken, auditorToken);
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute).isInstanceOf(IllegalArgumentException.class);
@@ -183,7 +206,7 @@ class CoordinatorCleanupOrchestratorTest {
     Result record2 = createMockResult(1500L);
 
     RecordDeleter mockDeleter = mock(RecordDeleter.class);
-    doThrow(new RuntimeException("DB unavailable")).when(mockDeleter).submit(record1);
+    doThrow(new RuntimeException("DB unavailable")).when(mockDeleter).execute(record1);
 
     when(scanner.scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any()))
         .thenAnswer(
@@ -199,16 +222,16 @@ class CoordinatorCleanupOrchestratorTest {
             storage,
             scannerFactory,
             tempDir,
-            1,
+            Coordinator.NAMESPACE,
             ledgerToken,
             auditorToken,
-            (s, threads) -> mockDeleter);
+            mockDeleter);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("DB unavailable");
-    verify(mockDeleter, never()).submit(record2);
+    verify(mockDeleter, never()).execute(record2);
   }
 
   @Test
@@ -221,7 +244,7 @@ class CoordinatorCleanupOrchestratorTest {
 
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, tempDir, 1, ledgerToken, auditorToken);
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -238,11 +261,6 @@ class CoordinatorCleanupOrchestratorTest {
     CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(tempDir);
     stateManager.persist(new CoordinatorCleanupState(500L));
 
-    // Tokens don't matter for a resumed run since the deletable-before timestamp is loaded from
-    // state
-    String ledgerToken = createLedgerToken(2000L);
-    String auditorToken = createAuditorToken(3000L);
-
     Result deletableRecord = createMockResult(400L);
     Result nonDeletableRecord = createMockResult(600L);
 
@@ -256,26 +274,114 @@ class CoordinatorCleanupOrchestratorTest {
             });
 
     RecordDeleter mockDeleter = mock(RecordDeleter.class);
-    when(mockDeleter.getDeletedCount()).thenReturn(1L);
+
+    CoordinatorCleanupOrchestrator orchestrator =
+        new CoordinatorCleanupOrchestrator(
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, null, null, mockDeleter);
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    // Should use the persisted deletable-before timestamp (500), not the token values
+    verify(mockDeleter).execute(deletableRecord);
+    verify(mockDeleter, never()).execute(nonDeletableRecord);
+  }
+
+  @Test
+  void execute_checkpointExistsAndTokensGiven_shouldResumeAndIgnoreTokens() throws Exception {
+    // Arrange
+    CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(tempDir);
+    stateManager.persist(new CoordinatorCleanupState(500L));
+
+    // Tokens that would compute a different boundary (2000) if they were not ignored
+    String ledgerToken = createLedgerToken(2000L);
+    String auditorToken = createAuditorToken(3000L);
+
+    Result deletableRecord = createMockResult(400L);
+    Result nonDeletableRecord = createMockResult(600L);
+    when(scanner.scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any()))
+        .thenAnswer(
+            invocation -> {
+              Consumer<Result> consumer = invocation.getArgument(2);
+              consumer.accept(deletableRecord);
+              consumer.accept(nonDeletableRecord);
+              return new ScanResult(2);
+            });
+
+    RecordDeleter mockDeleter = mock(RecordDeleter.class);
 
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
             storage,
             scannerFactory,
             tempDir,
-            1,
+            Coordinator.NAMESPACE,
             ledgerToken,
             auditorToken,
-            (s, threads) -> mockDeleter);
+            mockDeleter);
 
     // Act
-    long deletedCount = orchestrator.execute();
+    orchestrator.execute();
 
     // Assert
-    // Should use the persisted deletable-before timestamp (500), not the token values
-    assertThat(deletedCount).isEqualTo(1);
-    verify(mockDeleter).submit(deletableRecord);
-    verify(mockDeleter, never()).submit(nonDeletableRecord);
+    // The persisted boundary (500) is used, not the token-derived boundary (2000),
+    // so the record at 600 (deletable only under 2000) must be left intact.
+    verify(mockDeleter).execute(deletableRecord);
+    verify(mockDeleter, never()).execute(nonDeletableRecord);
+
+    CoordinatorCleanupState state = stateManager.load();
+    assertThat(state).isNotNull();
+    assertThat(state.getDeletableBeforeMs()).isEqualTo(500L);
+  }
+
+  @Test
+  void execute_noCheckpointAndNoTokensGiven_shouldThrowIllegalArgumentException() {
+    // Arrange
+    CoordinatorCleanupOrchestrator orchestrator =
+        new CoordinatorCleanupOrchestrator(
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, null, null);
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(
+            "Both ledger and auditor completion tokens are required for the initial run");
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  void execute_customCoordinatorNamespaceGiven_shouldScanAndDeleteInThatNamespace()
+      throws Exception {
+    // Arrange
+    String customNamespace = "my_coordinator";
+    String ledgerToken = createLedgerToken(2000L);
+    String auditorToken = createAuditorToken(3000L);
+
+    Result deletable = createMockResult(1000L);
+    when(deletable.getPartitionKey()).thenReturn(Optional.of(Key.ofText("tx_id", "tx-1")));
+    when(scanner.scan(eq(customNamespace), eq(Coordinator.TABLE), any()))
+        .thenAnswer(
+            invocation -> {
+              Consumer<Result> consumer = invocation.getArgument(2);
+              consumer.accept(deletable);
+              return new ScanResult(1);
+            });
+
+    // Use a real RecordDeleter so the namespace it builds the Delete with is exercised too.
+    CoordinatorCleanupOrchestrator orchestrator =
+        new CoordinatorCleanupOrchestrator(
+            storage, scannerFactory, tempDir, customNamespace, ledgerToken, auditorToken);
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    verify(scanner).scan(eq(customNamespace), eq(Coordinator.TABLE), any());
+    ArgumentCaptor<Delete> captor = ArgumentCaptor.forClass(Delete.class);
+    verify(storage).delete(captor.capture());
+    assertThat(captor.getValue().forNamespace()).hasValue(customNamespace);
+    assertThat(captor.getValue().forTable()).hasValue(Coordinator.TABLE);
   }
 
   @Test
@@ -285,7 +391,7 @@ class CoordinatorCleanupOrchestratorTest {
     String auditorToken = createAuditorToken(2000L);
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, tempDir, 1, ledgerToken, auditorToken);
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, ledgerToken, auditorToken);
 
     // Act
     orchestrator.close();

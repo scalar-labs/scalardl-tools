@@ -5,12 +5,14 @@ import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.transaction.consensuscommit.Attribute;
+import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Properties;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
@@ -21,7 +23,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>This class receives two completion tokens (from {@code ledger-finalize-records} and {@code
  * auditor-finalize-records}), derives the deletable-before timestamp as the earlier of the two
- * guarantee timestamps, scans the coordinator table, and deletes every record whose {@code
+ * timestamps from the tokens, scans the coordinator table, and deletes every record whose {@code
  * tx_created_at} is before that boundary.
  *
  * <p>The workflow is resumable: progress is checkpointed so that a failure only requires
@@ -34,27 +36,27 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
   private final DistributedStorage storage;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
-  private final int workerThreads;
-  private final String ledgerTokenString;
-  private final String auditorTokenString;
-  private final RecordDeleterFactory recordDeleterFactory;
+  private final String coordinatorNamespace;
+  @Nullable private final String ledgerTokenString;
+  @Nullable private final String auditorTokenString;
+  private final RecordDeleter recordDeleter;
 
   @VisibleForTesting
   CoordinatorCleanupOrchestrator(
       DistributedStorage storage,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir,
-      int workerThreads,
-      String ledgerTokenString,
-      String auditorTokenString) {
+      String coordinatorNamespace,
+      @Nullable String ledgerTokenString,
+      @Nullable String auditorTokenString) {
     this(
         storage,
         scannerFactory,
         checkpointDir,
-        workerThreads,
+        coordinatorNamespace,
         ledgerTokenString,
         auditorTokenString,
-        RecordDeleter::new);
+        new RecordDeleter(storage, coordinatorNamespace));
   }
 
   @VisibleForTesting
@@ -62,26 +64,24 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
       DistributedStorage storage,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir,
-      int workerThreads,
-      String ledgerTokenString,
-      String auditorTokenString,
-      RecordDeleterFactory recordDeleterFactory) {
+      String coordinatorNamespace,
+      @Nullable String ledgerTokenString,
+      @Nullable String auditorTokenString,
+      RecordDeleter recordDeleter) {
     this.storage = storage;
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
-    this.workerThreads = workerThreads;
+    this.coordinatorNamespace = coordinatorNamespace;
     this.ledgerTokenString = ledgerTokenString;
     this.auditorTokenString = auditorTokenString;
-    this.recordDeleterFactory = recordDeleterFactory;
+    this.recordDeleter = recordDeleter;
   }
 
   /**
-   * Creates an orchestrator from raw ScalarDB properties.
+   * Creates an orchestrator.
    *
-   * @param props properties containing ScalarDB database configuration information
+   * @param props the properties used by the ScalarDL Ledger
    * @param checkpointDir root directory for checkpoint state
-   * @param workerThreads number of threads for deleting records ({@code null} = number of available
-   *     CPU cores)
    * @param ledgerTokenString the ledger completion token
    * @param auditorTokenString the auditor completion token
    * @return a new orchestrator instance
@@ -89,40 +89,54 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
   public static CoordinatorCleanupOrchestrator create(
       Properties props,
       Path checkpointDir,
-      @Nullable Integer workerThreads,
-      String ledgerTokenString,
-      String auditorTokenString) {
+      @Nullable String ledgerTokenString,
+      @Nullable String auditorTokenString) {
     DatabaseConfig dbConfig = new DatabaseConfig(props);
     DistributedStorage storage = StorageFactory.create(props).getStorage();
+    try {
+      ResumableScannerFactory scannerFactory = new ResumableScannerFactory(dbConfig);
+      return new CoordinatorCleanupOrchestrator(
+          storage,
+          scannerFactory,
+          checkpointDir,
+          resolveCoordinatorNamespace(dbConfig),
+          ledgerTokenString,
+          auditorTokenString);
+    } catch (Exception e) {
+      storage.close();
+      throw e;
+    }
+  }
 
-    int resolvedWorkerThreads =
-        workerThreads != null ? workerThreads : Runtime.getRuntime().availableProcessors();
-    ResumableScannerFactory scannerFactory = new ResumableScannerFactory(dbConfig);
-    return new CoordinatorCleanupOrchestrator(
-        storage,
-        scannerFactory,
-        checkpointDir,
-        resolvedWorkerThreads,
-        ledgerTokenString,
-        auditorTokenString);
+  /** Resolves the namespace of the coordinator table. */
+  private static String resolveCoordinatorNamespace(DatabaseConfig dbConfig) {
+    return new ConsensusCommitConfig(dbConfig)
+        .getCoordinatorNamespace()
+        .orElse(Coordinator.NAMESPACE);
   }
 
   /**
-   * Executes the full cleanup workflow: parse and validate the completion tokens, determine the
-   * deletable-before timestamp, scan the coordinator table, and delete deletable records.
+   * Executes the full cleanup workflow: load or initialize state, scan the coordinator table, and
+   * delete deletable records. On the first run, completion tokens are parsed to determine the
+   * deletable-before timestamp. On subsequent runs, the timestamp is restored from the checkpoint.
    *
-   * @return the number of deleted records
    * @throws Exception if token validation, scanning, or state persistence fails
    */
-  public long execute() throws Exception {
+  public void execute() throws Exception {
     CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(checkpointDir);
     CoordinatorCleanupState state = loadOrInitializeState(stateManager);
 
-    long deletableBeforeMs = state.getDeletableBeforeMs();
-    long deletedCount = scanAndDelete(stateManager, deletableBeforeMs);
+    if (state.isCompleted()) {
+      logger.info("The cleanup has already been completed for this checkpoint; nothing to do.");
+      return;
+    }
 
-    logger.info("Cleanup complete: {} records deleted", deletedCount);
-    return deletedCount;
+    scanAndDelete(stateManager, state.getDeletableBeforeMs());
+
+    state.markCompleted();
+    stateManager.persist(state);
+
+    logger.info("Cleanup completed successfully.");
   }
 
   /**
@@ -132,15 +146,41 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
   private CoordinatorCleanupState loadOrInitializeState(
       CoordinatorCleanupStateManager stateManager) {
     CoordinatorCleanupState state = stateManager.load();
+
     if (state != null) {
-      logger.info("Resumed state: deletable_before_ms={}", state.getDeletableBeforeMs());
+      // The tool is resumable and idempotent: re-invoking the same command (including the
+      // completion tokens) with an existing checkpoint simply resumes the previous run. The
+      // specified tokens are ignored so that the deletion boundary stays fixed across retries.
+      if (ledgerTokenString != null || auditorTokenString != null) {
+        logger.warn(
+            "A checkpoint already exists; resuming the previous run. "
+                + "The specified completion tokens are ignored.");
+      }
+
+      if (state.isCompleted()) {
+        logger.info("Found existing checkpoint data; the cleanup has already been completed.");
+      } else {
+        logger.info(
+            "Found existing checkpoint data; resuming the previous run. "
+                + "Records created before {} will be deleted.",
+            Instant.ofEpochMilli(state.getDeletableBeforeMs()));
+      }
+
       return state;
+    }
+
+    if (ledgerTokenString == null || auditorTokenString == null) {
+      throw new IllegalArgumentException(
+          "Both ledger and auditor completion tokens are required for the initial run");
     }
 
     long deletableBeforeMs = parseAndComputeDeletableBeforeMs();
     state = new CoordinatorCleanupState(deletableBeforeMs);
     stateManager.persist(state);
-    logger.info("Initialized state: deletable_before_ms={}", deletableBeforeMs);
+    logger.info(
+        "Starting a new run. Records created before {} will be deleted.",
+        Instant.ofEpochMilli(deletableBeforeMs));
+
     return state;
   }
 
@@ -161,49 +201,49 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
     long ledgerTimestamp = ledgerToken.getStartedAtMs();
     long auditorTimestamp = auditorToken.getStartedAtMs();
     long deletableBeforeMs = Math.min(ledgerTimestamp, auditorTimestamp);
+
     logger.info(
-        "Tokens parsed: ledger={}, auditor={}, deletable_before_ms={}",
-        ledgerTimestamp,
-        auditorTimestamp,
-        deletableBeforeMs);
+        "Completion tokens parsed: ledger started at {}, auditor started at {}",
+        Instant.ofEpochMilli(ledgerTimestamp),
+        Instant.ofEpochMilli(auditorTimestamp));
+
     return deletableBeforeMs;
   }
 
   /** Scans the coordinator table and deletes deletable records. */
-  private long scanAndDelete(CoordinatorCleanupStateManager stateManager, long deletableBeforeMs)
+  private void scanAndDelete(CoordinatorCleanupStateManager stateManager, long deletableBeforeMs)
       throws Exception {
     Path scanCheckpointDir = stateManager.getStateDir();
 
-    logger.info("Scanning coordinator table");
+    logger.info("Starting to scan the coordinator table");
 
-    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir);
-        RecordDeleter deleter = recordDeleterFactory.create(storage, workerThreads)) {
+    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
 
       ScanResult scanResult =
           scanner.scan(
-              Coordinator.NAMESPACE,
+              coordinatorNamespace,
               Coordinator.TABLE,
               result -> {
                 if (!result.isNull(Attribute.CREATED_AT)
                     && result.getBigInt(Attribute.CREATED_AT) < deletableBeforeMs) {
                   try {
-                    deleter.submit(result);
+                    recordDeleter.execute(result);
                   } catch (Exception e) {
                     throw new RuntimeException(e);
                   }
                 }
               });
-      deleter.awaitCompletion();
 
       logger.info(
-          "Scan complete: scanned={}, deleted={}",
-          scanResult.getTotalScanned(),
-          deleter.getDeletedCount());
-
-      return deleter.getDeletedCount();
+          "Finished scanning the coordinator table. {} records were scanned.",
+          scanResult.getTotalScanned());
     }
   }
 
+  /**
+   * Releases the resources held by this orchestrator. Any failure during close is logged and
+   * suppressed rather than propagated.
+   */
   @Override
   public void close() {
     try {
@@ -211,11 +251,5 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
     } catch (Exception e) {
       logger.warn("Failed to close DistributedStorage.", e);
     }
-  }
-
-  @VisibleForTesting
-  @FunctionalInterface
-  interface RecordDeleterFactory {
-    RecordDeleter create(DistributedStorage storage, int workerThreads);
   }
 }

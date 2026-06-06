@@ -35,7 +35,6 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
 
   private static final long T_MIN = 1_000_000_000L;
   private static final int RECORDS_PER_CATEGORY = 3;
-  private static final int DEFAULT_WORKER_THREADS = 4;
 
   private DistributedTransactionAdmin admin;
   private DistributedStorage storage;
@@ -160,21 +159,13 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     }
   }
 
-  static Stream<Arguments> deletableBeforeMsAndWorkerThreadsProvider() {
-    return Stream.of(
-        Arguments.of(T_MIN - 10000, 0, DEFAULT_WORKER_THREADS),
-        Arguments.of(T_MIN, RECORDS_PER_CATEGORY * 2, DEFAULT_WORKER_THREADS),
-        Arguments.of(T_MIN, RECORDS_PER_CATEGORY * 2, 1),
-        Arguments.of(T_MIN + 10001, RECORDS_PER_CATEGORY * 5, DEFAULT_WORKER_THREADS));
+  static Stream<Arguments> deletableBeforeMsProvider() {
+    return Stream.of(Arguments.of(T_MIN - 10000), Arguments.of(T_MIN), Arguments.of(T_MIN + 10001));
   }
 
   @ParameterizedTest
-  @MethodSource("deletableBeforeMsAndWorkerThreadsProvider")
-  void execute_shouldDeleteOnlyDeletableRecords(
-      long deletableBeforeMs,
-      int expectedDeletedCount,
-      int workerThreads,
-      @TempDir Path checkpointDir)
+  @MethodSource("deletableBeforeMsProvider")
+  void execute_shouldDeleteOnlyDeletableRecords(long deletableBeforeMs, @TempDir Path checkpointDir)
       throws Exception {
     // Arrange
     String ledgerToken = createLedgerToken(deletableBeforeMs);
@@ -183,11 +174,15 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     // Act
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, checkpointDir, workerThreads, ledgerToken, auditorToken);
-    long deletedCount = orchestrator.execute();
+            storage,
+            scannerFactory,
+            checkpointDir,
+            Coordinator.NAMESPACE,
+            ledgerToken,
+            auditorToken);
+    orchestrator.execute();
 
     // Assert
-    assertThat(deletedCount).isEqualTo(expectedDeletedCount);
     assertDeletionCorrect(deletableBeforeMs);
   }
 
@@ -212,13 +207,12 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
             storage,
             scannerFactory,
             checkpointDir,
-            DEFAULT_WORKER_THREADS,
+            Coordinator.NAMESPACE,
             ledgerToken,
             auditorToken);
-    long deletedCount = orchestrator.execute();
+    orchestrator.execute();
 
     // Assert
-    assertThat(deletedCount).isEqualTo(RECORDS_PER_CATEGORY * 2);
     assertDeletionCorrect(T_MIN);
 
     CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(checkpointDir);
@@ -234,26 +228,45 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(checkpointDir);
     stateManager.persist(new CoordinatorCleanupState(T_MIN));
 
-    String ledgerToken = createLedgerToken(T_MIN + 99999);
-    String auditorToken = createAuditorToken(T_MIN + 99999);
-
     // Act
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage,
-            scannerFactory,
-            checkpointDir,
-            DEFAULT_WORKER_THREADS,
-            ledgerToken,
-            auditorToken);
-    long deletedCount = orchestrator.execute();
+            storage, scannerFactory, checkpointDir, Coordinator.NAMESPACE, null, null);
+    orchestrator.execute();
 
     // Assert
-    assertThat(deletedCount).isEqualTo(RECORDS_PER_CATEGORY * 2);
     assertDeletionCorrect(T_MIN);
 
     CoordinatorCleanupState updatedState = stateManager.load();
     assertThat(updatedState).isNotNull();
     assertThat(updatedState.getDeletableBeforeMs()).isEqualTo(T_MIN);
+    assertThat(updatedState.isCompleted()).isTrue();
+  }
+
+  @Test
+  void execute_runTwiceGiven_shouldBeIdempotent(@TempDir Path checkpointDir) throws Exception {
+    // Arrange
+    String ledgerToken = createLedgerToken(T_MIN);
+    String auditorToken = createAuditorToken(T_MIN);
+
+    // Act: the first run performs the cleanup and marks the checkpoint completed
+    new CoordinatorCleanupOrchestrator(
+            storage,
+            scannerFactory,
+            checkpointDir,
+            Coordinator.NAMESPACE,
+            ledgerToken,
+            auditorToken)
+        .execute();
+    // The second run against the completed checkpoint must be a safe no-op
+    new CoordinatorCleanupOrchestrator(
+            storage, scannerFactory, checkpointDir, Coordinator.NAMESPACE, null, null)
+        .execute();
+
+    // Assert
+    assertDeletionCorrect(T_MIN);
+    CoordinatorCleanupState state = new CoordinatorCleanupStateManager(checkpointDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.isCompleted()).isTrue();
   }
 }
