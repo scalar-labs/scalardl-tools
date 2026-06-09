@@ -55,7 +55,7 @@ public final class CompletionToken {
   public static CompletionToken decode(String encoded) {
     try {
       byte[] bytes = Base64.getUrlDecoder().decode(encoded);
-      JsonNode node = MAPPER.readTree(new String(bytes, StandardCharsets.UTF_8));
+      JsonNode node = MAPPER.readTree(bytes);
       String serverValue = node.get("server_type").asText();
       ServerType serverType = ServerType.fromValue(serverValue);
       long startedAtMs = node.get("started_at_ms").asLong();

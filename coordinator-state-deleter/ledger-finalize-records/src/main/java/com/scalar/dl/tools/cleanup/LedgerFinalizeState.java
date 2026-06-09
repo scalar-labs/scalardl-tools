@@ -4,7 +4,9 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Checkpoint state for {@code ledger-finalize-records}. Stored as {@code state.json}. */
 public final class LedgerFinalizeState {
@@ -16,7 +18,7 @@ public final class LedgerFinalizeState {
   private final List<String> tableList;
 
   @JsonProperty("completed_tables")
-  private final List<String> completedTables;
+  private final Set<String> completedTables;
 
   @JsonCreator
   public LedgerFinalizeState(
@@ -26,7 +28,7 @@ public final class LedgerFinalizeState {
     this.startedAtMs = startedAtMs;
     this.tableList = tableList != null ? new ArrayList<>(tableList) : new ArrayList<>();
     this.completedTables =
-        completedTables != null ? new ArrayList<>(completedTables) : new ArrayList<>();
+        completedTables != null ? new LinkedHashSet<>(completedTables) : new LinkedHashSet<>();
   }
 
   public long getStartedAtMs() {
@@ -37,13 +39,11 @@ public final class LedgerFinalizeState {
     return Collections.unmodifiableList(tableList);
   }
 
-  public List<String> getCompletedTables() {
-    return Collections.unmodifiableList(completedTables);
+  public Set<String> getCompletedTables() {
+    return Collections.unmodifiableSet(completedTables);
   }
 
   public void markTableCompleted(String qualifiedTableName) {
-    if (!completedTables.contains(qualifiedTableName)) {
-      completedTables.add(qualifiedTableName);
-    }
+    completedTables.add(qualifiedTableName);
   }
 }

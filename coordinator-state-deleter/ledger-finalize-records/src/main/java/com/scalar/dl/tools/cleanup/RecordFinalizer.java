@@ -1,5 +1,6 @@
 package com.scalar.dl.tools.cleanup;
 
+import com.google.common.util.concurrent.Uninterruptibles;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.Get;
@@ -9,6 +10,7 @@ import com.scalar.db.common.TransactionExecutor;
 import com.scalar.db.io.Key;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
 /** Finalizes non-terminal records by triggering ScalarDB recovery. */
@@ -43,12 +45,12 @@ public final class RecordFinalizer {
   }
 
   private Get buildGet(String namespace, String tableName, Result result) {
-    @Deprecated
+    @SuppressWarnings("deprecation")
     Key partitionKey =
         result
             .getPartitionKey()
             .orElseThrow(() -> new IllegalArgumentException("Partition key not found in result"));
-    @Deprecated
+    @SuppressWarnings("deprecation")
     @Nullable
     Key clusteringKey = result.getClusteringKey().orElse(null);
 
@@ -68,17 +70,18 @@ public final class RecordFinalizer {
     long backoffMs = 100;
 
     for (int attempt = 0; attempt < maxRetries; attempt++) {
+      // Trigger a lazy recovery
       TransactionExecutor.execute(
           manager,
           tx -> {
             tx.get(get);
           });
-
+      // Check the recovery completed
       Optional<Result> result = storage.get(get);
       if (!result.isPresent() || !stateChecker.needsFinalization(result.get())) {
         return;
       }
-      Thread.sleep(backoffMs);
+      Uninterruptibles.sleepUninterruptibly(backoffMs, TimeUnit.MILLISECONDS);
     }
 
     throw new RuntimeException("Record not finalized after " + maxRetries + " attempts: " + get);

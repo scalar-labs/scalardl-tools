@@ -2,7 +2,6 @@ package com.scalar.dl.tools.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.annotation.Nullable;
@@ -51,7 +50,7 @@ public abstract class StateManager<T> {
     }
     try {
       byte[] bytes = Files.readAllBytes(statePath);
-      return mapper.readValue(new String(bytes, StandardCharsets.UTF_8), stateClass);
+      return mapper.readValue(bytes, stateClass);
     } catch (IOException e) {
       throw new RuntimeException("Failed to load state from " + statePath, e);
     }
