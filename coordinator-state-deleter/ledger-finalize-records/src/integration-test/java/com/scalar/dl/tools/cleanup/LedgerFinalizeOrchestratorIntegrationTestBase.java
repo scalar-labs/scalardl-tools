@@ -275,7 +275,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin, storage, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -308,7 +308,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin, storage, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -347,7 +347,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin, storage, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert

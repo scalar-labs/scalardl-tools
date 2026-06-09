@@ -1,22 +1,31 @@
 package com.scalar.dl.tools.cleanup;
 
+import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.Get;
 import com.scalar.db.api.GetBuilder;
 import com.scalar.db.api.Result;
 import com.scalar.db.common.TransactionExecutor;
 import com.scalar.db.io.Key;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** Finalizes non-terminal records by triggering ScalarDB recovery. */
 public final class RecordFinalizer {
 
   private final DistributedTransactionManager manager;
+  private final DistributedStorage storage;
   private final RecordStateChecker stateChecker;
   private long finalizedCount;
 
-  public RecordFinalizer(DistributedTransactionManager manager, RecordStateChecker stateChecker) {
+  @SuppressFBWarnings("EI_EXPOSE_REP2")
+  public RecordFinalizer(
+      DistributedTransactionManager manager,
+      DistributedStorage storage,
+      RecordStateChecker stateChecker) {
     this.manager = manager;
+    this.storage = storage;
     this.stateChecker = stateChecker;
   }
 
@@ -59,13 +68,14 @@ public final class RecordFinalizer {
     long backoffMs = 100;
 
     for (int attempt = 0; attempt < maxRetries; attempt++) {
-      Result[] holder = new Result[1];
       TransactionExecutor.execute(
           manager,
           tx -> {
-            holder[0] = tx.get(get).orElse(null);
+            tx.get(get);
           });
-      if (holder[0] == null || !stateChecker.needsFinalization(holder[0])) {
+
+      Optional<Result> result = storage.get(get);
+      if (!result.isPresent() || !stateChecker.needsFinalization(result.get())) {
         return;
       }
       Thread.sleep(backoffMs);

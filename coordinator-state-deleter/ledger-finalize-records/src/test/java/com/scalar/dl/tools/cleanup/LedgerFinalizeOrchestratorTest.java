@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.Result;
@@ -40,6 +41,7 @@ class LedgerFinalizeOrchestratorTest {
   @TempDir Path tempDir;
 
   private DistributedStorageAdmin admin;
+  private DistributedStorage storage;
   private DistributedTransactionManager txManager;
   private ResumableScanner scanner;
   private ResumableScannerFactory scannerFactory;
@@ -47,6 +49,7 @@ class LedgerFinalizeOrchestratorTest {
   @BeforeEach
   void setUp() {
     admin = mock(DistributedStorageAdmin.class);
+    storage = mock(DistributedStorage.class);
     txManager = mock(DistributedTransactionManager.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
@@ -81,7 +84,7 @@ class LedgerFinalizeOrchestratorTest {
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
 
     // Act
     long before = System.currentTimeMillis();
@@ -110,7 +113,7 @@ class LedgerFinalizeOrchestratorTest {
     when(admin.getNamespaceNames()).thenReturn(Collections.emptySet());
 
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
 
     // Act
     String completionToken = orchestrator.execute();
@@ -130,7 +133,7 @@ class LedgerFinalizeOrchestratorTest {
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -168,7 +171,12 @@ class LedgerFinalizeOrchestratorTest {
     RecordFinalizer mockFinalizer = mock(RecordFinalizer.class);
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            admin, txManager, scannerFactory, tempDir, (mgr, checker) -> mockFinalizer);
+            admin,
+            storage,
+            txManager,
+            scannerFactory,
+            tempDir,
+            (mgr, stor, checker) -> mockFinalizer);
 
     // Act
     orchestrator.execute();
@@ -197,7 +205,7 @@ class LedgerFinalizeOrchestratorTest {
 
     // Act & Assert 1
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
     assertThatThrownBy(orchestrator::execute).isInstanceOf(RuntimeException.class);
 
     // Verify first table's completion was persisted
@@ -215,7 +223,7 @@ class LedgerFinalizeOrchestratorTest {
 
     // Act 2
     LedgerFinalizeOrchestrator orchestrator2 =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
     String token = orchestrator2.execute();
 
     // Assert 2
@@ -229,16 +237,17 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
-  void close_shouldCloseAdminAndTxManager() {
+  void close_shouldCloseAdminAndStorageAndTxManager() {
     // Arrange
     LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
 
     // Act
     orchestrator.close();
 
     // Assert
     verify(admin).close();
+    verify(storage).close();
     verify(txManager).close();
   }
 }

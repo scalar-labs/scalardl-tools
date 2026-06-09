@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedTransaction;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.Get;
@@ -21,11 +22,13 @@ import org.mockito.ArgumentCaptor;
 class RecordFinalizerTest {
 
   private DistributedTransactionManager manager;
+  private DistributedStorage storage;
   private RecordStateChecker stateChecker;
 
   @BeforeEach
   void setUp() {
     manager = mock(DistributedTransactionManager.class);
+    storage = mock(DistributedStorage.class);
     stateChecker = mock(RecordStateChecker.class);
   }
 
@@ -42,9 +45,9 @@ class RecordFinalizerTest {
     // Arrange
     DistributedTransaction tx = mock(DistributedTransaction.class);
     when(manager.begin()).thenReturn(tx);
-    when(tx.get(any(Get.class))).thenReturn(Optional.empty());
+    when(storage.get(any(Get.class))).thenReturn(Optional.empty());
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
 
     // Act
     finalizer.execute("ns", "tbl", createScanResult("pk1"));
@@ -53,6 +56,7 @@ class RecordFinalizerTest {
 
     // Assert
     verify(tx, times(3)).get(any(Get.class));
+    verify(storage, times(3)).get(any(Get.class));
     assertThat(finalizer.getFinalizedCount()).isEqualTo(3);
   }
 
@@ -64,18 +68,19 @@ class RecordFinalizerTest {
 
     Result nonTerminalResult = mock(Result.class);
     when(stateChecker.needsFinalization(nonTerminalResult)).thenReturn(true, true, false);
-    when(tx.get(any(Get.class)))
+    when(storage.get(any(Get.class)))
         .thenReturn(Optional.of(nonTerminalResult))
         .thenReturn(Optional.of(nonTerminalResult))
         .thenReturn(Optional.of(nonTerminalResult));
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
 
     // Act
     finalizer.execute("ns", "tbl", createScanResult("pk1"));
 
     // Assert
     verify(tx, times(3)).get(any(Get.class));
+    verify(storage, times(3)).get(any(Get.class));
     assertThat(finalizer.getFinalizedCount()).isEqualTo(1);
   }
 
@@ -87,9 +92,9 @@ class RecordFinalizerTest {
 
     Result nonTerminalResult = mock(Result.class);
     when(stateChecker.needsFinalization(nonTerminalResult)).thenReturn(true);
-    when(tx.get(any(Get.class))).thenReturn(Optional.of(nonTerminalResult));
+    when(storage.get(any(Get.class))).thenReturn(Optional.of(nonTerminalResult));
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
 
     // Act & Assert
     assertThatThrownBy(() -> finalizer.execute("ns", "tbl", createScanResult("pk1")))
@@ -102,7 +107,7 @@ class RecordFinalizerTest {
     // Arrange
     when(manager.begin()).thenThrow(new RuntimeException("DB unavailable"));
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
 
     // Act & Assert
     assertThatThrownBy(() -> finalizer.execute("ns", "tbl", createScanResult("pk1")))
@@ -116,13 +121,13 @@ class RecordFinalizerTest {
     // Arrange
     DistributedTransaction tx = mock(DistributedTransaction.class);
     when(manager.begin()).thenReturn(tx);
-    when(tx.get(any(Get.class))).thenReturn(Optional.empty());
+    when(storage.get(any(Get.class))).thenReturn(Optional.empty());
 
     Result scanResult = mock(Result.class);
     when(scanResult.getPartitionKey()).thenReturn(Optional.of(Key.ofText("id", "pk1")));
     when(scanResult.getClusteringKey()).thenReturn(Optional.empty());
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
 
     // Act
     finalizer.execute("ns", "tbl", scanResult);
