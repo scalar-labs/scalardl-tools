@@ -14,6 +14,7 @@ import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -30,7 +31,7 @@ import org.slf4j.LoggerFactory;
  * CompletionToken} that is later consumed by {@code coordinator-state-cleanup}.
  *
  * <p>The workflow is resumable: progress is checkpointed per table, so a failure only requires
- * re-invocation with the same checkpoint directory. The guarantee timestamp is captured once on the
+ * re-invocation with the same checkpoint directory. The start timestamp is captured once on the
  * first invocation and reused across resumptions.
  */
 public final class LedgerFinalizeOrchestrator implements AutoCloseable {
@@ -80,9 +81,9 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   }
 
   /**
-   * Creates an orchestrator from raw ScalarDB properties.
+   * Creates an orchestrator.
    *
-   * @param props properties containing ScalarDB database configuration information
+   * @param props the properties used by the ScalarDL Ledger
    * @param checkpointDir root directory for checkpoint state
    * @return a new orchestrator instance
    * @throws IllegalStateException if the configured storage is not supported
@@ -125,8 +126,8 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
     LedgerFinalizeState state = loadOrInitializeState(stateManager);
 
-    long guaranteeTimestamp = state.getStartedAtMs();
-    RecordStateChecker stateChecker = new RecordStateChecker(guaranteeTimestamp);
+    long startedAtMs = state.getStartedAtMs();
+    RecordStateChecker stateChecker = new RecordStateChecker(startedAtMs);
 
     for (String qualifiedTable : state.getTableList()) {
       if (state.getCompletedTables().contains(qualifiedTable)) {
@@ -137,32 +138,37 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     }
 
     String completionToken =
-        CompletionToken.create(CompletionToken.ServerType.LEDGER, guaranteeTimestamp).encode();
-    logger.info("Completion token emitted successfully");
+        CompletionToken.create(CompletionToken.ServerType.LEDGER, startedAtMs).encode();
+    logger.info("Completion token generated successfully: {}", completionToken);
     return completionToken;
   }
 
   /**
-   * Loads persisted state if available; otherwise captures {@code t_L}, discovers all transactional
-   * tables via the Admin API, and persists the initial state.
+   * Loads persisted state if available; otherwise captures the start timestamp, discovers all
+   * transactional tables via the Admin API, and persists the initial state.
    */
   private LedgerFinalizeState loadOrInitializeState(LedgerFinalizeStateManager stateManager)
       throws Exception {
     LedgerFinalizeState state = stateManager.load();
     if (state != null) {
       logger.info(
-          "Resumed state: t_L={}, completed={}/{}",
-          state.getStartedAtMs(),
+          "Found existing checkpoint data; resuming the previous run started at {}. "
+              + "{} of {} target tables have already been processed.",
+          Instant.ofEpochMilli(state.getStartedAtMs()),
           state.getCompletedTables().size(),
           state.getTableList().size());
       return state;
     }
 
-    long tL = System.currentTimeMillis();
+    long startedAtMs = System.currentTimeMillis();
     List<String> tableNames = discoverTables();
-    state = new LedgerFinalizeState(tL, tableNames, new ArrayList<>());
+    state = new LedgerFinalizeState(startedAtMs, tableNames);
     stateManager.persist(state);
-    logger.info("Initialized state: t_L={}, tables={}", tL, tableNames);
+    logger.info(
+        "Starting a new run at {}. {} target tables were found: {}",
+        Instant.ofEpochMilli(startedAtMs),
+        tableNames.size(),
+        tableNames);
     return state;
   }
 
@@ -196,7 +202,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     String namespace = parts[0];
     String tableName = parts[1];
 
-    logger.info("Processing table: {}", qualifiedTable);
+    logger.info("Starting to process the table: {}", qualifiedTable);
 
     RecordFinalizer recordFinalizer =
         recordFinalizerFactory.create(txManager, storage, stateChecker);
@@ -216,10 +222,10 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       ScanResult scanResult = scanner.scan(namespace, tableName, consumer);
 
       logger.info(
-          "Table {} complete: scanned={}, finalized={}",
+          "Finished processing the table: {}. {} of {} scanned records were finalized.",
           qualifiedTable,
-          scanResult.getTotalScanned(),
-          recordFinalizer.getFinalizedCount());
+          recordFinalizer.getFinalizedCount(),
+          scanResult.getTotalScanned());
     }
 
     state.markTableCompleted(qualifiedTable);

@@ -20,6 +20,11 @@ public final class LedgerFinalizeState {
   @JsonProperty("completed_tables")
   private final Set<String> completedTables;
 
+  /** Creates an initial state with no completed tables. */
+  public LedgerFinalizeState(long startedAtMs, List<String> tableList) {
+    this(startedAtMs, tableList, null);
+  }
+
   @JsonCreator
   public LedgerFinalizeState(
       @JsonProperty("started_at_ms") long startedAtMs,
