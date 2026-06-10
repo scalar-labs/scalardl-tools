@@ -222,9 +222,8 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       ScanResult scanResult = scanner.scan(namespace, tableName, consumer);
 
       logger.info(
-          "Finished processing the table: {}. {} of {} scanned records were finalized.",
+          "Finished processing the table: {}. {} records were scanned.",
           qualifiedTable,
-          recordFinalizer.getFinalizedCount(),
           scanResult.getTotalScanned());
     }
 

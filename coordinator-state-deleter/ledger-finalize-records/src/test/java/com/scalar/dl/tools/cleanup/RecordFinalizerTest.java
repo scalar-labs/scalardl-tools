@@ -57,7 +57,6 @@ class RecordFinalizerTest {
     // Assert
     verify(tx, times(3)).get(any(Get.class));
     verify(storage, times(3)).get(any(Get.class));
-    assertThat(finalizer.getFinalizedCount()).isEqualTo(3);
   }
 
   @Test
@@ -81,7 +80,6 @@ class RecordFinalizerTest {
     // Assert
     verify(tx, times(3)).get(any(Get.class));
     verify(storage, times(3)).get(any(Get.class));
-    assertThat(finalizer.getFinalizedCount()).isEqualTo(1);
   }
 
   @Test

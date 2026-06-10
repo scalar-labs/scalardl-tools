@@ -19,7 +19,6 @@ public final class RecordFinalizer {
   private final DistributedTransactionManager manager;
   private final DistributedStorage storage;
   private final RecordStateChecker stateChecker;
-  private long finalizedCount;
 
   @SuppressFBWarnings("EI_EXPOSE_REP2")
   public RecordFinalizer(
@@ -36,12 +35,6 @@ public final class RecordFinalizer {
     Get get = buildGet(namespace, tableName, scanResult);
 
     recoverSynchronously(get);
-    finalizedCount++;
-  }
-
-  /** Returns the count of successfully finalized records. */
-  public long getFinalizedCount() {
-    return finalizedCount;
   }
 
   private Get buildGet(String namespace, String tableName, Result result) {
