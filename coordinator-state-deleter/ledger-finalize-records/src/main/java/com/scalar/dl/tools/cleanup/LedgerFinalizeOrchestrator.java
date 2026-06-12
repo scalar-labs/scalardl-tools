@@ -4,6 +4,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
+import com.scalar.db.api.Result;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
@@ -208,7 +209,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
         recordFinalizerFactory.create(txManager, storage, stateChecker);
 
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
-      Consumer<com.scalar.db.api.Result> consumer =
+      Consumer<Result> consumer =
           result -> {
             if (stateChecker.needsFinalization(result)) {
               try {
@@ -231,6 +232,10 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     stateManager.persist(state);
   }
 
+  /**
+   * Releases the resources held by this orchestrator. Any failure during close is logged and
+   * suppressed rather than propagated.
+   */
   @Override
   public void close() {
     try {
