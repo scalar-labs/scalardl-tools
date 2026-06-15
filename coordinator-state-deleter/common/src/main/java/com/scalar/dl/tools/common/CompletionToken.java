@@ -22,7 +22,7 @@ import javax.annotation.concurrent.Immutable;
 @Immutable
 public final class CompletionToken {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ObjectMapper mapper = new ObjectMapper();
   private final ServerType serverType;
   private final long startedAtMs;
   private final String crc32c;
@@ -55,7 +55,7 @@ public final class CompletionToken {
   public static CompletionToken decode(String encoded) {
     try {
       byte[] bytes = Base64.getUrlDecoder().decode(encoded);
-      JsonNode node = MAPPER.readTree(bytes);
+      JsonNode node = mapper.readTree(bytes);
       String serverValue = node.get("server_type").asText();
       ServerType serverType = ServerType.fromValue(serverValue);
       long startedAtMs = node.get("started_at_ms").asLong();
@@ -91,11 +91,11 @@ public final class CompletionToken {
    */
   public String encode() {
     try {
-      ObjectNode node = MAPPER.createObjectNode();
+      ObjectNode node = mapper.createObjectNode();
       node.put("server_type", serverType.getValue());
       node.put("started_at_ms", startedAtMs);
       node.put("crc32c", crc32c);
-      byte[] json = MAPPER.writeValueAsBytes(node);
+      byte[] json = mapper.writeValueAsBytes(node);
       return Base64.getUrlEncoder().withoutPadding().encodeToString(json);
     } catch (Exception e) {
       throw new RuntimeException("Failed to encode completion token", e);
