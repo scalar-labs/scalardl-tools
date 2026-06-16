@@ -8,7 +8,7 @@ import com.scalar.db.transaction.consensuscommit.Coordinator;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /** Deletes coordinator table records using {@link DistributedStorage}. */
-public final class RecordDeleter {
+public class RecordDeleter {
 
   private final DistributedStorage storage;
   private final String coordinatorNamespace;

@@ -1,6 +1,7 @@
 package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedTransactionAdmin;
@@ -19,6 +20,7 @@ import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -277,5 +279,70 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     CoordinatorCleanupState state = new CoordinatorCleanupStateManager(checkpointDir).load();
     assertThat(state).isNotNull();
     assertThat(state.isCompleted()).isTrue();
+  }
+
+  @Test
+  void execute_resumedAfterMidScanFailureGiven_shouldDeleteOnlyDeletableRecordsAndComplete(
+      @TempDir Path checkpointDir) throws Exception {
+    // Arrange
+    String ledgerToken = createLedgerToken(DELETABLE_BEFORE_MS);
+    String auditorToken = createAuditorToken(DELETABLE_BEFORE_MS);
+
+    RecordDeleter interruptingDeleter =
+        new InterruptingRecordDeleter(storage, Coordinator.NAMESPACE, 3);
+
+    // Act 1: the first run fails partway through the scan.
+    CoordinatorCleanupOrchestrator failingRun =
+        new CoordinatorCleanupOrchestrator(
+            storage,
+            scannerFactory,
+            checkpointDir,
+            Coordinator.NAMESPACE,
+            ledgerToken,
+            auditorToken,
+            interruptingDeleter);
+    assertThatThrownBy(failingRun::execute).isInstanceOf(RuntimeException.class);
+
+    // The checkpoint must be left resumable: the boundary is persisted but the run is not
+    // completed.
+    CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(checkpointDir);
+    CoordinatorCleanupState interruptedState = stateManager.load();
+    assertThat(interruptedState).isNotNull();
+    assertThat(interruptedState.getDeletableBeforeMs()).isEqualTo(DELETABLE_BEFORE_MS);
+    assertThat(interruptedState.isCompleted()).isFalse();
+
+    // Act 2: re-run against the same checkpoint without tokens, resuming the previous run.
+    new CoordinatorCleanupOrchestrator(
+            storage, scannerFactory, checkpointDir, Coordinator.NAMESPACE, null, null)
+        .execute();
+
+    // Assert: exactly the deletable records are gone, the rest remain, and the run completed.
+    assertDeletionCorrect(DELETABLE_BEFORE_MS);
+    CoordinatorCleanupState finalState = stateManager.load();
+    assertThat(finalState).isNotNull();
+    assertThat(finalState.isCompleted()).isTrue();
+  }
+
+  /**
+   * A {@link RecordDeleter} that throws once it has been invoked {@code throwOnNthDelete} times,
+   * simulating a crash partway through the scan.
+   */
+  private static class InterruptingRecordDeleter extends RecordDeleter {
+    private final AtomicLong deleteCount = new AtomicLong();
+    private final long throwOnNthDelete;
+
+    InterruptingRecordDeleter(
+        DistributedStorage storage, String coordinatorNamespace, long throwOnNthDelete) {
+      super(storage, coordinatorNamespace);
+      this.throwOnNthDelete = throwOnNthDelete;
+    }
+
+    @Override
+    public void execute(Result scanResult) throws Exception {
+      if (deleteCount.incrementAndGet() >= throwOnNthDelete) {
+        throw new RuntimeException("Simulated interruption");
+      }
+      super.execute(scanResult);
+    }
   }
 }
