@@ -33,7 +33,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
 
-  private static final long T_MIN = 1_000_000_000L;
+  private static final long DELETABLE_BEFORE_MS = 1_000_000_000L;
+
   private static final int RECORDS_PER_CATEGORY = 3;
 
   private DistributedTransactionAdmin admin;
@@ -86,23 +87,27 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
   private void populateCoordinatorState() throws Exception {
     // Category A: old COMMITTED (should be deleted)
     for (int i = 0; i < RECORDS_PER_CATEGORY; i++) {
-      putCoordinatorRecord("old-committed-" + i, TransactionState.COMMITTED, T_MIN - 10000);
+      putCoordinatorRecord(
+          "old-committed-" + i, TransactionState.COMMITTED, DELETABLE_BEFORE_MS - 10000);
     }
     // Category B: old ABORTED (should be deleted)
     for (int i = 0; i < RECORDS_PER_CATEGORY; i++) {
-      putCoordinatorRecord("old-aborted-" + i, TransactionState.ABORTED, T_MIN - 5000);
+      putCoordinatorRecord(
+          "old-aborted-" + i, TransactionState.ABORTED, DELETABLE_BEFORE_MS - 5000);
     }
-    // Category C: boundary at T_MIN (should remain, < comparison)
+    // Category C: boundary at DELETABLE_BEFORE_MS (should remain, < comparison)
     for (int i = 0; i < RECORDS_PER_CATEGORY; i++) {
-      putCoordinatorRecord("boundary-" + i, TransactionState.COMMITTED, T_MIN);
+      putCoordinatorRecord("boundary-" + i, TransactionState.COMMITTED, DELETABLE_BEFORE_MS);
     }
     // Category D: new COMMITTED (should remain)
     for (int i = 0; i < RECORDS_PER_CATEGORY; i++) {
-      putCoordinatorRecord("new-committed-" + i, TransactionState.COMMITTED, T_MIN + 5000);
+      putCoordinatorRecord(
+          "new-committed-" + i, TransactionState.COMMITTED, DELETABLE_BEFORE_MS + 5000);
     }
     // Category E: new ABORTED (should remain)
     for (int i = 0; i < RECORDS_PER_CATEGORY; i++) {
-      putCoordinatorRecord("new-aborted-" + i, TransactionState.ABORTED, T_MIN + 10000);
+      putCoordinatorRecord(
+          "new-aborted-" + i, TransactionState.ABORTED, DELETABLE_BEFORE_MS + 10000);
     }
   }
 
@@ -137,11 +142,11 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
   }
 
   private static final String[][] RECORD_CATEGORIES = {
-    {"old-committed-", String.valueOf(T_MIN - 10000)},
-    {"old-aborted-", String.valueOf(T_MIN - 5000)},
-    {"boundary-", String.valueOf(T_MIN)},
-    {"new-committed-", String.valueOf(T_MIN + 5000)},
-    {"new-aborted-", String.valueOf(T_MIN + 10000)},
+    {"old-committed-", String.valueOf(DELETABLE_BEFORE_MS - 10000)},
+    {"old-aborted-", String.valueOf(DELETABLE_BEFORE_MS - 5000)},
+    {"boundary-", String.valueOf(DELETABLE_BEFORE_MS)},
+    {"new-committed-", String.valueOf(DELETABLE_BEFORE_MS + 5000)},
+    {"new-aborted-", String.valueOf(DELETABLE_BEFORE_MS + 10000)},
   };
 
   private void assertDeletionCorrect(long deletableBeforeMs) throws Exception {
@@ -160,7 +165,10 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
   }
 
   static Stream<Arguments> deletableBeforeMsProvider() {
-    return Stream.of(Arguments.of(T_MIN - 10000), Arguments.of(T_MIN), Arguments.of(T_MIN + 10001));
+    return Stream.of(
+        Arguments.of(DELETABLE_BEFORE_MS - 10000),
+        Arguments.of(DELETABLE_BEFORE_MS),
+        Arguments.of(DELETABLE_BEFORE_MS + 10001));
   }
 
   @ParameterizedTest
@@ -188,9 +196,9 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
 
   static Stream<Arguments> tokenTimestampProvider() {
     return Stream.of(
-        Arguments.of(T_MIN + 20000, T_MIN),
-        Arguments.of(T_MIN, T_MIN + 20000),
-        Arguments.of(T_MIN, T_MIN));
+        Arguments.of(DELETABLE_BEFORE_MS + 20000, DELETABLE_BEFORE_MS),
+        Arguments.of(DELETABLE_BEFORE_MS, DELETABLE_BEFORE_MS + 20000),
+        Arguments.of(DELETABLE_BEFORE_MS, DELETABLE_BEFORE_MS));
   }
 
   @ParameterizedTest
@@ -213,20 +221,20 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     orchestrator.execute();
 
     // Assert
-    assertDeletionCorrect(T_MIN);
+    assertDeletionCorrect(DELETABLE_BEFORE_MS);
 
     CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(checkpointDir);
     CoordinatorCleanupState state = stateManager.load();
     assertThat(state).isNotNull();
-    assertThat(state.getDeletableBeforeMs()).isEqualTo(T_MIN);
+    assertThat(state.getDeletableBeforeMs()).isEqualTo(DELETABLE_BEFORE_MS);
   }
 
   @Test
   void execute_resumedStateGiven_shouldResumeAndPreserveDeletableBeforeMs(
       @TempDir Path checkpointDir) throws Exception {
-    // Arrange: persist state with T_MIN, proving tokens won't be parsed during resume
+    // Arrange: persist state with DELETABLE_BEFORE_MS, proving tokens won't be parsed during resume
     CoordinatorCleanupStateManager stateManager = new CoordinatorCleanupStateManager(checkpointDir);
-    stateManager.persist(new CoordinatorCleanupState(T_MIN));
+    stateManager.persist(new CoordinatorCleanupState(DELETABLE_BEFORE_MS));
 
     // Act
     CoordinatorCleanupOrchestrator orchestrator =
@@ -235,19 +243,20 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     orchestrator.execute();
 
     // Assert
-    assertDeletionCorrect(T_MIN);
+    assertDeletionCorrect(DELETABLE_BEFORE_MS);
 
     CoordinatorCleanupState updatedState = stateManager.load();
     assertThat(updatedState).isNotNull();
-    assertThat(updatedState.getDeletableBeforeMs()).isEqualTo(T_MIN);
+    assertThat(updatedState.getDeletableBeforeMs()).isEqualTo(DELETABLE_BEFORE_MS);
     assertThat(updatedState.isCompleted()).isTrue();
   }
 
   @Test
-  void execute_runTwiceGiven_shouldBeIdempotent(@TempDir Path checkpointDir) throws Exception {
+  void execute_alreadyCompletedStateGiven_shouldDoNothing(@TempDir Path checkpointDir)
+      throws Exception {
     // Arrange
-    String ledgerToken = createLedgerToken(T_MIN);
-    String auditorToken = createAuditorToken(T_MIN);
+    String ledgerToken = createLedgerToken(DELETABLE_BEFORE_MS);
+    String auditorToken = createAuditorToken(DELETABLE_BEFORE_MS);
 
     // Act: the first run performs the cleanup and marks the checkpoint completed
     new CoordinatorCleanupOrchestrator(
@@ -264,7 +273,7 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
         .execute();
 
     // Assert
-    assertDeletionCorrect(T_MIN);
+    assertDeletionCorrect(DELETABLE_BEFORE_MS);
     CoordinatorCleanupState state = new CoordinatorCleanupStateManager(checkpointDir).load();
     assertThat(state).isNotNull();
     assertThat(state.isCompleted()).isTrue();
