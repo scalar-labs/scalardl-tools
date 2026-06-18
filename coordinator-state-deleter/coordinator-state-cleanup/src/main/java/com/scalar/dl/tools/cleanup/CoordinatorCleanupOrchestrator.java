@@ -4,7 +4,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
-import com.scalar.db.transaction.consensuscommit.Attribute;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -14,6 +13,7 @@ import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +33,10 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
 
   private static final Logger logger =
       LoggerFactory.getLogger(CoordinatorCleanupOrchestrator.class);
+
+  /** The number of deletions between successive progress log lines. */
+  private static final long PROGRESS_LOG_INTERVAL = 100_000L;
+
   private final DistributedStorage storage;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
@@ -217,6 +221,9 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
 
     logger.info("Starting to scan the coordinator table");
 
+    RecordDeletionChecker deletionChecker = new RecordDeletionChecker(deletableBeforeMs);
+    AtomicLong deletedCount = new AtomicLong();
+
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
 
       ScanResult scanResult =
@@ -224,19 +231,24 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
               coordinatorNamespace,
               Coordinator.TABLE,
               result -> {
-                if (!result.isNull(Attribute.CREATED_AT)
-                    && result.getBigInt(Attribute.CREATED_AT) < deletableBeforeMs) {
+                if (deletionChecker.isDeletable(result)) {
                   try {
                     recordDeleter.execute(result);
                   } catch (Exception e) {
                     throw new RuntimeException(e);
                   }
+                  long deleted = deletedCount.incrementAndGet();
+                  if (deleted % PROGRESS_LOG_INTERVAL == 0) {
+                    logger.info("Deleted {} records in this run so far.", deleted);
+                  }
                 }
               });
 
-      logger.info(
-          "Finished scanning the coordinator table. {} records were scanned.",
-          scanResult.getTotalScanned());
+      // The deletion count is per run (command execution) only. Tracking a cumulative total across
+      // runs would require persisting it on every deletion, so we report only what this run did.
+      logger.info("Finished scanning the coordinator table.");
+      logger.info("Scanned records in this run: {}", scanResult.getTotalScanned());
+      logger.info("Deleted records in this run: {}", deletedCount.get());
     }
   }
 

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,6 +118,8 @@ class CoordinatorCleanupOrchestratorTest {
 
     // Assert
     verify(scanner).scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any());
+    // Only the deletable records are deleted (and therefore counted); the rest are left intact.
+    verify(mockDeleter, times(2)).execute(any());
     verify(mockDeleter).execute(deletable1);
     verify(mockDeleter).execute(deletable2);
     verify(mockDeleter, never()).execute(notDeletable1);
