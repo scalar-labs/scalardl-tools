@@ -56,6 +56,13 @@ class CoordinatorCleanupOrchestratorTest {
         Arguments.of(2000L, 2000L, 2000L));
   }
 
+  static Stream<Arguments> missingTokenProvider() {
+    return Stream.of(
+        Arguments.of(null, null),
+        Arguments.of(createLedgerToken(1000L), null),
+        Arguments.of(null, createAuditorToken(1000L)));
+  }
+
   static Stream<Arguments> invalidTokenProvider() {
     String invalidCrc = "aW52YWxpZC10b2tlbg"; // base64url("invalid-token")
     return Stream.of(
@@ -235,6 +242,12 @@ class CoordinatorCleanupOrchestratorTest {
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("DB unavailable");
     verify(mockDeleter, never()).execute(record2);
+
+    // Resumability is the core contract: a failed run must leave the checkpoint not-completed so
+    // that a re-invocation resumes instead of short-circuiting.
+    CoordinatorCleanupState state = new CoordinatorCleanupStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.isCompleted()).isFalse();
   }
 
   @Test
@@ -338,12 +351,14 @@ class CoordinatorCleanupOrchestratorTest {
     assertThat(state.getDeletableBeforeMs()).isEqualTo(500L);
   }
 
-  @Test
-  void execute_noCheckpointAndNoTokensGiven_shouldThrowIllegalArgumentException() {
+  @ParameterizedTest
+  @MethodSource("missingTokenProvider")
+  void execute_noCheckpointAndMissingTokenGiven_shouldThrowIllegalArgumentException(
+      String ledgerToken, String auditorToken) {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, null, null);
+            storage, scannerFactory, tempDir, Coordinator.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
