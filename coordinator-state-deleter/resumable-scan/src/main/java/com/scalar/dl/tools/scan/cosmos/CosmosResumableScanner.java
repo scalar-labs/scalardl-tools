@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.scalar.db.api.DistributedStorageAdmin;
-import com.scalar.db.api.Result;
 import com.scalar.db.api.TableMetadata;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
@@ -17,6 +16,7 @@ import com.scalar.db.storage.cosmos.CosmosConfig;
 import com.scalar.db.storage.cosmos.CosmosUtils;
 import com.scalar.db.storage.cosmos.ResultInterpreter;
 import com.scalar.db.util.ScalarDbUtils;
+import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
@@ -28,7 +28,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import javax.annotation.concurrent.NotThreadSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,11 +99,11 @@ public final class CosmosResumableScanner implements ResumableScanner {
   }
 
   @Override
-  public ScanResult scan(String namespace, String tableName, Consumer<Result> recordConsumer) {
+  public ScanResult scan(String namespace, String tableName, RecordHandler recordHandler) {
     try {
       String qualifiedTableName = ScalarDbUtils.getFullTableName(namespace, tableName);
       checkpointManager.initCheckpointFor(qualifiedTableName);
-      ScanResult result = doScan(namespace, tableName, recordConsumer);
+      ScanResult result = doScan(namespace, tableName, recordHandler);
       checkpointManager.clearCheckpointFor(qualifiedTableName);
       return result;
     } catch (RuntimeException e) {
@@ -116,7 +115,7 @@ public final class CosmosResumableScanner implements ResumableScanner {
     }
   }
 
-  private ScanResult doScan(String namespace, String tableName, Consumer<Result> recordConsumer)
+  private ScanResult doScan(String namespace, String tableName, RecordHandler recordHandler)
       throws Exception {
 
     // Resolve Cosmos database and container from namespace and table name
@@ -165,7 +164,7 @@ public final class CosmosResumableScanner implements ResumableScanner {
                 feedRangeId,
                 qualifiedTableName,
                 continuationToken,
-                recordConsumer,
+                recordHandler,
                 resultInterpreter,
                 checkpointManager,
                 maxItemCount);

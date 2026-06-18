@@ -1,14 +1,10 @@
 package com.scalar.dl.tools.scan;
 
-import com.scalar.db.api.Result;
-import java.util.function.Consumer;
-
 /**
  * A resumable, parallel scanner over a ScalarDB table.
  *
- * <p>Callers specify a ScalarDB namespace and table name; the scanner delivers each record as a
- * {@link Result} via the provided callback. Progress is checkpointed to enable
- * resume-after-failure.
+ * <p>Callers specify a ScalarDB namespace and table name; the scanner delivers each record to the
+ * provided {@link RecordHandler}. Progress is checkpointed to enable resume-after-failure.
  */
 public interface ResumableScanner extends AutoCloseable {
 
@@ -17,8 +13,8 @@ public interface ResumableScanner extends AutoCloseable {
    *
    * @param namespace ScalarDB namespace of the table to scan
    * @param tableName ScalarDB table name to scan
-   * @param recordConsumer callback invoked for each scanned record; must be thread-safe
+   * @param recordHandler callback invoked for each scanned record; must be thread-safe
    * @return the scan result
    */
-  ScanResult scan(String namespace, String tableName, Consumer<Result> recordConsumer);
+  ScanResult scan(String namespace, String tableName, RecordHandler recordHandler);
 }

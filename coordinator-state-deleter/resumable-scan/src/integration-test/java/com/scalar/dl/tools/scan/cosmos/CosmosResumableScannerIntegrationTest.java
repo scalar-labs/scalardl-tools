@@ -21,6 +21,7 @@ import com.scalar.db.io.Key;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.storage.cosmos.CosmosConfig;
 import com.scalar.db.storage.cosmos.CosmosUtils;
+import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -33,7 +34,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -199,10 +199,10 @@ class CosmosResumableScannerIntegrationTest {
    *
    * @param recordIds the set to collect scanned record IDs into
    * @param threshold the number of records after which to simulate an interruption
-   * @return a Consumer that collects record IDs into {@code recordIds} and throws a {@link
+   * @return a RecordHandler that collects record IDs into {@code recordIds} and throws a {@link
    *     RuntimeException} after being invoked {@code threshold} times
    */
-  private static Consumer<Result> interruptingConsumerAfter(Set<String> recordIds, int threshold) {
+  private static RecordHandler interruptingHandlerAfter(Set<String> recordIds, int threshold) {
     AtomicLong count = new AtomicLong();
     return r -> {
       recordIds.add(recordId(r));
@@ -285,7 +285,7 @@ class CosmosResumableScannerIntegrationTest {
         scanner.scan(
             NAMESPACE,
             TABLE,
-            interruptingConsumerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2));
+            interruptingHandlerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2));
       } catch (Exception e) {
         // Ignore expected interruption
       }
@@ -338,7 +338,7 @@ class CosmosResumableScannerIntegrationTest {
         scanner.scan(
             NAMESPACE,
             TABLE,
-            interruptingConsumerAfter(firstScannedRecordIds, TEST_RECORD_COUNT * 3 / 4));
+            interruptingHandlerAfter(firstScannedRecordIds, TEST_RECORD_COUNT * 3 / 4));
       } catch (Exception e) {
         // Ignore expected interruption
       }
@@ -395,7 +395,7 @@ class CosmosResumableScannerIntegrationTest {
         new CosmosResumableScanner(databaseConfig, checkpointDir)) {
       try {
         scanner.scan(
-            NAMESPACE, TABLE, interruptingConsumerAfter(scannedRecordIds, TEST_RECORD_COUNT / 2));
+            NAMESPACE, TABLE, interruptingHandlerAfter(scannedRecordIds, TEST_RECORD_COUNT / 2));
       } catch (Exception e) {
         // Ignore expected interruption
       }
@@ -450,7 +450,7 @@ class CosmosResumableScannerIntegrationTest {
           scanner.scan(
               NAMESPACE,
               TABLE,
-              interruptingConsumerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2));
+              interruptingHandlerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2));
         } catch (Exception e) {
           // Ignore expected interruption
         }

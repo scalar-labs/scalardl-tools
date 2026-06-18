@@ -24,13 +24,13 @@ import com.scalar.db.api.Result;
 import com.scalar.db.api.TableMetadata;
 import com.scalar.db.io.DataType;
 import com.scalar.db.storage.cosmos.Record;
+import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +40,7 @@ class CosmosResumableScannerTest {
   private static final String TABLE = "table";
   private static final String QUALIFIED_TABLE = NAMESPACE + "." + TABLE;
 
-  @SuppressWarnings("unchecked")
-  private final Consumer<Result> consumer = mock(Consumer.class);
+  private final RecordHandler recordHandler = mock(RecordHandler.class);
 
   private CosmosClient cosmosClient;
   private CosmosDatabase cosmosDatabase;
@@ -102,7 +101,7 @@ class CosmosResumableScannerTest {
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -126,7 +125,7 @@ class CosmosResumableScannerTest {
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -143,7 +142,7 @@ class CosmosResumableScannerTest {
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      ScanResult result = scanner.scan(NAMESPACE, TABLE, consumer);
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, recordHandler);
       assertThat(result.getTotalScanned()).isEqualTo(5);
     }
   }
@@ -168,7 +167,7 @@ class CosmosResumableScannerTest {
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      ScanResult result = scanner.scan(NAMESPACE, TABLE, consumer);
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, recordHandler);
       assertThat(result.getTotalScanned()).isEqualTo(6);
     }
   }
@@ -194,7 +193,7 @@ class CosmosResumableScannerTest {
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      ScanResult result = scanner.scan(NAMESPACE, TABLE, consumer);
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, recordHandler);
 
       // Assert
       assertThat(result.getTotalScanned()).isEqualTo(1);
@@ -203,15 +202,15 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_workerThrowsException_shouldPropagateException() {
+  void scan_workerThrowsException_shouldPropagateException() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
-    doThrow(new RuntimeException("worker error")).when(consumer).accept(any(Result.class));
+    doThrow(new RuntimeException("worker error")).when(recordHandler).handle(any(Result.class));
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, consumer))
+      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, recordHandler))
           .isInstanceOf(RuntimeException.class)
           .hasMessage("worker error");
     }
@@ -227,7 +226,7 @@ class CosmosResumableScannerTest {
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, consumer))
+      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, recordHandler))
           .isInstanceOf(IllegalStateException.class);
     }
   }
@@ -267,8 +266,8 @@ class CosmosResumableScannerTest {
     try (CosmosResumableScanner scanner = createScanner()) {
       assertThatCode(
               () -> {
-                scanner.scan(NAMESPACE, TABLE, consumer);
-                scanner.scan(NAMESPACE, table2, consumer);
+                scanner.scan(NAMESPACE, TABLE, recordHandler);
+                scanner.scan(NAMESPACE, table2, recordHandler);
               })
           .doesNotThrowAnyException();
     }
@@ -282,7 +281,7 @@ class CosmosResumableScannerTest {
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -290,15 +289,15 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_doScanFails_shouldNotClearCheckpoints() {
+  void scan_doScanFails_shouldNotClearCheckpoints() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
-    doThrow(new RuntimeException("worker error")).when(consumer).accept(any(Result.class));
+    doThrow(new RuntimeException("worker error")).when(recordHandler).handle(any(Result.class));
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, consumer))
+      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, recordHandler))
           .isInstanceOf(RuntimeException.class);
     }
 
@@ -359,7 +358,7 @@ class CosmosResumableScannerTest {
     try (CosmosResumableScanner scanner =
         new CosmosResumableScanner(
             cosmosClient, checkpointManager, storageAdmin, maxWorkerThreads, maxItemCount)) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -372,7 +371,7 @@ class CosmosResumableScannerTest {
     setupSingleFeedRange(0);
     setupNoCheckpoint();
     CosmosResumableScanner scanner = createScanner();
-    scanner.scan(NAMESPACE, TABLE, consumer);
+    scanner.scan(NAMESPACE, TABLE, recordHandler);
 
     // Act
     scanner.close();

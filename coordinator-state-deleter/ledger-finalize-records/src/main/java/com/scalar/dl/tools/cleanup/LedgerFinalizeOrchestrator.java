@@ -4,7 +4,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
-import com.scalar.db.api.Result;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
@@ -19,7 +18,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,21 +37,11 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
   private static final Logger logger = LoggerFactory.getLogger(LedgerFinalizeOrchestrator.class);
 
-  @VisibleForTesting
-  @FunctionalInterface
-  interface RecordFinalizerFactory {
-    RecordFinalizer create(
-        DistributedTransactionManager txManager,
-        DistributedStorage storage,
-        RecordStateChecker stateChecker);
-  }
-
   private final DistributedStorageAdmin admin;
   private final DistributedStorage storage;
   private final DistributedTransactionManager txManager;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
-  private final RecordFinalizerFactory recordFinalizerFactory;
 
   @VisibleForTesting
   LedgerFinalizeOrchestrator(
@@ -62,23 +50,11 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir) {
-    this(admin, storage, txManager, scannerFactory, checkpointDir, RecordFinalizer::new);
-  }
-
-  @VisibleForTesting
-  LedgerFinalizeOrchestrator(
-      DistributedStorageAdmin admin,
-      DistributedStorage storage,
-      DistributedTransactionManager txManager,
-      ResumableScannerFactory scannerFactory,
-      Path checkpointDir,
-      RecordFinalizerFactory recordFinalizerFactory) {
     this.admin = admin;
     this.storage = storage;
     this.txManager = txManager;
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
-    this.recordFinalizerFactory = recordFinalizerFactory;
   }
 
   /**
@@ -205,27 +181,21 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
     logger.info("Starting to process the table: {}", qualifiedTable);
 
-    RecordFinalizer recordFinalizer =
-        recordFinalizerFactory.create(txManager, storage, stateChecker);
+    FinalizeTransactionRecordHandler handler =
+        new FinalizeTransactionRecordHandler(
+            stateChecker,
+            new RecordFinalizer(txManager, storage, stateChecker),
+            namespace,
+            tableName);
 
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
-      Consumer<Result> consumer =
-          result -> {
-            if (stateChecker.needsFinalization(result)) {
-              try {
-                recordFinalizer.execute(namespace, tableName, result);
-              } catch (Exception e) {
-                throw new RuntimeException(e);
-              }
-            }
-          };
-
-      ScanResult scanResult = scanner.scan(namespace, tableName, consumer);
+      ScanResult scanResult = scanner.scan(namespace, tableName, handler);
 
       logger.info(
-          "Finished processing the table: {}. {} records were scanned.",
+          "Finished processing the table: {}. {} records were scanned, {} records were finalized.",
           qualifiedTable,
-          scanResult.getTotalScanned());
+          scanResult.getTotalScanned(),
+          handler.getFinalizedCount());
     }
 
     state.markTableCompleted(qualifiedTable);

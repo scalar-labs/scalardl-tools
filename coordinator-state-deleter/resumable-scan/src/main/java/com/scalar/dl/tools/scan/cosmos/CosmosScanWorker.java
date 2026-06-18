@@ -8,8 +8,8 @@ import com.azure.cosmos.util.CosmosPagedIterable;
 import com.scalar.db.api.Result;
 import com.scalar.db.storage.cosmos.Record;
 import com.scalar.db.storage.cosmos.ResultInterpreter;
+import com.scalar.dl.tools.scan.RecordHandler;
 import java.util.concurrent.Callable;
-import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
  * Scans a single FeedRange of a Cosmos container.
  *
  * <p>Iterates pages via CosmosPagedIterable, converts each Cosmos document to a ScalarDB Result via
- * {@link ResultInterpreter}, delivers it to the consumer, and checkpoints the continuation token
- * after each page.
+ * {@link ResultInterpreter}, delivers it to the {@link RecordHandler}, and checkpoints the
+ * continuation token after each page.
  *
  * <p>Does NOT use setMaxDegreeOfParallelism (per design §7.4.2).
  */
@@ -32,7 +32,7 @@ class CosmosScanWorker implements Callable<Long> {
   private final String feedRangeId;
   private final String tableName;
   @Nullable private final String continuationToken;
-  private final Consumer<Result> recordConsumer;
+  private final RecordHandler recordHandler;
   private final ResultInterpreter resultInterpreter;
   private final CheckpointManager checkpointManager;
   private final int maxItemCount;
@@ -43,7 +43,7 @@ class CosmosScanWorker implements Callable<Long> {
       String feedRangeId,
       String tableName,
       @Nullable String continuationToken,
-      Consumer<Result> recordConsumer,
+      RecordHandler recordHandler,
       ResultInterpreter resultInterpreter,
       CheckpointManager checkpointManager,
       int maxItemCount) {
@@ -52,7 +52,7 @@ class CosmosScanWorker implements Callable<Long> {
     this.feedRangeId = feedRangeId;
     this.tableName = tableName;
     this.continuationToken = continuationToken;
-    this.recordConsumer = recordConsumer;
+    this.recordHandler = recordHandler;
     this.resultInterpreter = resultInterpreter;
     this.checkpointManager = checkpointManager;
     this.maxItemCount = maxItemCount;
@@ -83,7 +83,7 @@ class CosmosScanWorker implements Callable<Long> {
       }
       for (Record record : page.getResults()) {
         Result result = resultInterpreter.interpret(record);
-        recordConsumer.accept(result);
+        recordHandler.handle(result);
         scanned++;
       }
 
