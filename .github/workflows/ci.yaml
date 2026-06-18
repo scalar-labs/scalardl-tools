@@ -6,12 +6,14 @@ on:
     paths:
       - 'coordinator-state-deleter/common/**'
       - 'coordinator-state-deleter/resumable-scan/**'
+      - 'coordinator-state-deleter/coordinator-state-cleanup/**'
       - 'coordinator-state-deleter/ledger-finalize-records/**'
       - '.github/workflows/ci.yaml'
   pull_request:
     paths:
       - 'coordinator-state-deleter/common/**'
       - 'coordinator-state-deleter/resumable-scan/**'
+      - 'coordinator-state-deleter/coordinator-state-cleanup/**'
       - 'coordinator-state-deleter/ledger-finalize-records/**'
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
@@ -38,7 +40,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run check
-        run: ./gradlew :common:check :resumable-scan:check :ledger-finalize-records:check
+        run: ./gradlew :common:check :resumable-scan:check :coordinator-state-cleanup:check :ledger-finalize-records:check
 
       - name: Upload test reports
         if: always()
@@ -48,6 +50,7 @@ jobs:
           path: |
             coordinator-state-deleter/common/build/reports/tests/test/
             coordinator-state-deleter/resumable-scan/build/reports/tests/test/
+            coordinator-state-deleter/coordinator-state-cleanup/build/reports/tests/test/
             coordinator-state-deleter/ledger-finalize-records/build/reports/tests/test/
 
   integration-test:
@@ -115,3 +118,36 @@ jobs:
         with:
           name: ledger-finalize-integration-test-reports
           path: coordinator-state-deleter/ledger-finalize-records/build/reports/tests/cosmosIntegrationTest/
+
+  coordinator-cleanup-integration-test:
+    name: Cosmos DB integration test (coordinator-state-cleanup)
+    needs: ledger-finalize-integration-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run integration tests
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+        run: |
+          ./gradlew :coordinator-state-cleanup:cosmosIntegrationTest \
+            -Dscalardb.cosmos.uri="$COSMOS_URI" \
+            -Dscalardb.cosmos.password="$COSMOS_KEY"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coordinator-cleanup-integration-test-reports
+          path: coordinator-state-deleter/coordinator-state-cleanup/build/reports/tests/cosmosIntegrationTest/
