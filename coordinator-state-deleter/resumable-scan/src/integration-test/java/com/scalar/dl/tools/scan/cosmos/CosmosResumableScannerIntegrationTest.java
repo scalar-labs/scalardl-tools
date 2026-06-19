@@ -23,7 +23,6 @@ import com.scalar.db.storage.cosmos.CosmosConfig;
 import com.scalar.db.storage.cosmos.CosmosUtils;
 import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ScanResult;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -213,7 +212,7 @@ class CosmosResumableScannerIntegrationTest {
   }
 
   @Test
-  void scan_withoutInterruption_shouldScanAllRecords(@TempDir Path checkpointDir) {
+  void scan_withoutInterruption_shouldScanAllRecords(@TempDir Path checkpointDir) throws Exception {
     // Arrange
     Set<String> threadNames = ConcurrentHashMap.newKeySet();
     AtomicLong count = new AtomicLong();
@@ -272,7 +271,7 @@ class CosmosResumableScannerIntegrationTest {
 
   @Test
   void scan_interruptedAndResumed_shouldCoverAllRecords(@TempDir Path checkpointDir)
-      throws IOException {
+      throws Exception {
     // Arrange 1
     // First scan interrupted halfway
     Set<String> firstScannedRecordIds = ConcurrentHashMap.newKeySet();

@@ -15,6 +15,8 @@ public interface ResumableScanner extends AutoCloseable {
    * @param tableName ScalarDB table name to scan
    * @param recordHandler callback invoked for each scanned record; must be thread-safe
    * @return the scan result
+   * @throws Exception if the scan fails; an exception thrown by {@code recordHandler} propagates
+   *     as-is
    */
-  ScanResult scan(String namespace, String tableName, RecordHandler recordHandler);
+  ScanResult scan(String namespace, String tableName, RecordHandler recordHandler) throws Exception;
 }

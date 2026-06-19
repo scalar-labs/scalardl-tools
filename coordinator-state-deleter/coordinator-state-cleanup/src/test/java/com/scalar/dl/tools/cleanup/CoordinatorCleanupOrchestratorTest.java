@@ -65,7 +65,7 @@ class CoordinatorCleanupOrchestratorTest {
   }
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws Exception {
     storage = mock(DistributedStorage.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);

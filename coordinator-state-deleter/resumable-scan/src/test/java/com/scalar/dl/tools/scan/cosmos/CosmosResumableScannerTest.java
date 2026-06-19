@@ -94,7 +94,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_noPersistedFeedRanges_shouldDiscoverAndPersistFeedRanges() {
+  void scan_noPersistedFeedRanges_shouldDiscoverAndPersistFeedRanges() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
@@ -110,7 +110,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_persistedFeedRangesExist_shouldLoadFromCheckpoint() {
+  void scan_persistedFeedRangesExist_shouldLoadFromCheckpoint() throws Exception {
     // Arrange
     FeedRange feedRange = FeedRange.forFullRange();
     String persistedJson = "[\"" + FeedRangeSerializer.toJson(feedRange) + "\"]";
@@ -135,7 +135,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_singleFeedRange_shouldReturnTotalScanned() {
+  void scan_singleFeedRange_shouldReturnTotalScanned() throws Exception {
     // Arrange
     setupSingleFeedRange(5);
     setupNoCheckpoint();
@@ -148,7 +148,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_multipleFeedRanges_shouldSumCounts() {
+  void scan_multipleFeedRanges_shouldSumCounts() throws Exception {
     // Arrange
     FeedRange range1 = createMockFeedRange("r1");
     FeedRange range2 = createMockFeedRange("r2");
@@ -173,7 +173,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_continuationTokenExists_shouldResumeFromToken() {
+  void scan_continuationTokenExists_shouldResumeFromToken() throws Exception {
     // Arrange
     FeedRange feedRange = createMockFeedRange("full");
     String feedRangeId = FeedRangeSerializer.toId(feedRange);
@@ -274,7 +274,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_doScanSucceeds_shouldClearAllCheckpoints() {
+  void scan_doScanSucceeds_shouldClearAllCheckpoints() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
@@ -306,7 +306,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_withCustomMaxWorkerThreads_shouldLimitThreadCount() {
+  void scan_withCustomMaxWorkerThreads_shouldLimitThreadCount() throws Exception {
     // Arrange
     FeedRange range1 = createMockFeedRange("r1");
     FeedRange range2 = createMockFeedRange("r2");
@@ -338,7 +338,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_withCustomMaxItemCount_shouldPassMaxItemCountToWorkers() {
+  void scan_withCustomMaxItemCount_shouldPassMaxItemCountToWorkers() throws Exception {
     // Arrange
     int maxWorkerThreads = 32;
     int maxItemCount = 50;
@@ -366,7 +366,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void close_shouldCloseClientAndStorageAdmin() {
+  void close_shouldCloseClientAndStorageAdmin() throws Exception {
     // Arrange
     setupSingleFeedRange(0);
     setupNoCheckpoint();
