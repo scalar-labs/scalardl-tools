@@ -168,6 +168,24 @@ class CoordinatorCleanupOrchestratorTest {
   }
 
   @Test
+  void execute_scanFailureGiven_shouldNotMarkCompleted() throws Exception {
+    // Arrange
+    when(scanner.scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any()))
+        .thenThrow(new RuntimeException("Cosmos DB unavailable"));
+    CoordinatorCleanupOrchestrator orchestrator =
+        newOrchestrator(Coordinator.NAMESPACE, createLedgerToken(2000L), createAuditorToken(3000L));
+
+    // Act
+    assertThatThrownBy(orchestrator::execute).isInstanceOf(RuntimeException.class);
+
+    // Assert
+    // The checkpoint must remain not-completed.
+    CoordinatorCleanupState state = new CoordinatorCleanupStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.isCompleted()).isFalse();
+  }
+
+  @Test
   void execute_resumedStateGiven_shouldUsePreviousDeletableBeforeMs() throws Exception {
     // Arrange
     // Pre-persist state to simulate a resumed run

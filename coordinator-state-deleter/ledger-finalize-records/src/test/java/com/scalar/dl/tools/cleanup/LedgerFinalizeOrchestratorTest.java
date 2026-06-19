@@ -120,49 +120,54 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
-  void execute_partialTableFailureGiven_shouldPersistPartialCompletionAndResumeSuccessfully()
-      throws Exception {
-    // Arrange 1
-    // First run discovers two tables, succeeds on the first, fails on the second
+  void execute_scanFailureGiven_shouldNotMarkCompleted() throws Exception {
+    // Arrange
+    // Discovers two tables, succeeds on the first, fails on the second.
     when(admin.getNamespaceNames()).thenReturn(new LinkedHashSet<>(Arrays.asList("ns1", "ns2")));
     when(admin.getNamespaceTableNames("ns1"))
         .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
     when(admin.getNamespaceTableNames("ns2"))
         .thenReturn(new HashSet<>(Collections.singletonList("tbl2")));
-
     when(scanner.scan(eq("ns1"), eq("tbl1"), any())).thenReturn(new ScanResult(10));
     when(scanner.scan(eq("ns2"), eq("tbl2"), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
-    // Act & Assert 1
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act
     assertThatThrownBy(orchestrator::execute).isInstanceOf(RuntimeException.class);
 
-    // Verify first table's completion was persisted
-    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(tempDir);
-    LedgerFinalizeState state = stateManager.load();
+    // Assert
+    // Only the finished table is marked completed; the failed table is left not-completed.
+    LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
     assertThat(state).isNotNull();
     assertThat(state.getCompletedTables()).containsExactly("ns1.tbl1");
-    long startedAtMs = state.getStartedAtMs();
+  }
 
-    // Arrange 2
-    // Resume — create a fresh scanner for the second run
-    ResumableScanner scanner2 = mock(ResumableScanner.class);
-    when(scannerFactory.create(any())).thenReturn(scanner2);
-    when(scanner2.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
+  @Test
+  void execute_resumedStateGiven_shouldSkipCompletedTablesAndProcessRemaining() throws Exception {
+    // Arrange
+    // Pre-persist a checkpoint where the first of two tables is already completed.
+    long startedAtMs = 1000L;
+    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(tempDir);
+    stateManager.persist(
+        new LedgerFinalizeState(
+            startedAtMs,
+            Arrays.asList("ns1.tbl1", "ns2.tbl2"),
+            Collections.singletonList("ns1.tbl1")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
 
-    // Act 2
-    LedgerFinalizeOrchestrator orchestrator2 = newOrchestrator();
-    String token = orchestrator2.execute();
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
-    // Assert 2
-    assertThat(token).isNotEmpty();
-    CompletionToken decoded = CompletionToken.decode(token);
-    assertThat(decoded.getStartedAtMs()).isEqualTo(startedAtMs);
+    // Act
+    String token = orchestrator.execute();
 
-    // Second table was processed, first was skipped
-    verify(scanner2, never()).scan(eq("ns1"), eq("tbl1"), any());
-    verify(scanner2).scan(eq("ns2"), eq("tbl2"), any());
+    // Assert
+    // The completed table is skipped; only the remaining table is scanned.
+    verify(scanner, never()).scan(eq("ns1"), eq("tbl1"), any());
+    verify(scanner).scan(eq("ns2"), eq("tbl2"), any());
+    // The original start timestamp is carried over across the resume.
+    assertThat(CompletionToken.decode(token).getStartedAtMs()).isEqualTo(startedAtMs);
   }
 
   @Test
