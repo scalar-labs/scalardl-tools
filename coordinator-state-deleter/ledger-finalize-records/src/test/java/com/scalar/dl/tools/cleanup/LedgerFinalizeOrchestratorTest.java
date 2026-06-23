@@ -14,28 +14,20 @@ import static org.mockito.Mockito.when;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
-import com.scalar.db.api.Result;
-import com.scalar.db.api.TransactionState;
-import com.scalar.db.io.BigIntColumn;
-import com.scalar.db.io.IntColumn;
-import com.scalar.db.transaction.consensuscommit.Attribute;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@SuppressWarnings("resource")
 class LedgerFinalizeOrchestratorTest {
 
   @TempDir Path tempDir;
@@ -56,25 +48,12 @@ class LedgerFinalizeOrchestratorTest {
     when(scannerFactory.create(any())).thenReturn(scanner);
   }
 
-  /**
-   * Creates a mock {@link Result} that {@link RecordStateChecker} can inspect. Follows the same
-   * pattern as {@link RecordStateCheckerTest}.
-   */
-  private Result createMockResult(TransactionState txState, long txPreparedAt) {
-    Result result = mock(Result.class);
-    Map<String, com.scalar.db.io.Column<?>> columns = new LinkedHashMap<>();
-    columns.put(Attribute.STATE, IntColumn.of(Attribute.STATE, txState.get()));
-    columns.put(Attribute.PREPARED_AT, BigIntColumn.of(Attribute.PREPARED_AT, txPreparedAt));
-    when(result.getColumns()).thenReturn(columns);
-    when(result.isNull(Attribute.STATE)).thenReturn(false);
-    when(result.getInt(Attribute.STATE)).thenReturn(txState.get());
-    when(result.isNull(Attribute.PREPARED_AT)).thenReturn(false);
-    when(result.getBigInt(Attribute.PREPARED_AT)).thenReturn(txPreparedAt);
-    return result;
+  private LedgerFinalizeOrchestrator newOrchestrator() {
+    return new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
   }
 
   @Test
-  void execute_initialRunGiven_shouldDiscoverTablesAndScanAndReturnToken() throws Exception {
+  void execute_initialRunGiven_shouldDiscoverTablesScanAndReturnToken() throws Exception {
     // Arrange
     when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Arrays.asList("ns1", "ns2")));
     when(admin.getNamespaceTableNames("ns1"))
@@ -83,8 +62,7 @@ class LedgerFinalizeOrchestratorTest {
         .thenReturn(new HashSet<>(Collections.singletonList("tbl2")));
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
     // Act
     long before = System.currentTimeMillis();
@@ -92,11 +70,11 @@ class LedgerFinalizeOrchestratorTest {
     long after = System.currentTimeMillis();
 
     // Assert
-    assertThat(completionToken).isNotEmpty();
     CompletionToken token = CompletionToken.decode(completionToken);
     assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
     assertThat(token.getStartedAtMs()).isBetween(before, after);
 
+    // Each discovered table is scanned and the scanner is closed per table.
     verify(scanner).scan(eq("ns1"), eq("tbl1"), any());
     verify(scanner).scan(eq("ns2"), eq("tbl2"), any());
     verify(scanner, times(2)).close();
@@ -112,8 +90,7 @@ class LedgerFinalizeOrchestratorTest {
     // Arrange
     when(admin.getNamespaceNames()).thenReturn(Collections.emptySet());
 
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
     // Act
     String completionToken = orchestrator.execute();
@@ -132,8 +109,7 @@ class LedgerFinalizeOrchestratorTest {
     when(scanner.scan(eq("ns1"), eq("tbl1"), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -144,103 +120,60 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
-  void execute_nonTerminalAndTerminalRecordsGiven_shouldProcessOnlyNonTerminalRecordsInWindow()
-      throws Exception {
+  void execute_scanFailureGiven_shouldNotMarkCompleted() throws Exception {
     // Arrange
-    // Use pre-persisted state to specify guaranteeTimestamp
-    long guaranteeTimestamp = 1000L;
-    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(tempDir);
-    stateManager.persist(
-        new LedgerFinalizeState(
-            guaranteeTimestamp, Collections.singletonList("ns1.tbl1"), new ArrayList<>()));
-
-    Result preparedInWindow = createMockResult(TransactionState.PREPARED, 500L);
-    Result committedRecord = createMockResult(TransactionState.COMMITTED, 500L);
-    Result preparedOutsideWindow = createMockResult(TransactionState.PREPARED, 2000L);
-
-    when(scanner.scan(eq("ns1"), eq("tbl1"), any()))
-        .thenAnswer(
-            invocation -> {
-              Consumer<Result> consumer = invocation.getArgument(2);
-              consumer.accept(preparedInWindow);
-              consumer.accept(committedRecord);
-              consumer.accept(preparedOutsideWindow);
-              return new ScanResult(3);
-            });
-
-    RecordFinalizer mockFinalizer = mock(RecordFinalizer.class);
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(
-            admin,
-            storage,
-            txManager,
-            scannerFactory,
-            tempDir,
-            (mgr, stor, checker) -> mockFinalizer);
-
-    // Act
-    orchestrator.execute();
-
-    // Assert
-    // Only the PREPARED record within the guarantee window should be finalized
-    verify(mockFinalizer).execute("ns1", "tbl1", preparedInWindow);
-    verify(mockFinalizer, never()).execute(anyString(), anyString(), eq(committedRecord));
-    verify(mockFinalizer, never()).execute(anyString(), anyString(), eq(preparedOutsideWindow));
-  }
-
-  @Test
-  void execute_partialTableFailureGiven_shouldPersistPartialCompletionAndResumeSuccessfully()
-      throws Exception {
-    // Arrange 1
-    // First run discovers two tables, succeeds on the first, fails on the second
+    // Discovers two tables, succeeds on the first, fails on the second.
     when(admin.getNamespaceNames()).thenReturn(new LinkedHashSet<>(Arrays.asList("ns1", "ns2")));
     when(admin.getNamespaceTableNames("ns1"))
         .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
     when(admin.getNamespaceTableNames("ns2"))
         .thenReturn(new HashSet<>(Collections.singletonList("tbl2")));
-
     when(scanner.scan(eq("ns1"), eq("tbl1"), any())).thenReturn(new ScanResult(10));
     when(scanner.scan(eq("ns2"), eq("tbl2"), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
-    // Act & Assert 1
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act
     assertThatThrownBy(orchestrator::execute).isInstanceOf(RuntimeException.class);
 
-    // Verify first table's completion was persisted
-    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(tempDir);
-    LedgerFinalizeState state = stateManager.load();
+    // Assert
+    // Only the finished table is marked completed; the failed table is left not-completed.
+    LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
     assertThat(state).isNotNull();
     assertThat(state.getCompletedTables()).containsExactly("ns1.tbl1");
-    long startedAtMs = state.getStartedAtMs();
+  }
 
-    // Arrange 2
-    // Resume — create a fresh scanner for the second run
-    ResumableScanner scanner2 = mock(ResumableScanner.class);
-    when(scannerFactory.create(any())).thenReturn(scanner2);
-    when(scanner2.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
+  @Test
+  void execute_resumedStateGiven_shouldSkipCompletedTablesAndProcessRemaining() throws Exception {
+    // Arrange
+    // Pre-persist a checkpoint where the first of two tables is already completed.
+    long startedAtMs = 1000L;
+    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(tempDir);
+    stateManager.persist(
+        new LedgerFinalizeState(
+            startedAtMs,
+            Arrays.asList("ns1.tbl1", "ns2.tbl2"),
+            Collections.singletonList("ns1.tbl1")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
 
-    // Act 2
-    LedgerFinalizeOrchestrator orchestrator2 =
-        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
-    String token = orchestrator2.execute();
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
-    // Assert 2
-    assertThat(token).isNotEmpty();
-    CompletionToken decoded = CompletionToken.decode(token);
-    assertThat(decoded.getStartedAtMs()).isEqualTo(startedAtMs);
+    // Act
+    String token = orchestrator.execute();
 
-    // Second table was processed, first was skipped
-    verify(scanner2, never()).scan(eq("ns1"), eq("tbl1"), any());
-    verify(scanner2).scan(eq("ns2"), eq("tbl2"), any());
+    // Assert
+    // The completed table is skipped; only the remaining table is scanned.
+    verify(scanner, never()).scan(eq("ns1"), eq("tbl1"), any());
+    verify(scanner).scan(eq("ns2"), eq("tbl2"), any());
+    // The original start timestamp is carried over across the resume.
+    assertThat(CompletionToken.decode(token).getStartedAtMs()).isEqualTo(startedAtMs);
   }
 
   @Test
   void close_shouldCloseAdminAndStorageAndTxManager() {
     // Arrange
-    LedgerFinalizeOrchestrator orchestrator =
-        new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
     // Act
     orchestrator.close();

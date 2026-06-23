@@ -12,8 +12,10 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /** Finalizes non-terminal records by triggering ScalarDB recovery. */
+@ThreadSafe
 public final class RecordFinalizer {
 
   private final DistributedTransactionManager manager;

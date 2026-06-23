@@ -19,10 +19,10 @@ import com.azure.cosmos.util.CosmosPagedIterable;
 import com.scalar.db.api.Result;
 import com.scalar.db.storage.cosmos.Record;
 import com.scalar.db.storage.cosmos.ResultInterpreter;
+import com.scalar.dl.tools.scan.RecordHandler;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,8 +32,7 @@ class CosmosScanWorkerTest {
   private static final String RANGE_ID = "range1";
   private static final int DEFAULT_MAX_ITEM_COUNT = 100;
 
-  @SuppressWarnings("unchecked")
-  private final Consumer<Result> consumer = mock(Consumer.class);
+  private final RecordHandler recordHandler = mock(RecordHandler.class);
 
   private CosmosContainer container;
   private FeedRange feedRange;
@@ -58,7 +57,7 @@ class CosmosScanWorkerTest {
         RANGE_ID,
         TABLE_NAME,
         continuationToken,
-        consumer,
+        recordHandler,
         resultInterpreter,
         checkpointManager,
         maxItemCount);
@@ -78,7 +77,7 @@ class CosmosScanWorkerTest {
 
     // Assert
     assertThat(count).isEqualTo(3);
-    verify(consumer, times(3)).accept(any(Result.class));
+    verify(recordHandler, times(3)).handle(any(Result.class));
   }
 
   @Test
@@ -100,7 +99,7 @@ class CosmosScanWorkerTest {
   }
 
   @Test
-  void call_emptyResult_shouldReturnZeroAndNotCallConsumer() throws Exception {
+  void call_emptyResult_shouldReturnZeroAndNotCallHandler() throws Exception {
     // Arrange
     FeedResponse<Record> page = CosmosMockHelper.createMockPage(Collections.emptyList(), null);
     CosmosPagedIterable<Record> iterable =
@@ -112,7 +111,7 @@ class CosmosScanWorkerTest {
 
     // Assert
     assertThat(count).isEqualTo(0);
-    verify(consumer, never()).accept(any());
+    verify(recordHandler, never()).handle(any());
   }
 
   @Test
@@ -187,7 +186,7 @@ class CosmosScanWorkerTest {
   }
 
   @Test
-  void call_shouldPassInterpretedResultsToConsumer() throws Exception {
+  void call_shouldPassInterpretedResultsToHandler() throws Exception {
     // Arrange
     Result mockResult = mock(Result.class);
     when(resultInterpreter.interpret(any(Record.class))).thenReturn(mockResult);
@@ -202,7 +201,7 @@ class CosmosScanWorkerTest {
     createWorker(null).call();
 
     // Assert
-    verify(consumer).accept(mockResult);
+    verify(recordHandler).handle(mockResult);
   }
 
   @Test
@@ -222,7 +221,7 @@ class CosmosScanWorkerTest {
   }
 
   @Test
-  void call_consumerThrowsException_shouldPropagateException() {
+  void call_handlerThrowsException_shouldPropagateException() throws Exception {
     // Arrange
     List<Record> records = CosmosMockHelper.createMockRecords(1);
     FeedResponse<Record> page = CosmosMockHelper.createMockPage(records, null);
@@ -230,11 +229,11 @@ class CosmosScanWorkerTest {
         CosmosMockHelper.createMockPagedIterable(Collections.singletonList(page));
     container = CosmosMockHelper.createMockContainer(iterable, Collections.emptyList());
 
-    doThrow(new RuntimeException("consumer error")).when(consumer).accept(any(Result.class));
+    doThrow(new RuntimeException("handler error")).when(recordHandler).handle(any(Result.class));
 
     // Act & Assert
     assertThatThrownBy(() -> createWorker(null).call())
         .isInstanceOf(RuntimeException.class)
-        .hasMessage("consumer error");
+        .hasMessage("handler error");
   }
 }

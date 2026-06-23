@@ -24,13 +24,13 @@ import com.scalar.db.api.Result;
 import com.scalar.db.api.TableMetadata;
 import com.scalar.db.io.DataType;
 import com.scalar.db.storage.cosmos.Record;
+import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,8 +40,7 @@ class CosmosResumableScannerTest {
   private static final String TABLE = "table";
   private static final String QUALIFIED_TABLE = NAMESPACE + "." + TABLE;
 
-  @SuppressWarnings("unchecked")
-  private final Consumer<Result> consumer = mock(Consumer.class);
+  private final RecordHandler recordHandler = mock(RecordHandler.class);
 
   private CosmosClient cosmosClient;
   private CosmosDatabase cosmosDatabase;
@@ -95,14 +94,14 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_noPersistedFeedRanges_shouldDiscoverAndPersistFeedRanges() {
+  void scan_noPersistedFeedRanges_shouldDiscoverAndPersistFeedRanges() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -111,7 +110,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_persistedFeedRangesExist_shouldLoadFromCheckpoint() {
+  void scan_persistedFeedRangesExist_shouldLoadFromCheckpoint() throws Exception {
     // Arrange
     FeedRange feedRange = FeedRange.forFullRange();
     String persistedJson = "[\"" + FeedRangeSerializer.toJson(feedRange) + "\"]";
@@ -126,7 +125,7 @@ class CosmosResumableScannerTest {
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -136,20 +135,20 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_singleFeedRange_shouldReturnTotalScanned() {
+  void scan_singleFeedRange_shouldReturnTotalScanned() throws Exception {
     // Arrange
     setupSingleFeedRange(5);
     setupNoCheckpoint();
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      ScanResult result = scanner.scan(NAMESPACE, TABLE, consumer);
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, recordHandler);
       assertThat(result.getTotalScanned()).isEqualTo(5);
     }
   }
 
   @Test
-  void scan_multipleFeedRanges_shouldSumCounts() {
+  void scan_multipleFeedRanges_shouldSumCounts() throws Exception {
     // Arrange
     FeedRange range1 = createMockFeedRange("r1");
     FeedRange range2 = createMockFeedRange("r2");
@@ -168,13 +167,13 @@ class CosmosResumableScannerTest {
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      ScanResult result = scanner.scan(NAMESPACE, TABLE, consumer);
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, recordHandler);
       assertThat(result.getTotalScanned()).isEqualTo(6);
     }
   }
 
   @Test
-  void scan_continuationTokenExists_shouldResumeFromToken() {
+  void scan_continuationTokenExists_shouldResumeFromToken() throws Exception {
     // Arrange
     FeedRange feedRange = createMockFeedRange("full");
     String feedRangeId = FeedRangeSerializer.toId(feedRange);
@@ -194,7 +193,7 @@ class CosmosResumableScannerTest {
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      ScanResult result = scanner.scan(NAMESPACE, TABLE, consumer);
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, recordHandler);
 
       // Assert
       assertThat(result.getTotalScanned()).isEqualTo(1);
@@ -203,15 +202,15 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_workerThrowsException_shouldPropagateException() {
+  void scan_workerThrowsException_shouldPropagateException() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
-    doThrow(new RuntimeException("worker error")).when(consumer).accept(any(Result.class));
+    doThrow(new RuntimeException("worker error")).when(recordHandler).handle(any(Result.class));
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, consumer))
+      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, recordHandler))
           .isInstanceOf(RuntimeException.class)
           .hasMessage("worker error");
     }
@@ -227,7 +226,7 @@ class CosmosResumableScannerTest {
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {
-      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, consumer))
+      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, recordHandler))
           .isInstanceOf(IllegalStateException.class);
     }
   }
@@ -267,22 +266,22 @@ class CosmosResumableScannerTest {
     try (CosmosResumableScanner scanner = createScanner()) {
       assertThatCode(
               () -> {
-                scanner.scan(NAMESPACE, TABLE, consumer);
-                scanner.scan(NAMESPACE, table2, consumer);
+                scanner.scan(NAMESPACE, TABLE, recordHandler);
+                scanner.scan(NAMESPACE, table2, recordHandler);
               })
           .doesNotThrowAnyException();
     }
   }
 
   @Test
-  void scan_doScanSucceeds_shouldClearAllCheckpoints() {
+  void scan_doScanSucceeds_shouldClearAllCheckpoints() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -290,15 +289,15 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_doScanFails_shouldNotClearCheckpoints() {
+  void scan_doScanFails_shouldNotClearCheckpoints() throws Exception {
     // Arrange
     setupSingleFeedRange(1);
     setupNoCheckpoint();
-    doThrow(new RuntimeException("worker error")).when(consumer).accept(any(Result.class));
+    doThrow(new RuntimeException("worker error")).when(recordHandler).handle(any(Result.class));
 
     // Act
     try (CosmosResumableScanner scanner = createScanner()) {
-      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, consumer))
+      assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, recordHandler))
           .isInstanceOf(RuntimeException.class);
     }
 
@@ -307,7 +306,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_withCustomMaxWorkerThreads_shouldLimitThreadCount() {
+  void scan_withCustomMaxWorkerThreads_shouldLimitThreadCount() throws Exception {
     // Arrange
     FeedRange range1 = createMockFeedRange("r1");
     FeedRange range2 = createMockFeedRange("r2");
@@ -339,7 +338,7 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void scan_withCustomMaxItemCount_shouldPassMaxItemCountToWorkers() {
+  void scan_withCustomMaxItemCount_shouldPassMaxItemCountToWorkers() throws Exception {
     // Arrange
     int maxWorkerThreads = 32;
     int maxItemCount = 50;
@@ -359,7 +358,7 @@ class CosmosResumableScannerTest {
     try (CosmosResumableScanner scanner =
         new CosmosResumableScanner(
             cosmosClient, checkpointManager, storageAdmin, maxWorkerThreads, maxItemCount)) {
-      scanner.scan(NAMESPACE, TABLE, consumer);
+      scanner.scan(NAMESPACE, TABLE, recordHandler);
     }
 
     // Assert
@@ -367,12 +366,12 @@ class CosmosResumableScannerTest {
   }
 
   @Test
-  void close_shouldCloseClientAndStorageAdmin() {
+  void close_shouldCloseClientAndStorageAdmin() throws Exception {
     // Arrange
     setupSingleFeedRange(0);
     setupNoCheckpoint();
     CosmosResumableScanner scanner = createScanner();
-    scanner.scan(NAMESPACE, TABLE, consumer);
+    scanner.scan(NAMESPACE, TABLE, recordHandler);
 
     // Act
     scanner.close();

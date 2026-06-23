@@ -2,6 +2,9 @@ package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
 
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedTransactionAdmin;
@@ -288,8 +291,18 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     String ledgerToken = createLedgerToken(DELETABLE_BEFORE_MS);
     String auditorToken = createAuditorToken(DELETABLE_BEFORE_MS);
 
-    RecordDeleter interruptingDeleter =
-        new InterruptingRecordDeleter(storage, Coordinator.NAMESPACE, 3);
+    // A spy that throws on the 3rd call, simulating a crash partway through the scan.
+    RecordDeleter interruptingDeleter = spy(new RecordDeleter(storage, Coordinator.NAMESPACE));
+    AtomicLong deleteCount = new AtomicLong();
+    doAnswer(
+            invocation -> {
+              if (deleteCount.incrementAndGet() >= 3) {
+                throw new RuntimeException("Simulated interruption");
+              }
+              return invocation.callRealMethod();
+            })
+        .when(interruptingDeleter)
+        .execute(any(Result.class));
 
     // Act 1: the first run fails partway through the scan.
     CoordinatorCleanupOrchestrator failingRun =
@@ -321,28 +334,5 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     CoordinatorCleanupState finalState = stateManager.load();
     assertThat(finalState).isNotNull();
     assertThat(finalState.isCompleted()).isTrue();
-  }
-
-  /**
-   * A {@link RecordDeleter} that throws once it has been invoked {@code throwOnNthDelete} times,
-   * simulating a crash partway through the scan.
-   */
-  private static class InterruptingRecordDeleter extends RecordDeleter {
-    private final AtomicLong deleteCount = new AtomicLong();
-    private final long throwOnNthDelete;
-
-    InterruptingRecordDeleter(
-        DistributedStorage storage, String coordinatorNamespace, long throwOnNthDelete) {
-      super(storage, coordinatorNamespace);
-      this.throwOnNthDelete = throwOnNthDelete;
-    }
-
-    @Override
-    public void execute(Result scanResult) throws Exception {
-      if (deleteCount.incrementAndGet() >= throwOnNthDelete) {
-        throw new RuntimeException("Simulated interruption");
-      }
-      super.execute(scanResult);
-    }
   }
 }

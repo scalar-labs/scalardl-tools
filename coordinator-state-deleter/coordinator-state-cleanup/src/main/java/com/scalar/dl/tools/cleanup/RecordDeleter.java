@@ -6,9 +6,11 @@ import com.scalar.db.api.Result;
 import com.scalar.db.io.Key;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import javax.annotation.concurrent.ThreadSafe;
 
 /** Deletes coordinator table records using {@link DistributedStorage}. */
-public class RecordDeleter {
+@ThreadSafe
+public final class RecordDeleter {
 
   private final DistributedStorage storage;
   private final String coordinatorNamespace;
