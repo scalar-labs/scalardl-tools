@@ -51,7 +51,8 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
   private static final String NAMESPACE = "it_auditor_orch";
   private static final int RECORDS_COUNT = 8; // must be divisible by 4
   private static final long OLD_TIMESTAMP = 1L;
-  private static final long FUTURE_TIMESTAMP = Long.MAX_VALUE / 2;
+  // Far-future timestamp, capped at 2^53 — the max value ScalarDB allows for a BIGINT in Cosmos.
+  private static final long FUTURE_TIMESTAMP = 9_007_199_254_740_992L;
 
   private DatabaseConfig databaseConfig;
   private DistributedStorageAdmin storageAdmin;
