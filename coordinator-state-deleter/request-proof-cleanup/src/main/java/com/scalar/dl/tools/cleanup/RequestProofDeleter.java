@@ -27,16 +27,18 @@ public final class RequestProofDeleter {
   }
 
   private Delete buildDelete(Result result) {
-    @SuppressWarnings("deprecation")
-    Key partitionKey =
-        result
-            .getPartitionKey()
-            .orElseThrow(() -> new IllegalArgumentException("Partition key not found in result"));
-
+    String nonce = result.getText(AuditorInternalValues.REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME);
+    if (nonce == null) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Partition key '%s' not found in result",
+              AuditorInternalValues.REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME));
+    }
     return Delete.newBuilder()
         .namespace(namespace)
         .table(AuditorInternalValues.REQUEST_PROOF_TABLE_NAME)
-        .partitionKey(partitionKey)
+        .partitionKey(
+            Key.ofText(AuditorInternalValues.REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME, nonce))
         .build();
   }
 }
