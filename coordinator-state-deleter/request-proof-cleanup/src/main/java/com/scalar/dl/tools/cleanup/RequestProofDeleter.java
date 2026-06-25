@@ -4,24 +4,24 @@ import com.scalar.db.api.Delete;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.Result;
 import com.scalar.db.io.Key;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.annotation.concurrent.ThreadSafe;
 
-/** Deletes coordinator table records using {@link DistributedStorage}. */
+/** Deletes {@code request_proof} records using {@link DistributedStorage}. */
 @ThreadSafe
-public final class RecordDeleter {
+public final class RequestProofDeleter {
 
   private final DistributedStorage storage;
-  private final String coordinatorNamespace;
+  private final String namespace;
 
   @SuppressFBWarnings("EI_EXPOSE_REP2")
-  public RecordDeleter(DistributedStorage storage, String coordinatorNamespace) {
+  public RequestProofDeleter(DistributedStorage storage, String namespace) {
     this.storage = storage;
-    this.coordinatorNamespace = coordinatorNamespace;
+    this.namespace = namespace;
   }
 
-  /** Deletes a coordinator table record. */
+  /** Deletes a {@code request_proof} record. */
   public void execute(Result result) throws Exception {
     storage.delete(buildDelete(result));
   }
@@ -34,8 +34,8 @@ public final class RecordDeleter {
             .orElseThrow(() -> new IllegalArgumentException("Partition key not found in result"));
 
     return Delete.newBuilder()
-        .namespace(coordinatorNamespace)
-        .table(Coordinator.TABLE)
+        .namespace(namespace)
+        .table(AuditorInternalValues.REQUEST_PROOF_TABLE_NAME)
         .partitionKey(partitionKey)
         .build();
   }

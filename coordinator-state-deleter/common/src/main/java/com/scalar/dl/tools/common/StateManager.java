@@ -10,9 +10,9 @@ import javax.annotation.Nullable;
  * Base class for checkpoint state managers that atomically load and persist a state file.
  *
  * <p>Each subcommand ({@code ledger-finalize-records}, {@code auditor-finalize-records}, {@code
- * coordinator-state-cleanup}) extends this class to manage its own checkpoint state. The state file
- * is stored as {@code <checkpointDir>/<subdirectory>/state.json} and is written atomically to
- * ensure crash-safety.
+ * coordinator-state-cleanup}, {@code request-proof-cleanup}) extends this class to manage its own
+ * checkpoint state. The state file is stored as {@code <checkpointDir>/<subdirectory>/state.json}
+ * and is written atomically to ensure crash-safety.
  *
  * @param <T> the state type, which must be Jackson-serializable
  */

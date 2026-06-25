@@ -1,6 +1,12 @@
 package com.scalar.dl.tools.common;
 
-/** Internal Auditor constants: table/column names, lock-type values, and timing parameters. */
+/**
+ * Internal Auditor constants: table/column names, lock-type values, and timing parameters.
+ *
+ * <p>These values mirror the Auditor's own definitions in the scalardl-enterprise source. This
+ * module intentionally does not depend on scalardl-enterprise, so the literals are duplicated here
+ * and must be kept in sync if the Auditor side changes them.
+ */
 public final class AuditorInternalValues {
 
   // asset_lock table name and columns.
@@ -14,6 +20,10 @@ public final class AuditorInternalValues {
   public static final int LOCK_TYPE_WRITE = 3; // LockType.WRITE
   public static final long LOCK_VALID_PERIOD_MS = 15_000L; // Auditor's LOCK_VALID_PERIOD_MILLIS
 
+  // request_proof table name and columns.
+  public static final String REQUEST_PROOF_TABLE_NAME = "request_proof";
+  public static final String REQUEST_PROOF_TABLE_REGISTERED_AT_COLUMN_NAME = "registered_at";
+
   // Namespace registry table name and columns.
   public static final String NAMESPACE_TABLE_NAME = "namespace";
   public static final String NAMESPACE_TABLE_PARTITION_ID_COLUMN_NAME = "partition_id";
@@ -25,6 +35,7 @@ public final class AuditorInternalValues {
   public static final String NAMESPACE_NAME_SEPARATOR = "_";
 
   // Auditor base-namespace configuration.
+  // Keep in sync with AuditorConfig.NAMESPACE / AuditorConfig.DEFAULT_NAMESPACE.
   public static final String AUDITOR_NAMESPACE_PROPERTY = "scalar.dl.auditor.namespace";
   public static final String DEFAULT_BASE_NAMESPACE = "auditor";
 

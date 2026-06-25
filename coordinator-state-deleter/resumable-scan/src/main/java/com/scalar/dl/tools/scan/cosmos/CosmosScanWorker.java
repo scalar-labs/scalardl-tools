@@ -21,7 +21,8 @@ import org.slf4j.LoggerFactory;
  * {@link ResultInterpreter}, delivers it to the {@link RecordHandler}, and checkpoints the
  * continuation token after each page.
  *
- * <p>Does NOT use setMaxDegreeOfParallelism (per design §7.4.2).
+ * <p>Does NOT use setMaxDegreeOfParallelism: in that mode the continuation token covers the entire
+ * logical scan rather than a single partition, so it cannot be resumed per FeedRange.
  */
 class CosmosScanWorker implements Callable<Long> {
 
