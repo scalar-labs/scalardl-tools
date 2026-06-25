@@ -15,7 +15,8 @@ public final class RequestProofDeletionChecker {
   /**
    * Returns {@code true} if the record was registered strictly before the deletable-before
    * boundary. The {@code registered_at} column is immutable (written once at bind time), so it acts
-   * as the record's creation timestamp.
+   * as the record's creation timestamp. See {@link RequestProofCleanupOrchestrator} for why a
+   * record registered before the boundary is safe to delete.
    */
   public boolean isDeletable(Result result) {
     if (result.isNull(AuditorInternalValues.REQUEST_PROOF_TABLE_REGISTERED_AT_COLUMN_NAME)) {

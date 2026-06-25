@@ -24,6 +24,17 @@ import org.slf4j.LoggerFactory;
  * {@code request_proof} table, and deletes every record whose {@code registered_at} is before that
  * boundary.
  *
+ * <p><b>Why deleting records before the boundary is safe:</b> the guarantee timestamp is captured
+ * by {@code auditor-finalize-records} as {@code now - LOCK_VALID_PERIOD_MS} (the Auditor's lock
+ * valid period), and that command emits its completion token only after it has recovered every
+ * asset lock acquired before that timestamp. A {@code request_proof} record is only ever read to
+ * recover an unsettled write lock, and a lock is always acquired before its {@code request_proof}
+ * is created, so {@code last_updated_at <= registered_at} for every write lock the transaction
+ * held. Therefore, a record with {@code registered_at < boundary} gives {@code last_updated_at <=
+ * registered_at < boundary} for each such lock, so all of them were finalized by {@code
+ * auditor-finalize-records}; the transaction is already settled (committed, aborted, or recovered),
+ * and its proof is no longer needed for recovery and can be deleted.
+ *
  * <p>The workflow is resumable: progress is checkpointed so that a failure only requires
  * re-invocation with the same checkpoint directory.
  */
