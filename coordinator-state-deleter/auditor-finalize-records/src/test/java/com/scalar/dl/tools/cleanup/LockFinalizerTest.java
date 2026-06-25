@@ -12,6 +12,7 @@ import com.scalar.db.api.Result;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,7 +30,8 @@ class LockFinalizerTest {
 
   private Result createScanResult() {
     Result result = mock(Result.class);
-    when(result.getText(AuditorInternalValues.ID)).thenReturn("asset1");
+    when(result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME))
+        .thenReturn("asset1");
     return result;
   }
 
@@ -65,12 +67,12 @@ class LockFinalizerTest {
   void execute_assetIdMissingGiven_shouldThrowExceptionWithoutCallingRecover() {
     // Arrange — the scan result has no id column.
     Result result = mock(Result.class);
-    when(result.getText(AuditorInternalValues.ID)).thenReturn(null);
+    when(result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME)).thenReturn(null);
 
     // Act & Assert — the RPC is never issued for a record without an asset id.
     assertThatThrownBy(() -> finalizer.execute("default", result))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(AuditorInternalValues.ID);
+        .hasMessageContaining(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     verify(auditorClient, never()).recover(any(AssetLockRecoveryRequest.class));
   }
 

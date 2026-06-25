@@ -11,6 +11,7 @@ import com.scalar.db.io.Key;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.service.AuditorClient;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
@@ -183,20 +184,21 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
     Set<String> namespaces = new LinkedHashSet<>();
     namespaces.add(AuditorInternalValues.DEFAULT_LOGICAL_NAMESPACE);
 
-    if (admin.tableExists(baseNamespace, AuditorInternalValues.NAMESPACE_TABLE)) {
+    if (admin.tableExists(baseNamespace, AuditorInternalValues.NAMESPACE_TABLE_NAME)) {
       logger.info("Namespace registry table found; scanning for registered namespaces.");
       Scan scan =
           Scan.newBuilder()
               .namespace(baseNamespace)
-              .table(AuditorInternalValues.NAMESPACE_TABLE)
+              .table(AuditorInternalValues.NAMESPACE_TABLE_NAME)
               .partitionKey(
                   Key.ofInt(
-                      AuditorInternalValues.NAMESPACE_COLUMN_PARTITION_ID,
-                      AuditorInternalValues.NAMESPACE_DEFAULT_PARTITION_ID))
+                      AuditorInternalValues.NAMESPACE_TABLE_PARTITION_ID_COLUMN_NAME,
+                      AuditorInternalValues.NAMESPACE_TABLE_DEFAULT_PARTITION_ID))
               .build();
       try (Scanner scanner = storage.scan(scan)) {
         for (Result result : scanner) {
-          String registered = result.getText(AuditorInternalValues.NAMESPACE_COLUMN_NAME);
+          String registered =
+              result.getText(AuditorInternalValues.NAMESPACE_TABLE_NAME_COLUMN_NAME);
           if (namespaces.add(registered)) {
             logger.info("Discovered registered namespace: {}", registered);
           }
@@ -232,7 +234,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
 
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
       ScanResult scanResult =
-          scanner.scan(physicalNamespace, AuditorInternalValues.TABLE_NAME, handler);
+          scanner.scan(physicalNamespace, AuditorInternalValues.ASSET_LOCK_TABLE_NAME, handler);
 
       logger.info(
           "Finished asset_lock table in namespace {}: {} records were scanned, {} locks were"

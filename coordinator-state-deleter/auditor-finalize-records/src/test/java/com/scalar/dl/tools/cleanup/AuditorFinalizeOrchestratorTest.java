@@ -17,6 +17,7 @@ import com.scalar.db.api.Result;
 import com.scalar.db.api.Scan;
 import com.scalar.db.api.Scanner;
 import com.scalar.dl.client.service.AuditorClient;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
@@ -55,7 +56,7 @@ class AuditorFinalizeOrchestratorTest {
   /** Creates a mock namespace {@link Result} with the given name. */
   private Result createMockNamespaceResult(String name) {
     Result result = mock(Result.class);
-    when(result.getText(AuditorInternalValues.NAMESPACE_COLUMN_NAME)).thenReturn(name);
+    when(result.getText(AuditorInternalValues.NAMESPACE_TABLE_NAME_COLUMN_NAME)).thenReturn(name);
     return result;
   }
 
@@ -75,7 +76,8 @@ class AuditorFinalizeOrchestratorTest {
   @Test
   void execute_initialRunGiven_shouldScanReturnTokenAndPersistState() throws Exception {
     // Arrange — no namespace registry table, so only the default namespace is swept.
-    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE)).thenReturn(false);
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME))
+        .thenReturn(false);
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
     // Act — the start timestamp is captured as now() - the lock validity period.
@@ -101,7 +103,7 @@ class AuditorFinalizeOrchestratorTest {
   @Test
   void execute_namespaceTableExistsGiven_shouldScanAllRegisteredNamespaces() throws Exception {
     // Arrange
-    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE)).thenReturn(true);
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME)).thenReturn(true);
     Scanner namespaceScanner =
         createMockScanner(createMockNamespaceResult("ns1"), createMockNamespaceResult("ns2"));
     when(storage.scan(any(Scan.class))).thenReturn(namespaceScanner);
@@ -121,7 +123,8 @@ class AuditorFinalizeOrchestratorTest {
   @Test
   void execute_scanFailureGiven_shouldPropagateException() throws Exception {
     // Arrange — only the default namespace, whose scan fails.
-    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE)).thenReturn(false);
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME))
+        .thenReturn(false);
     when(scanner.scan(eq(NAMESPACE), eq("asset_lock"), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
@@ -136,7 +139,7 @@ class AuditorFinalizeOrchestratorTest {
   @Test
   void execute_scanFailureGiven_shouldNotMarkCompleted() throws Exception {
     // Arrange — default + ns1; the default succeeds, ns1 fails.
-    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE)).thenReturn(true);
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME)).thenReturn(true);
     Scanner namespaceScanner = createMockScanner(createMockNamespaceResult("ns1"));
     when(storage.scan(any(com.scalar.db.api.Scan.class))).thenReturn(namespaceScanner);
     when(scanner.scan(eq(NAMESPACE), eq("asset_lock"), any())).thenReturn(new ScanResult(10));

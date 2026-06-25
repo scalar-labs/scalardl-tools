@@ -1,6 +1,7 @@
 package com.scalar.dl.tools.cleanup;
 
 import com.scalar.db.api.Result;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 
 /** Checks asset-lock state to determine if a lock record needs finalization. */
 public final class LockStateChecker {
@@ -26,7 +27,7 @@ public final class LockStateChecker {
    * @throws IllegalStateException if the record carries an unexpected {@code lock_type} value
    */
   public boolean needsFinalization(Result result) {
-    int lockType = result.getInt(AuditorInternalValues.LOCK_TYPE);
+    int lockType = result.getInt(AuditorInternalValues.ASSET_LOCK_TABLE_LOCK_TYPE_COLUMN_NAME);
     if (lockType == AuditorInternalValues.LOCK_TYPE_NONE) {
       return false;
     }
@@ -34,7 +35,8 @@ public final class LockStateChecker {
       return true;
     }
     if (lockType == AuditorInternalValues.LOCK_TYPE_WRITE) {
-      long lastUpdatedAt = result.getBigInt(AuditorInternalValues.LAST_UPDATED_AT);
+      long lastUpdatedAt =
+          result.getBigInt(AuditorInternalValues.ASSET_LOCK_TABLE_LAST_UPDATED_AT_COLUMN_NAME);
       return lastUpdatedAt < guaranteeTimestamp;
     }
     throw new IllegalStateException(

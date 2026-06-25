@@ -16,6 +16,7 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import java.nio.file.Path;
@@ -73,18 +74,20 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
     storageAdmin.createNamespace(NAMESPACE, true);
     TableMetadata metadata =
         TableMetadata.newBuilder()
-            .addColumn(AuditorInternalValues.ID, DataType.TEXT)
-            .addColumn(AuditorInternalValues.LOCK_TYPE, DataType.INT)
-            .addColumn(AuditorInternalValues.LAST_UPDATED_AT, DataType.BIGINT)
-            .addPartitionKey(AuditorInternalValues.ID)
+            .addColumn(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME, DataType.TEXT)
+            .addColumn(AuditorInternalValues.ASSET_LOCK_TABLE_LOCK_TYPE_COLUMN_NAME, DataType.INT)
+            .addColumn(
+                AuditorInternalValues.ASSET_LOCK_TABLE_LAST_UPDATED_AT_COLUMN_NAME, DataType.BIGINT)
+            .addPartitionKey(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME)
             .build();
-    storageAdmin.createTable(NAMESPACE, AuditorInternalValues.TABLE_NAME, metadata, true);
+    storageAdmin.createTable(
+        NAMESPACE, AuditorInternalValues.ASSET_LOCK_TABLE_NAME, metadata, true);
   }
 
   @AfterAll
   void tearDownAll() throws Exception {
     try {
-      storageAdmin.dropTable(NAMESPACE, AuditorInternalValues.TABLE_NAME, true);
+      storageAdmin.dropTable(NAMESPACE, AuditorInternalValues.ASSET_LOCK_TABLE_NAME, true);
       storageAdmin.dropNamespace(NAMESPACE, true);
     } finally {
       storageAdmin.close();
@@ -106,7 +109,7 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
               return LockRecoveryResult.SUCCEEDED;
             });
 
-    storageAdmin.truncateTable(NAMESPACE, AuditorInternalValues.TABLE_NAME);
+    storageAdmin.truncateTable(NAMESPACE, AuditorInternalValues.ASSET_LOCK_TABLE_NAME);
 
     for (int i = 0; i < RECORDS_COUNT; i++) {
       int lockType;
@@ -144,10 +147,12 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
     Put put =
         Put.newBuilder()
             .namespace(namespace)
-            .table(AuditorInternalValues.TABLE_NAME)
-            .partitionKey(Key.ofText(AuditorInternalValues.ID, assetId))
-            .intValue(AuditorInternalValues.LOCK_TYPE, lockType)
-            .bigIntValue(AuditorInternalValues.LAST_UPDATED_AT, lastUpdatedAt)
+            .table(AuditorInternalValues.ASSET_LOCK_TABLE_NAME)
+            .partitionKey(
+                Key.ofText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME, assetId))
+            .intValue(AuditorInternalValues.ASSET_LOCK_TABLE_LOCK_TYPE_COLUMN_NAME, lockType)
+            .bigIntValue(
+                AuditorInternalValues.ASSET_LOCK_TABLE_LAST_UPDATED_AT_COLUMN_NAME, lastUpdatedAt)
             .build();
     storage.put(put);
   }
@@ -309,45 +314,48 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
                   recoverKey("ns1", "ns1-held")));
       assertThat(capturedRecoverKeys()).isEqualTo(expected);
     } finally {
-      storageAdmin.dropTable(ns1Physical, AuditorInternalValues.TABLE_NAME, true);
+      storageAdmin.dropTable(ns1Physical, AuditorInternalValues.ASSET_LOCK_TABLE_NAME, true);
       storageAdmin.dropNamespace(ns1Physical, true);
-      storageAdmin.dropTable(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE, true);
+      storageAdmin.dropTable(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME, true);
     }
   }
 
   private void createNamespaceRegistryTable() throws Exception {
     TableMetadata metadata =
         TableMetadata.newBuilder()
-            .addColumn(AuditorInternalValues.NAMESPACE_COLUMN_PARTITION_ID, DataType.INT)
-            .addColumn(AuditorInternalValues.NAMESPACE_COLUMN_NAME, DataType.TEXT)
-            .addPartitionKey(AuditorInternalValues.NAMESPACE_COLUMN_PARTITION_ID)
-            .addClusteringKey(AuditorInternalValues.NAMESPACE_COLUMN_NAME)
+            .addColumn(AuditorInternalValues.NAMESPACE_TABLE_PARTITION_ID_COLUMN_NAME, DataType.INT)
+            .addColumn(AuditorInternalValues.NAMESPACE_TABLE_NAME_COLUMN_NAME, DataType.TEXT)
+            .addPartitionKey(AuditorInternalValues.NAMESPACE_TABLE_PARTITION_ID_COLUMN_NAME)
+            .addClusteringKey(AuditorInternalValues.NAMESPACE_TABLE_NAME_COLUMN_NAME)
             .build();
-    storageAdmin.createTable(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE, metadata, true);
+    storageAdmin.createTable(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME, metadata, true);
   }
 
   private void createAssetLockTableIn(String namespace) throws Exception {
     storageAdmin.createNamespace(namespace, true);
     TableMetadata metadata =
         TableMetadata.newBuilder()
-            .addColumn(AuditorInternalValues.ID, DataType.TEXT)
-            .addColumn(AuditorInternalValues.LOCK_TYPE, DataType.INT)
-            .addColumn(AuditorInternalValues.LAST_UPDATED_AT, DataType.BIGINT)
-            .addPartitionKey(AuditorInternalValues.ID)
+            .addColumn(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME, DataType.TEXT)
+            .addColumn(AuditorInternalValues.ASSET_LOCK_TABLE_LOCK_TYPE_COLUMN_NAME, DataType.INT)
+            .addColumn(
+                AuditorInternalValues.ASSET_LOCK_TABLE_LAST_UPDATED_AT_COLUMN_NAME, DataType.BIGINT)
+            .addPartitionKey(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME)
             .build();
-    storageAdmin.createTable(namespace, AuditorInternalValues.TABLE_NAME, metadata, true);
+    storageAdmin.createTable(
+        namespace, AuditorInternalValues.ASSET_LOCK_TABLE_NAME, metadata, true);
   }
 
   private void putRegisteredNamespace() throws Exception {
     Put put =
         Put.newBuilder()
             .namespace(NAMESPACE)
-            .table(AuditorInternalValues.NAMESPACE_TABLE)
+            .table(AuditorInternalValues.NAMESPACE_TABLE_NAME)
             .partitionKey(
                 Key.ofInt(
-                    AuditorInternalValues.NAMESPACE_COLUMN_PARTITION_ID,
-                    AuditorInternalValues.NAMESPACE_DEFAULT_PARTITION_ID))
-            .clusteringKey(Key.ofText(AuditorInternalValues.NAMESPACE_COLUMN_NAME, "ns1"))
+                    AuditorInternalValues.NAMESPACE_TABLE_PARTITION_ID_COLUMN_NAME,
+                    AuditorInternalValues.NAMESPACE_TABLE_DEFAULT_PARTITION_ID))
+            .clusteringKey(
+                Key.ofText(AuditorInternalValues.NAMESPACE_TABLE_NAME_COLUMN_NAME, "ns1"))
             .build();
     storage.put(put);
   }

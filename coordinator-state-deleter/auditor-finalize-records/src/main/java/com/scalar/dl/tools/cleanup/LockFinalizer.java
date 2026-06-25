@@ -4,6 +4,7 @@ import com.scalar.db.api.Result;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
+import com.scalar.dl.tools.common.AuditorInternalValues;
 
 /** Finalizes unreleased asset locks by issuing {@code RecoverAssetLock} RPCs to the Auditor. */
 public final class LockFinalizer {
@@ -20,10 +21,12 @@ public final class LockFinalizer {
    * confirms the lock is released; no re-read is required.
    */
   public void execute(String namespace, Result result) {
-    String assetId = result.getText(AuditorInternalValues.ID);
+    String assetId = result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     if (assetId == null) {
       throw new IllegalArgumentException(
-          String.format("Column %s not found in result", AuditorInternalValues.ID));
+          String.format(
+              "Column %s not found in result",
+              AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME));
     }
 
     AssetLockRecoveryRequest rpcRequest =
