@@ -22,6 +22,7 @@ public final class AuditorInternalValues {
 
   // request_proof table name and columns.
   public static final String REQUEST_PROOF_TABLE_NAME = "request_proof";
+  public static final String REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME = "nonce";
   public static final String REQUEST_PROOF_TABLE_REGISTERED_AT_COLUMN_NAME = "registered_at";
 
   // Namespace registry table name and columns.

@@ -16,7 +16,6 @@ import com.scalar.db.api.Result;
 import com.scalar.db.exception.storage.ExecutionException;
 import com.scalar.db.io.Key;
 import com.scalar.dl.tools.common.AuditorInternalValues;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,10 +32,9 @@ class RequestProofDeleterTest {
     storage = mock(DistributedStorage.class);
   }
 
-  @SuppressWarnings("deprecation")
-  private Result createScanResult(String pkValue) {
+  private Result createScanResult(String nonceValue) {
     Result result = mock(Result.class);
-    when(result.getPartitionKey()).thenReturn(Optional.of(Key.ofText(NONCE, pkValue)));
+    when(result.getText(NONCE)).thenReturn(nonceValue);
     return result;
   }
 
@@ -56,6 +54,19 @@ class RequestProofDeleterTest {
   }
 
   @Test
+  void execute_partitionKeyMissingGiven_shouldThrowIllegalArgumentException() {
+    // Arrange: a record whose partition key column (nonce) is null.
+    Result result = mock(Result.class);
+    when(result.getText(NONCE)).thenReturn(null);
+    RequestProofDeleter deleter = new RequestProofDeleter(storage, NAMESPACE);
+
+    // Act & Assert
+    assertThatThrownBy(() -> deleter.execute(result))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("nonce");
+  }
+
+  @Test
   void execute_dbFailureGiven_shouldPropagateException() throws Exception {
     // Arrange
     doThrow(new ExecutionException("DB unavailable")).when(storage).delete(any(Delete.class));
@@ -68,14 +79,13 @@ class RequestProofDeleterTest {
   }
 
   @Test
-  @SuppressWarnings("deprecation")
   void execute_shouldConstructDeleteWithConfiguredNamespaceAndPartitionKey() throws Exception {
     // Arrange
     String namespace = "my_auditor";
     doNothing().when(storage).delete(any(Delete.class));
 
     Result scanResult = mock(Result.class);
-    when(scanResult.getPartitionKey()).thenReturn(Optional.of(Key.ofText(NONCE, "nonce-abc")));
+    when(scanResult.getText(NONCE)).thenReturn("nonce-abc");
 
     RequestProofDeleter deleter = new RequestProofDeleter(storage, namespace);
 
