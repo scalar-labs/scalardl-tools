@@ -330,9 +330,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       @TempDir Path checkpointDir) throws Exception {
     // Arrange: a PREPARED record whose writer is still in flight
     createPreparedRecord(TABLE_1, "in-flight", 0);
-    // Make the guarantee timestamp strictly greater than prepared_at so the record is in window.
-    Thread.sleep(10);
-    long tL = System.currentTimeMillis();
+    // The record was prepared before now, so now + 1 is strictly greater than its prepared_at and
+    // keeps it in window.
+    long tL = System.currentTimeMillis() + 1;
 
     List<String> allTables = discoverAllTables();
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);

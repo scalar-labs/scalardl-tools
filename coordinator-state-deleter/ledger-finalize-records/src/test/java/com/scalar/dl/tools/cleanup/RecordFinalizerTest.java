@@ -56,8 +56,9 @@ class RecordFinalizerTest {
 
   @Test
   void execute_recoverRecordReturnsFalse_shouldNotRetryOrThrow() throws Exception {
-    // Arrange: recoverRecord returns false (record outside the finalization window). The finalizer
-    // must treat it as out of scope: call recoverRecord exactly once and not throw.
+    // Arrange: recoverRecord returns false, i.e. the record is not yet recoverable (e.g. its writer
+    // is still in flight). The finalizer must treat it as out of scope: call recoverRecord exactly
+    // once and not throw.
     when(manager.recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class)))
         .thenReturn(false);
 

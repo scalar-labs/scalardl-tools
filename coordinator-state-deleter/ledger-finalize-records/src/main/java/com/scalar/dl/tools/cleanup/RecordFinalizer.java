@@ -43,8 +43,8 @@ public final class RecordFinalizer {
     // deletes states created before this tool's start time. We can therefore skip it.
     boolean recovered = manager.recoverRecord(namespace, tableName, partitionKey, clusteringKey);
     if (!recovered) {
-      logger.info(
-          "Record not yet recoverable and outside our deletion window, so skipping."
+      logger.debug(
+          "Record not yet recoverable (writer may still be in flight); skipping."
               + " namespace={}, table={}, partitionKey={}, clusteringKey={}",
           namespace,
           tableName,
