@@ -45,7 +45,10 @@ public final class FinalizeTransactionRecordHandler implements RecordHandler {
     if (!stateChecker.needsFinalization(record)) {
       return;
     }
-    recordFinalizer.execute(namespace, tableName, record);
+    if (!recordFinalizer.execute(namespace, tableName, record)) {
+      // The record was not yet recoverable and was skipped, so it was not actually finalized.
+      return;
+    }
     long finalized = finalizedCount.incrementAndGet();
     if (finalized % PROGRESS_LOG_INTERVAL == 0) {
       logger.info(

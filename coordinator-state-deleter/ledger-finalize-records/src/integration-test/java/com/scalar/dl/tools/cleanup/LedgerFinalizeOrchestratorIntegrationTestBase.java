@@ -275,7 +275,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, storage, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -308,7 +308,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, storage, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -323,6 +323,38 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       assertRecordNotCommitted(TABLE_1, "out-prep-" + i, i);
       assertRecordNotCommitted(TABLE_1, "out-del-" + i, i);
     }
+  }
+
+  @Test
+  public void execute_nonExpiredPreparedRecordGiven_shouldSkipItAndCompleteNormally(
+      @TempDir Path checkpointDir) throws Exception {
+    // Arrange: a PREPARED record whose writer is still in flight
+    createPreparedRecord(TABLE_1, "in-flight", 0);
+    // Make the guarantee timestamp strictly greater than prepared_at so the record is in window.
+    Thread.sleep(10);
+    long tL = System.currentTimeMillis();
+
+    List<String> allTables = discoverAllTables();
+    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
+    LedgerFinalizeState state = new LedgerFinalizeState(tL, allTables, new ArrayList<>());
+    stateManager.persist(state);
+
+    // Act
+    LedgerFinalizeOrchestrator orchestrator =
+        new LedgerFinalizeOrchestrator(
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+    String completionToken = orchestrator.execute();
+
+    // Assert: a false from recoverRecord must not abort the table; the sweep completes normally.
+    assertThat(completionToken).isNotEmpty();
+    CompletionToken token = CompletionToken.decode(completionToken);
+    assertThat(token.getStartedAtMs()).isEqualTo(tL);
+
+    // The not-yet-recoverable record is left untouched (still non-terminal).
+    assertRecordNotCommitted(TABLE_1, "in-flight", 0);
+
+    // The expired records were still finalized, confirming the scan did real work.
+    assertRecordsFinalized(TABLE_1, TABLE_2);
   }
 
   @Test
@@ -347,7 +379,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, storage, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin, txManager, realScannerFactory(), checkpointDir);
     String completionToken = orchestrator.execute();
 
     // Assert

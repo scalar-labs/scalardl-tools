@@ -35,6 +35,7 @@ class FinalizeTransactionRecordHandlerTest {
     // Arrange
     Result record = mock(Result.class);
     when(stateChecker.needsFinalization(record)).thenReturn(true);
+    when(recordFinalizer.execute(NAMESPACE, TABLE, record)).thenReturn(true);
 
     // Act
     handler.handle(record);
@@ -42,6 +43,22 @@ class FinalizeTransactionRecordHandlerTest {
     // Assert
     verify(recordFinalizer).execute(NAMESPACE, TABLE, record);
     assertThat(handler.getFinalizedCount()).isEqualTo(1);
+  }
+
+  @Test
+  void handle_recordNotYetRecoverableGiven_shouldNotCount() throws Exception {
+    // Arrange: the record needs finalization but recoverRecord reports it as not yet recoverable
+    // (execute returns false), so it must not be counted as finalized.
+    Result record = mock(Result.class);
+    when(stateChecker.needsFinalization(record)).thenReturn(true);
+    when(recordFinalizer.execute(NAMESPACE, TABLE, record)).thenReturn(false);
+
+    // Act
+    handler.handle(record);
+
+    // Assert
+    verify(recordFinalizer).execute(NAMESPACE, TABLE, record);
+    assertThat(handler.getFinalizedCount()).isZero();
   }
 
   @Test
@@ -67,6 +84,8 @@ class FinalizeTransactionRecordHandlerTest {
     when(stateChecker.needsFinalization(needsFinalization1)).thenReturn(true);
     when(stateChecker.needsFinalization(needsFinalization2)).thenReturn(true);
     when(stateChecker.needsFinalization(terminal)).thenReturn(false);
+    when(recordFinalizer.execute(NAMESPACE, TABLE, needsFinalization1)).thenReturn(true);
+    when(recordFinalizer.execute(NAMESPACE, TABLE, needsFinalization2)).thenReturn(true);
 
     // Act
     handler.handle(needsFinalization1);

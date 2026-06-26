@@ -3,15 +3,14 @@ package com.scalar.dl.tools.cleanup;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.scalar.db.api.DistributedStorage;
-import com.scalar.db.api.DistributedTransaction;
 import com.scalar.db.api.DistributedTransactionManager;
-import com.scalar.db.api.Get;
 import com.scalar.db.api.Result;
 import com.scalar.db.io.Key;
 import java.util.Optional;
@@ -22,14 +21,10 @@ import org.mockito.ArgumentCaptor;
 class RecordFinalizerTest {
 
   private DistributedTransactionManager manager;
-  private DistributedStorage storage;
-  private RecordStateChecker stateChecker;
 
   @BeforeEach
   void setUp() {
     manager = mock(DistributedTransactionManager.class);
-    storage = mock(DistributedStorage.class);
-    stateChecker = mock(RecordStateChecker.class);
   }
 
   @SuppressWarnings("deprecation")
@@ -41,71 +36,49 @@ class RecordFinalizerTest {
   }
 
   @Test
-  void execute_shouldFinalizeAllSuccessfully() throws Exception {
+  void execute_shouldCallRecoverRecordOncePerRecord() throws Exception {
     // Arrange
-    DistributedTransaction tx = mock(DistributedTransaction.class);
-    when(manager.begin()).thenReturn(tx);
-    when(storage.get(any(Get.class))).thenReturn(Optional.empty());
+    when(manager.recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class)))
+        .thenReturn(true);
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager);
 
     // Act
-    finalizer.execute("ns", "tbl", createScanResult("pk1"));
+    boolean recovered = finalizer.execute("ns", "tbl", createScanResult("pk1"));
     finalizer.execute("ns", "tbl", createScanResult("pk2"));
     finalizer.execute("ns", "tbl", createScanResult("pk3"));
 
     // Assert
-    verify(tx, times(3)).get(any(Get.class));
-    verify(storage, times(3)).get(any(Get.class));
+    assertThat(recovered).isTrue();
+    verify(manager, times(3))
+        .recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class));
   }
 
   @Test
-  void execute_recoveryCompletesAfterRetries_shouldFinalize() throws Exception {
-    // Arrange
-    DistributedTransaction tx = mock(DistributedTransaction.class);
-    when(manager.begin()).thenReturn(tx);
+  void execute_recoverRecordReturnsFalse_shouldNotRetryOrThrow() throws Exception {
+    // Arrange: recoverRecord returns false (record outside the finalization window). The finalizer
+    // must treat it as out of scope: call recoverRecord exactly once and not throw.
+    when(manager.recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class)))
+        .thenReturn(false);
 
-    Result nonTerminalResult = mock(Result.class);
-    when(stateChecker.needsFinalization(nonTerminalResult)).thenReturn(true, true, false);
-    when(storage.get(any(Get.class)))
-        .thenReturn(Optional.of(nonTerminalResult))
-        .thenReturn(Optional.of(nonTerminalResult))
-        .thenReturn(Optional.of(nonTerminalResult));
-
-    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager);
 
     // Act
-    finalizer.execute("ns", "tbl", createScanResult("pk1"));
+    boolean recovered = finalizer.execute("ns", "tbl", createScanResult("pk1"));
 
     // Assert
-    verify(tx, times(3)).get(any(Get.class));
-    verify(storage, times(3)).get(any(Get.class));
+    assertThat(recovered).isFalse();
+    verify(manager, times(1))
+        .recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class));
   }
 
   @Test
-  void execute_recoveryNeverCompletes_shouldThrowException() throws Exception {
+  void execute_recoverRecordThrows_shouldPropagateException() throws Exception {
     // Arrange
-    DistributedTransaction tx = mock(DistributedTransaction.class);
-    when(manager.begin()).thenReturn(tx);
+    when(manager.recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class)))
+        .thenThrow(new RuntimeException("DB unavailable"));
 
-    Result nonTerminalResult = mock(Result.class);
-    when(stateChecker.needsFinalization(nonTerminalResult)).thenReturn(true);
-    when(storage.get(any(Get.class))).thenReturn(Optional.of(nonTerminalResult));
-
-    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
-
-    // Act & Assert
-    assertThatThrownBy(() -> finalizer.execute("ns", "tbl", createScanResult("pk1")))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("not finalized");
-  }
-
-  @Test
-  void execute_dbFailureGiven_shouldPropagateException() throws Exception {
-    // Arrange
-    when(manager.begin()).thenThrow(new RuntimeException("DB unavailable"));
-
-    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager);
 
     // Act & Assert
     assertThatThrownBy(() -> finalizer.execute("ns", "tbl", createScanResult("pk1")))
@@ -115,28 +88,50 @@ class RecordFinalizerTest {
 
   @Test
   @SuppressWarnings("deprecation")
-  void execute_noClusteringKeyGiven_shouldConstructCorrectGet() throws Exception {
+  void execute_noClusteringKeyGiven_shouldCallRecoverRecordWithNullClusteringKey()
+      throws Exception {
     // Arrange
-    DistributedTransaction tx = mock(DistributedTransaction.class);
-    when(manager.begin()).thenReturn(tx);
-    when(storage.get(any(Get.class))).thenReturn(Optional.empty());
+    when(manager.recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class)))
+        .thenReturn(true);
 
     Result scanResult = mock(Result.class);
     when(scanResult.getPartitionKey()).thenReturn(Optional.of(Key.ofText("id", "pk1")));
     when(scanResult.getClusteringKey()).thenReturn(Optional.empty());
 
-    RecordFinalizer finalizer = new RecordFinalizer(manager, storage, stateChecker);
+    RecordFinalizer finalizer = new RecordFinalizer(manager);
 
     // Act
     finalizer.execute("ns", "tbl", scanResult);
 
     // Assert
-    ArgumentCaptor<Get> captor = ArgumentCaptor.forClass(Get.class);
-    verify(tx).get(captor.capture());
-    Get captured = captor.getValue();
-    assertThat(captured.forNamespace()).hasValue("ns");
-    assertThat(captured.forTable()).hasValue("tbl");
-    assertThat((Object) captured.getPartitionKey()).isEqualTo(Key.ofText("id", "pk1"));
-    assertThat(captured.getClusteringKey()).isEmpty();
+    ArgumentCaptor<Key> pkCaptor = ArgumentCaptor.forClass(Key.class);
+    ArgumentCaptor<Key> ckCaptor = ArgumentCaptor.forClass(Key.class);
+    verify(manager).recoverRecord(eq("ns"), eq("tbl"), pkCaptor.capture(), ckCaptor.capture());
+    assertThat((Object) pkCaptor.getValue()).isEqualTo(Key.ofText("id", "pk1"));
+    assertThat((Object) ckCaptor.getValue()).isNull();
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  void execute_clusteringKeyGiven_shouldCallRecoverRecordWithClusteringKey() throws Exception {
+    // Arrange
+    when(manager.recoverRecord(eq("ns"), eq("tbl"), any(Key.class), nullable(Key.class)))
+        .thenReturn(true);
+
+    Result scanResult = mock(Result.class);
+    when(scanResult.getPartitionKey()).thenReturn(Optional.of(Key.ofText("id", "pk1")));
+    when(scanResult.getClusteringKey()).thenReturn(Optional.of(Key.ofInt("age", 20)));
+
+    RecordFinalizer finalizer = new RecordFinalizer(manager);
+
+    // Act
+    finalizer.execute("ns", "tbl", scanResult);
+
+    // Assert
+    ArgumentCaptor<Key> pkCaptor = ArgumentCaptor.forClass(Key.class);
+    ArgumentCaptor<Key> ckCaptor = ArgumentCaptor.forClass(Key.class);
+    verify(manager).recoverRecord(eq("ns"), eq("tbl"), pkCaptor.capture(), ckCaptor.capture());
+    assertThat((Object) pkCaptor.getValue()).isEqualTo(Key.ofText("id", "pk1"));
+    assertThat((Object) ckCaptor.getValue()).isEqualTo(Key.ofInt("age", 20));
   }
 }
