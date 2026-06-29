@@ -30,8 +30,8 @@ import org.slf4j.LoggerFactory;
  * CompletionToken} that is later consumed by {@code coordinator-state-cleanup}.
  *
  * <p>The workflow is resumable: progress is checkpointed per table, so a failure only requires
- * re-invocation with the same checkpoint directory. The start timestamp is captured once on the
- * first invocation and reused across resumptions.
+ * re-invocation with the same checkpoint directory. The start timestamp and the target table set
+ * are captured once on the first invocation and reused across resumptions.
  */
 public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
