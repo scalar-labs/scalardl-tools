@@ -5,8 +5,10 @@ import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
+import javax.annotation.concurrent.ThreadSafe;
 
 /** Finalizes unreleased asset locks by issuing {@code RecoverAssetLock} RPCs to the Auditor. */
+@ThreadSafe
 public final class LockFinalizer {
 
   private final AuditorClient auditorClient;
