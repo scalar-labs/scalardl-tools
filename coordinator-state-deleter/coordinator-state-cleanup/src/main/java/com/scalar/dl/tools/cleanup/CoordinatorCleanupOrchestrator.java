@@ -7,6 +7,8 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -168,8 +170,8 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
     }
 
     if (ledgerTokenString == null || auditorTokenString == null) {
-      throw new IllegalArgumentException(
-          "Both ledger and auditor completion tokens are required for the initial run");
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.BOTH_COMPLETION_TOKENS_REQUIRED);
     }
 
     long deletableBeforeMs = parseAndComputeDeletableBeforeMs();
@@ -186,14 +188,15 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
   private long parseAndComputeDeletableBeforeMs() {
     CompletionToken ledgerToken = CompletionToken.decode(ledgerTokenString);
     if (ledgerToken.getServerType() != CompletionToken.ServerType.LEDGER) {
-      throw new IllegalArgumentException(
-          "Ledger token has wrong server type: " + ledgerToken.getServerType());
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.LEDGER_TOKEN_WRONG_SERVER_TYPE, ledgerToken.getServerType());
     }
 
     CompletionToken auditorToken = CompletionToken.decode(auditorTokenString);
     if (auditorToken.getServerType() != CompletionToken.ServerType.AUDITOR) {
-      throw new IllegalArgumentException(
-          "Auditor token has wrong server type: " + auditorToken.getServerType());
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.AUDITOR_TOKEN_WRONG_SERVER_TYPE,
+          auditorToken.getServerType());
     }
 
     long ledgerTimestamp = ledgerToken.getStartedAtMs();

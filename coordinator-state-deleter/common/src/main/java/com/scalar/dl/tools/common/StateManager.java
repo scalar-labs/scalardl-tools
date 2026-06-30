@@ -40,7 +40,7 @@ public abstract class StateManager<T> {
    * Loads the persisted state from the checkpoint directory.
    *
    * @return the deserialized state, or {@code null} if no state file exists
-   * @throws RuntimeException if the state file exists but cannot be read or parsed
+   * @throws CoordinatorStateDeleterException if the state file exists but cannot be read or parsed
    */
   @Nullable
   public T load() {
@@ -52,7 +52,8 @@ public abstract class StateManager<T> {
       byte[] bytes = Files.readAllBytes(statePath);
       return mapper.readValue(bytes, stateClass);
     } catch (IOException e) {
-      throw new RuntimeException("Failed to load state from " + statePath, e);
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.STATE_LOAD_FAILED, e, statePath);
     }
   }
 
@@ -61,7 +62,7 @@ public abstract class StateManager<T> {
    * it does not exist.
    *
    * @param state the state object to persist
-   * @throws RuntimeException if the state cannot be serialized or written
+   * @throws CoordinatorStateDeleterException if the state cannot be serialized or written
    */
   public void persist(T state) {
     try {
@@ -69,7 +70,8 @@ public abstract class StateManager<T> {
       byte[] content = mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(state);
       FileUtils.writeAtomic(stateDir.resolve(STATE_FILE), content);
     } catch (IOException e) {
-      throw new RuntimeException("Failed to persist state to " + stateDir.resolve(STATE_FILE), e);
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.STATE_PERSIST_FAILED, e, stateDir.resolve(STATE_FILE));
     }
   }
 

@@ -6,6 +6,8 @@ import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -170,8 +172,8 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
     }
 
     if (auditorTokenString == null) {
-      throw new IllegalArgumentException(
-          "The auditor completion token is required for the initial run");
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.AUDITOR_COMPLETION_TOKEN_REQUIRED);
     }
 
     long deletableBeforeMs = parseDeletableBeforeMs();
@@ -188,8 +190,9 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
   private long parseDeletableBeforeMs() {
     CompletionToken auditorToken = CompletionToken.decode(auditorTokenString);
     if (auditorToken.getServerType() != CompletionToken.ServerType.AUDITOR) {
-      throw new IllegalArgumentException(
-          "Auditor token has wrong server type: " + auditorToken.getServerType());
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.AUDITOR_TOKEN_WRONG_SERVER_TYPE,
+          auditorToken.getServerType());
     }
 
     long guaranteeTimestamp = auditorToken.getStartedAtMs();

@@ -27,7 +27,7 @@ public final class FileUtils {
     if (fileName == null) {
       throw new IllegalArgumentException("The target path must have a file name");
     }
-    Path tmp = target.resolveSibling(fileName.toString() + ".tmp");
+    Path tmp = target.resolveSibling(fileName + ".tmp");
     try {
       Files.write(tmp, content);
       Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
