@@ -18,6 +18,7 @@ subprojects {
         jacksonVersion = '2.21.3'
         scalarDbVersion = '3.17.3'
         scalardlVersion = '4.0.0-SNAPSHOT'
+        picoCliVersion = '4.7.7'
         assertjVersion = '3.27.7'
         junitVersion = '5.14.4'
         junitPlatformVersion = '1.14.4'
