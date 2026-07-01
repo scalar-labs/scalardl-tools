@@ -10,19 +10,17 @@ import picocli.CommandLine.MissingParameterException;
 public class CommonOptionsTest {
 
   @Test
-  void parseArgs_givenNoCheckpointDir_shouldDefaultToTmpCheckpoint() {
-    // Arrange
-    CoordinatorStateCleanupCommand command = new CoordinatorStateCleanupCommand();
-
-    // Act
-    new CommandLine(command).parseArgs("--properties", "/path/to/server.properties");
-
-    // Assert
-    assertThat(command.checkpointDir).isEqualTo("/tmp/checkpoint");
+  void parseArgs_givenNoCheckpointDir_shouldThrowMissingParameter() {
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                new CommandLine(new CoordinatorStateCleanupCommand())
+                    .parseArgs("--properties", "/path/to/server.properties"))
+        .isInstanceOf(MissingParameterException.class);
   }
 
   @Test
-  void parseArgs_givenCheckpointDir_shouldOverrideDefault() {
+  void parseArgs_givenCheckpointDir_shouldSetCheckpointDir() {
     // Arrange
     LedgerFinalizeRecordsCommand command = new LedgerFinalizeRecordsCommand();
 

@@ -23,9 +23,9 @@ public class CommonOptions {
 
   @Option(
       names = {"--checkpoint-dir"},
+      required = true,
       paramLabel = "CHECKPOINT_DIR",
-      defaultValue = "/tmp/checkpoint",
-      description = "Directory to persist resumable-scan state. (default: ${DEFAULT-VALUE})")
+      description = "Directory to persist resumable-scan state.")
   protected String checkpointDir;
 
   @Option(

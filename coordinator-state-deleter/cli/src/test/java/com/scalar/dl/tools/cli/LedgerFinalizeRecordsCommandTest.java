@@ -87,7 +87,9 @@ public class LedgerFinalizeRecordsCommandTest {
         };
 
     // Act
-    int code = new CommandLine(command).execute("--properties", propertiesFile());
+    int code =
+        new CommandLine(command)
+            .execute("--properties", propertiesFile(), "--checkpoint-dir", tempDir.toString());
 
     // Assert
     assertThat(code).isEqualTo(1);
