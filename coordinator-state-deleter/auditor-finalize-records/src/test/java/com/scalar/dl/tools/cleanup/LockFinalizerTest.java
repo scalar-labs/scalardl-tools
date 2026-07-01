@@ -73,7 +73,7 @@ class LockFinalizerTest {
 
     // Act & Assert — the RPC is never issued for a record without an asset id.
     assertThatThrownBy(() -> finalizer.execute("default", result))
-        .isInstanceOf(AssertionError.class)
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     verify(auditorClient, never()).recover(any(AssetLockRecoveryRequest.class));
   }

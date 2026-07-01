@@ -27,9 +27,9 @@ public final class LockFinalizer {
   public void execute(String namespace, Result result) {
     String assetId = result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     if (assetId == null) {
-      // The id column is the partition key of the asset_lock table, so it can never be null for a
-      // real record.
-      throw new AssertionError(
+      // The id column is the partition key of the asset_lock table, so it should never be null for
+      // a real record; guard against unexpected/corrupted data.
+      throw new IllegalStateException(
           "Column "
               + AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME
               + " not found in the result");

@@ -1,5 +1,7 @@
 package com.scalar.dl.tools.common;
 
+import java.util.Objects;
+
 /**
  * The exception thrown by the coordinator-state-deletion tools.
  *
@@ -13,21 +15,21 @@ public class CoordinatorStateDeleterException extends RuntimeException {
 
   public CoordinatorStateDeleterException(String message, Category category) {
     super(message);
-    this.category = category;
+    this.category = Objects.requireNonNull(category);
   }
 
   public CoordinatorStateDeleterException(String message, Throwable cause, Category category) {
     super(message, cause);
-    this.category = category;
+    this.category = Objects.requireNonNull(category);
   }
 
   public CoordinatorStateDeleterException(ScalarDlToolsError error, Object... args) {
-    this(error.buildMessage(args), error.getCategory());
+    this(Objects.requireNonNull(error).buildMessage(args), error.getCategory());
   }
 
   public CoordinatorStateDeleterException(
       ScalarDlToolsError error, Throwable cause, Object... args) {
-    this(error.buildMessage(args), cause, error.getCategory());
+    this(Objects.requireNonNull(error).buildMessage(args), cause, error.getCategory());
   }
 
   public Category getCategory() {
