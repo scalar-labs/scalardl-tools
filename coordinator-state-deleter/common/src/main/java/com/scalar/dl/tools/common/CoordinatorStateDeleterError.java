@@ -53,6 +53,18 @@ public enum CoordinatorStateDeleterError implements ScalarDlToolsError {
       "The auditor completion token is required for the initial run.",
       "",
       "Provide the auditor completion token emitted by 'auditor-finalize-records'."),
+  CONFIGURATION_LOAD_FAILED(
+      Category.USER_ERROR,
+      "008",
+      "Failed to load the configuration from %s.",
+      "",
+      "Verify that the path points to a readable configuration file in properties format."),
+  INVALID_CHECKPOINT_DIRECTORY(
+      Category.USER_ERROR,
+      "009",
+      "The checkpoint directory path is invalid: %s.",
+      "",
+      "Provide a valid filesystem path for the checkpoint directory."),
 
   //
   // Errors for the internal error category
