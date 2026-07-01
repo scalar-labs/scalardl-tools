@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -142,14 +144,13 @@ class CoordinatorCleanupOrchestratorTest {
 
   @ParameterizedTest
   @MethodSource("invalidTokenProvider")
-  void execute_invalidTokenGiven_shouldThrowIllegalArgumentException(
-      String ledgerToken, String auditorToken) {
+  void execute_invalidTokenGiven_shouldThrowException(String ledgerToken, String auditorToken) {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
         newOrchestrator(Coordinator.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
-    assertThatThrownBy(orchestrator::execute).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(orchestrator::execute).isInstanceOf(CoordinatorStateDeleterException.class);
   }
 
   @Test
@@ -228,7 +229,7 @@ class CoordinatorCleanupOrchestratorTest {
 
   @ParameterizedTest
   @MethodSource("missingTokenProvider")
-  void execute_noCheckpointAndMissingTokenGiven_shouldThrowIllegalArgumentException(
+  void execute_noCheckpointAndMissingTokenGiven_shouldThrowException(
       String ledgerToken, String auditorToken) {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
@@ -236,9 +237,9 @@ class CoordinatorCleanupOrchestratorTest {
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(CoordinatorStateDeleterException.class)
         .hasMessageContaining(
-            "Both ledger and auditor completion tokens are required for the initial run");
+            CoordinatorStateDeleterError.BOTH_COMPLETION_TOKENS_REQUIRED.buildCode());
   }
 
   @Test

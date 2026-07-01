@@ -79,7 +79,7 @@ class CompletionTokenTest {
   }
 
   @Test
-  void decode_corruptedCrcGiven_shouldThrowIllegalArgumentException() {
+  void decode_corruptedCrcGiven_shouldThrowException() {
     // Arrange
     CompletionToken token =
         CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
@@ -91,20 +91,20 @@ class CompletionTokenTest {
 
     // Act & Assert
     assertThatThrownBy(() -> CompletionToken.decode(corrupted))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(CoordinatorStateDeleterException.class);
   }
 
   @Test
-  void decode_invalidBase64Given_shouldThrowIllegalArgumentException() {
+  void decode_invalidBase64Given_shouldThrowException() {
     // Arrange
 
     // Act & Assert
     assertThatThrownBy(() -> CompletionToken.decode("!!!not-base64!!!"))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(CoordinatorStateDeleterException.class);
   }
 
   @Test
-  void decode_invalidJsonGiven_shouldThrowIllegalArgumentException() {
+  void decode_invalidJsonGiven_shouldThrowException() {
     // Arrange
     CompletionToken token =
         CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
@@ -113,6 +113,6 @@ class CompletionTokenTest {
 
     // Act & Assert
     assertThatThrownBy(() -> CompletionToken.decode(truncated))
-        .isInstanceOf(IllegalArgumentException.class);
+        .isInstanceOf(CoordinatorStateDeleterException.class);
   }
 }
