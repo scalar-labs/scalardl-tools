@@ -12,6 +12,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+// The Charset overloads errorprone's JdkObsolete recommends are Java 10+ and do not compile under
+// this module's --release 8 target, so the tests use the "UTF-8" String overloads deliberately.
+@SuppressWarnings("JdkObsolete")
 public class CommonTest {
 
   private static final ObjectMapper mapper = new ObjectMapper();
