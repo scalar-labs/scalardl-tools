@@ -30,6 +30,9 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import picocli.CommandLine;
 
+// The Charset overloads errorprone's JdkObsolete recommends are Java 10+ and do not compile under
+// this module's --release 8 target, so the tests use the "UTF-8" String overloads deliberately.
+@SuppressWarnings("JdkObsolete")
 public class CoordinatorStateCleanupCommandTest {
 
   private static final ObjectMapper mapper = new ObjectMapper();
