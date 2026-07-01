@@ -28,9 +28,15 @@ public class CommonOptions {
       description = "Directory to persist resumable-scan state.")
   protected String checkpointDir;
 
+  // Defaults to true: the finalize/cleanup commands are heavyweight, state-mutating operations that
+  // an operator cannot cheaply re-run, so a failure must surface full diagnostics immediately
+  // rather than forcing an opt-in re-run just to obtain the stack trace.
   @Option(
       names = {"--stacktrace"},
-      description = "Output the Java stack trace to stderr on failure.")
+      negatable = true,
+      defaultValue = "true",
+      description =
+          "Output the Java stack trace to stderr on failure. Use --no-stacktrace to disable.")
   protected boolean stacktraceEnabled;
 
   @Option(

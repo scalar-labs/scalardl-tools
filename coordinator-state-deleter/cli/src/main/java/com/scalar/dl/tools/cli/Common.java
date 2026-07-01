@@ -57,7 +57,8 @@ public final class Common {
 
   private static Category resolveCategory(Exception e) {
     if (e instanceof CoordinatorStateDeleterException) {
-      return ((CoordinatorStateDeleterException) e).getCategory();
+      Category category = ((CoordinatorStateDeleterException) e).getCategory();
+      return category != null ? category : Category.INTERNAL_ERROR;
     }
     return Category.INTERNAL_ERROR;
   }
