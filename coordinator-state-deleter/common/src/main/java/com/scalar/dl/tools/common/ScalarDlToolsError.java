@@ -32,17 +32,17 @@ public interface ScalarDlToolsError {
       String message,
       String cause,
       String solution) {
-    Objects.requireNonNull(componentName, "The component name must not be null.");
-    Objects.requireNonNull(category, "The category must not be null.");
+    Objects.requireNonNull(componentName);
+    Objects.requireNonNull(category);
 
-    Objects.requireNonNull(id, "The id must not be null.");
+    Objects.requireNonNull(id);
     if (id.length() != 3) {
       throw new IllegalArgumentException("The length of the id must be 3.");
     }
 
-    Objects.requireNonNull(message, "The message must not be null.");
-    Objects.requireNonNull(cause, "The cause must not be null.");
-    Objects.requireNonNull(solution, "The solution must not be null.");
+    Objects.requireNonNull(message);
+    Objects.requireNonNull(cause);
+    Objects.requireNonNull(solution);
   }
 
   /**
@@ -67,6 +67,6 @@ public interface ScalarDlToolsError {
   default String buildMessage(Object... args) {
     return buildCode()
         + ": "
-        + (args.length == 0 ? getMessage() : String.format(getMessage(), args));
+        + (args == null || args.length == 0 ? getMessage() : String.format(getMessage(), args));
   }
 }

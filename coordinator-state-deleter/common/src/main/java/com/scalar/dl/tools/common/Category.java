@@ -17,7 +17,7 @@ public enum Category {
   private final String id;
 
   Category(String id) {
-    Objects.requireNonNull(id, "The id must not be null.");
+    Objects.requireNonNull(id);
     if (id.length() != 1) {
       throw new IllegalArgumentException("The length of the id must be 1.");
     }

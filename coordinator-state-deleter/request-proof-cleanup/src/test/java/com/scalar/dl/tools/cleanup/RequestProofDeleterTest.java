@@ -54,7 +54,7 @@ class RequestProofDeleterTest {
   }
 
   @Test
-  void execute_partitionKeyMissingGiven_shouldThrowAssertionError() {
+  void execute_partitionKeyMissingGiven_shouldThrowException() {
     // Arrange: a record whose partition key column (nonce) is null.
     Result result = mock(Result.class);
     when(result.getText(NONCE)).thenReturn(null);
@@ -62,7 +62,7 @@ class RequestProofDeleterTest {
 
     // Act & Assert
     assertThatThrownBy(() -> deleter.execute(result))
-        .isInstanceOf(AssertionError.class)
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("nonce");
   }
 
