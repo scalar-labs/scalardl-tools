@@ -152,9 +152,7 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
       // completion tokens) with an existing checkpoint simply resumes the previous run. The
       // specified tokens are ignored so that the deletion boundary stays fixed across retries.
       if (ledgerTokenString != null || auditorTokenString != null) {
-        logger.warn(
-            "A checkpoint already exists; resuming the previous run. "
-                + "The specified completion tokens are ignored.");
+        logger.warn("A checkpoint already exists; the specified completion tokens are ignored.");
       }
 
       if (state.isCompleted()) {

@@ -22,8 +22,8 @@ public final class RecordDeleter {
   }
 
   /** Deletes a coordinator table record. */
-  public void execute(Result scanResult) throws Exception {
-    storage.delete(buildDelete(scanResult));
+  public void execute(Result result) throws Exception {
+    storage.delete(buildDelete(result));
   }
 
   private Delete buildDelete(Result result) {
