@@ -291,7 +291,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       @TempDir Path checkpointDir) throws Exception {
     // Arrange
     Thread.sleep(10);
-    long tL = System.currentTimeMillis();
+    long guaranteeTimestamp = System.currentTimeMillis();
     Thread.sleep(10);
     // Create out-of-window records
     for (int i = 0; i < 3; i++) {
@@ -299,10 +299,11 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       createDeletedRecord(TABLE_1, "out-del-" + i, i);
     }
 
-    // Persist state with t_L as the guarantee timestamp
+    // Persist state with the known start timestamp
     List<String> allTables = discoverAllTables();
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
-    LedgerFinalizeState state = new LedgerFinalizeState(tL, allTables, new ArrayList<>());
+    LedgerFinalizeState state =
+        new LedgerFinalizeState(guaranteeTimestamp, allTables, new ArrayList<>());
     stateManager.persist(state);
 
     // Act
@@ -313,7 +314,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
     // Assert
     CompletionToken token = CompletionToken.decode(completionToken);
-    assertThat(token.getStartedAtMs()).isEqualTo(tL);
+    assertThat(token.getStartedAtMs()).isEqualTo(guaranteeTimestamp);
 
     // In-window records → finalized
     assertRecordsFinalized(TABLE_1);
