@@ -1,7 +1,6 @@
 package com.scalar.dl.tools.cleanup;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.config.DatabaseConfig;
@@ -38,7 +37,6 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   private static final Logger logger = LoggerFactory.getLogger(LedgerFinalizeOrchestrator.class);
 
   private final DistributedStorageAdmin admin;
-  private final DistributedStorage storage;
   private final DistributedTransactionManager txManager;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
@@ -46,12 +44,10 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   @VisibleForTesting
   LedgerFinalizeOrchestrator(
       DistributedStorageAdmin admin,
-      DistributedStorage storage,
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir) {
     this.admin = admin;
-    this.storage = storage;
     this.txManager = txManager;
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
@@ -67,23 +63,17 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
    */
   public static LedgerFinalizeOrchestrator create(Properties props, Path checkpointDir) {
     DistributedStorageAdmin admin = null;
-    DistributedStorage storage = null;
     DistributedTransactionManager txManager = null;
     try {
       StorageFactory storageFactory = StorageFactory.create(props);
       admin = storageFactory.getStorageAdmin();
-      storage = storageFactory.getStorage();
       txManager = TransactionFactory.create(props).getTransactionManager();
       ResumableScannerFactory scannerFactory =
           new ResumableScannerFactory(new DatabaseConfig(props));
-      return new LedgerFinalizeOrchestrator(
-          admin, storage, txManager, scannerFactory, checkpointDir);
+      return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, checkpointDir);
     } catch (Exception e) {
       if (txManager != null) {
         txManager.close();
-      }
-      if (storage != null) {
-        storage.close();
       }
       if (admin != null) {
         admin.close();
@@ -183,10 +173,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
     FinalizeTransactionRecordHandler handler =
         new FinalizeTransactionRecordHandler(
-            stateChecker,
-            new RecordFinalizer(txManager, storage, stateChecker),
-            namespace,
-            tableName);
+            stateChecker, new RecordFinalizer(txManager), namespace, tableName);
 
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
       ScanResult scanResult = scanner.scan(namespace, tableName, handler);
@@ -212,11 +199,6 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       admin.close();
     } catch (Exception e) {
       logger.warn("Failed to close DistributedStorageAdmin.", e);
-    }
-    try {
-      storage.close();
-    } catch (Exception e) {
-      logger.warn("Failed to close DistributedStorage.", e);
     }
     try {
       txManager.close();

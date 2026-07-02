@@ -11,7 +11,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -33,7 +32,6 @@ class LedgerFinalizeOrchestratorTest {
   @TempDir Path tempDir;
 
   private DistributedStorageAdmin admin;
-  private DistributedStorage storage;
   private DistributedTransactionManager txManager;
   private ResumableScanner scanner;
   private ResumableScannerFactory scannerFactory;
@@ -41,7 +39,6 @@ class LedgerFinalizeOrchestratorTest {
   @BeforeEach
   void setUp() {
     admin = mock(DistributedStorageAdmin.class);
-    storage = mock(DistributedStorage.class);
     txManager = mock(DistributedTransactionManager.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
@@ -49,7 +46,7 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   private LedgerFinalizeOrchestrator newOrchestrator() {
-    return new LedgerFinalizeOrchestrator(admin, storage, txManager, scannerFactory, tempDir);
+    return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
   }
 
   @Test
@@ -171,7 +168,7 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
-  void close_shouldCloseAdminAndStorageAndTxManager() {
+  void close_shouldCloseAdminAndTxManager() {
     // Arrange
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
@@ -180,7 +177,6 @@ class LedgerFinalizeOrchestratorTest {
 
     // Assert
     verify(admin).close();
-    verify(storage).close();
     verify(txManager).close();
   }
 }
