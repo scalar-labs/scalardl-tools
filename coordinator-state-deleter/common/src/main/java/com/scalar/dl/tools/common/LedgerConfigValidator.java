@@ -2,6 +2,7 @@ package com.scalar.dl.tools.common;
 
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
+import java.util.Objects;
 
 /**
  * Validates that the ScalarDL configuration (including ScalarDB configuration) is supported by the
@@ -21,6 +22,7 @@ public final class LedgerConfigValidator {
    *     Coordinator group commit is enabled
    */
   public static void validate(DatabaseConfig databaseConfig) {
+    Objects.requireNonNull(databaseConfig, "databaseConfig must not be null");
     throwIfJdbcTransactionManager(databaseConfig);
     throwIfGroupCommitEnabled(databaseConfig);
   }
