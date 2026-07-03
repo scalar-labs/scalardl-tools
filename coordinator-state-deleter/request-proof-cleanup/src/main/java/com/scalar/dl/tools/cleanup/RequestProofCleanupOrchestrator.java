@@ -8,6 +8,7 @@ import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
+import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -91,10 +92,12 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
    * @param checkpointDir root directory for checkpoint state
    * @param auditorTokenString the Auditor completion token
    * @return a new orchestrator instance
+   * @throws CoordinatorStateDeleterException if the configuration is not supported
    */
   public static RequestProofCleanupOrchestrator create(
       Properties props, Path checkpointDir, @Nullable String auditorTokenString) {
     DatabaseConfig dbConfig = new DatabaseConfig(props);
+    StorageValidator.validate(dbConfig);
     DistributedStorage storage = StorageFactory.create(props).getStorage();
     try {
       ResumableScannerFactory scannerFactory = new ResumableScannerFactory(dbConfig);

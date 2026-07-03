@@ -9,6 +9,9 @@ import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
+import com.scalar.dl.tools.common.LedgerConfigValidator;
+import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -59,12 +62,15 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
    * @param props the properties used by the ScalarDL Ledger
    * @param checkpointDir root directory for checkpoint state
    * @return a new orchestrator instance
-   * @throws IllegalStateException if the configured storage is not supported
+   * @throws CoordinatorStateDeleterException if the configured storage is not supported
    */
   public static LedgerFinalizeOrchestrator create(Properties props, Path checkpointDir) {
     DistributedStorageAdmin admin = null;
     DistributedTransactionManager txManager = null;
     try {
+      DatabaseConfig databaseConfig = new DatabaseConfig(props);
+      StorageValidator.validate(databaseConfig);
+      LedgerConfigValidator.validate(databaseConfig);
       StorageFactory storageFactory = StorageFactory.create(props);
       admin = storageFactory.getStorageAdmin();
       txManager = TransactionFactory.create(props).getTransactionManager();

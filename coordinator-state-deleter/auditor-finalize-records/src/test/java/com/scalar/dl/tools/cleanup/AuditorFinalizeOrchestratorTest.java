@@ -1,11 +1,14 @@
 package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,9 +19,12 @@ import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.Result;
 import com.scalar.db.api.Scan;
 import com.scalar.db.api.Scanner;
+import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -26,9 +32,12 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Properties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
 @SuppressWarnings("resource")
 class AuditorFinalizeOrchestratorTest {
@@ -71,6 +80,47 @@ class AuditorFinalizeOrchestratorTest {
   private AuditorFinalizeOrchestrator orchestrator() {
     return new AuditorFinalizeOrchestrator(
         admin, storage, auditorClient, scannerFactory, tempDir, NAMESPACE);
+  }
+
+  @Test
+  void create_nonCosmosStorageGiven_shouldThrowCoordinatorStateDeleterException() {
+    // Arrange
+    Properties auditorProps = new Properties();
+    auditorProps.setProperty(DatabaseConfig.STORAGE, "cassandra");
+
+    // Act & Assert
+    assertThatThrownBy(
+            () -> AuditorFinalizeOrchestrator.create(auditorProps, new Properties(), tempDir))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining("not supported");
+  }
+
+  @Test
+  void create_cosmosStorageGiven_shouldNotThrow() {
+    // Arrange
+    Properties auditorProps = new Properties();
+    auditorProps.setProperty(DatabaseConfig.STORAGE, "cosmos");
+    Properties clientProps = new Properties();
+    clientProps.setProperty("scalar.dl.client.mode", "client");
+    clientProps.setProperty("scalar.dl.client.entity.id", "test-entity");
+    clientProps.setProperty("scalar.dl.client.authentication.method", "hmac");
+    clientProps.setProperty("scalar.dl.client.entity.identity.hmac.secret_key", "test-secret");
+    clientProps.setProperty("scalar.dl.client.auditor.enabled", "true");
+
+    StorageFactory storageFactory = mock(StorageFactory.class);
+    when(storageFactory.getStorageAdmin()).thenReturn(mock(DistributedStorageAdmin.class));
+    when(storageFactory.getStorage()).thenReturn(mock(DistributedStorage.class));
+
+    try (MockedStatic<StorageFactory> storageFactoryStatic = mockStatic(StorageFactory.class);
+        MockedConstruction<AuditorClient> ignored = mockConstruction(AuditorClient.class)) {
+      storageFactoryStatic
+          .when(() -> StorageFactory.create(any(Properties.class)))
+          .thenReturn(storageFactory);
+
+      // Act & Assert
+      assertThatCode(() -> AuditorFinalizeOrchestrator.create(auditorProps, clientProps, tempDir))
+          .doesNotThrowAnyException();
+    }
   }
 
   @Test
