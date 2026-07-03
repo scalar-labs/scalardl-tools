@@ -62,7 +62,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
    * @param props the properties used by the ScalarDL Ledger
    * @param checkpointDir root directory for checkpoint state
    * @return a new orchestrator instance
-   * @throws CoordinatorStateDeleterException if the configured storage is not supported
+   * @throws CoordinatorStateDeleterException if the configuration is not supported
    */
   public static LedgerFinalizeOrchestrator create(Properties props, Path checkpointDir) {
     DistributedStorageAdmin admin = null;
