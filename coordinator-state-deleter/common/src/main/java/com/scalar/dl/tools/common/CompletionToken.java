@@ -51,7 +51,8 @@ public final class CompletionToken {
    *
    * @param encoded the base64url-encoded token string
    * @return the decoded completion token
-   * @throws IllegalArgumentException if the string cannot be decoded or the CRC32C does not match
+   * @throws CoordinatorStateDeleterException if the string cannot be decoded or the CRC32C does not
+   *     match
    */
   public static CompletionToken decode(String encoded) {
     try {
@@ -64,14 +65,15 @@ public final class CompletionToken {
 
       String expected = computeCrc32c(serverValue, startedAtMs);
       if (!expected.equals(crc)) {
-        throw new IllegalArgumentException(
-            "CRC32C mismatch: expected " + expected + " but got " + crc);
+        throw new CoordinatorStateDeleterException(
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_CRC_MISMATCH, expected, crc);
       }
       return new CompletionToken(serverType, startedAtMs, crc);
-    } catch (IllegalArgumentException e) {
+    } catch (CoordinatorStateDeleterException e) {
       throw e;
     } catch (Exception e) {
-      throw new IllegalArgumentException("Failed to decode completion token", e);
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED, e);
     }
   }
 
@@ -135,7 +137,8 @@ public final class CompletionToken {
           return s;
         }
       }
-      throw new IllegalArgumentException("Unknown server type: " + value);
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.UNKNOWN_SERVER_TYPE, value);
     }
 
     public String getValue() {

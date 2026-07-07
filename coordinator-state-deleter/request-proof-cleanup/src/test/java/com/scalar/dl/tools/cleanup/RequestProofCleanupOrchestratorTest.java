@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -92,13 +94,16 @@ class RequestProofCleanupOrchestratorTest {
   }
 
   @Test
-  void execute_corruptedTokenGiven_shouldThrowIllegalArgumentException() {
-    // Arrange: a token that cannot be decoded (malformed base64url/JSON or CRC mismatch).
+  void execute_corruptedTokenGiven_shouldThrowException() {
+    // Arrange: a token whose payload is not valid JSON, so decoding fails.
     String corruptedToken = "aW52YWxpZC10b2tlbg"; // base64url("invalid-token")
     RequestProofCleanupOrchestrator orchestrator = newOrchestrator(NAMESPACE, corruptedToken);
 
     // Act & Assert
-    assertThatThrownBy(orchestrator::execute).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED.buildCode());
   }
 
   @Test
@@ -109,8 +114,9 @@ class RequestProofCleanupOrchestratorTest {
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("wrong server type");
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.AUDITOR_TOKEN_WRONG_SERVER_TYPE.buildCode());
 
     // The boundary must not be persisted when the token is rejected.
     assertThat(new RequestProofCleanupStateManager(tempDir).load()).isNull();
@@ -190,14 +196,15 @@ class RequestProofCleanupOrchestratorTest {
   }
 
   @Test
-  void execute_noCheckpointAndMissingTokenGiven_shouldThrowIllegalArgumentException() {
+  void execute_noCheckpointAndMissingTokenGiven_shouldThrowException() {
     // Arrange
     RequestProofCleanupOrchestrator orchestrator = newOrchestrator(NAMESPACE, null);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("The auditor completion token is required for the initial run");
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.AUDITOR_COMPLETION_TOKEN_REQUIRED.buildCode());
   }
 
   @Test

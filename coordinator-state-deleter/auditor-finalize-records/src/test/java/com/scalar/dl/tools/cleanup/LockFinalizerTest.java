@@ -13,6 +13,8 @@ import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -71,7 +73,7 @@ class LockFinalizerTest {
 
     // Act & Assert — the RPC is never issued for a record without an asset id.
     assertThatThrownBy(() -> finalizer.execute("default", result))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     verify(auditorClient, never()).recover(any(AssetLockRecoveryRequest.class));
   }
@@ -96,8 +98,9 @@ class LockFinalizerTest {
 
     // Act & Assert
     assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("RPC failed");
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.RECOVER_ASSET_LOCK_RPC_FAILED.buildCode());
   }
 
   @Test

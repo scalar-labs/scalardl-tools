@@ -29,10 +29,12 @@ public final class RequestProofDeleter {
   private Delete buildDelete(Result result) {
     String nonce = result.getText(AuditorInternalValues.REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME);
     if (nonce == null) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Partition key '%s' not found in result",
-              AuditorInternalValues.REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME));
+      // The nonce column is the partition key of the request_proof table, so it should never be
+      // null for a real record; guard against unexpected/corrupted data.
+      throw new IllegalStateException(
+          "Partition key '"
+              + AuditorInternalValues.REQUEST_PROOF_TABLE_NONCE_COLUMN_NAME
+              + "' not found in the result");
     }
     return Delete.newBuilder()
         .namespace(namespace)

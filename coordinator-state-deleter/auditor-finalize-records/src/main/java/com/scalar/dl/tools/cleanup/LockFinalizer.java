@@ -5,6 +5,8 @@ import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import javax.annotation.concurrent.ThreadSafe;
 
 /** Finalizes unreleased asset locks by issuing {@code RecoverAssetLock} RPCs to the Auditor. */
@@ -25,10 +27,12 @@ public final class LockFinalizer {
   public void execute(String namespace, Result result) {
     String assetId = result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     if (assetId == null) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Column %s not found in result",
-              AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME));
+      // The id column is the partition key of the asset_lock table, so it should never be null for
+      // a real record; guard against unexpected/corrupted data.
+      throw new IllegalStateException(
+          "Column "
+              + AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME
+              + " not found in the result");
     }
 
     AssetLockRecoveryRequest rpcRequest =
@@ -36,9 +40,8 @@ public final class LockFinalizer {
 
     LockRecoveryResult rpcResult = auditorClient.recover(rpcRequest);
     if (rpcResult == LockRecoveryResult.FAILED) {
-      throw new RuntimeException(
-          String.format(
-              "RecoverAssetLock RPC failed for asset %s in namespace %s", assetId, namespace));
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.RECOVER_ASSET_LOCK_RPC_FAILED, assetId, namespace);
     }
 
     // TODO: NOT_RECOVERABLE means the lock is still active and currently aborts the whole run. A
