@@ -3,6 +3,9 @@ package com.scalar.dl.tools.common;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
 class CompletionTokenTest {
@@ -79,19 +82,20 @@ class CompletionTokenTest {
   }
 
   @Test
-  void decode_corruptedCrcGiven_shouldThrowException() {
-    // Arrange
-    CompletionToken token =
-        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
-    String encoded = token.encode();
-    // Corrupt one character
-    char[] chars = encoded.toCharArray();
-    chars[chars.length - 1] = chars[chars.length - 1] == 'A' ? 'B' : 'A';
-    String corrupted = new String(chars);
+  void decode_crcMismatchGiven_shouldThrowExceptionWithCrcMismatchCode() {
+    // Arrange: a well-formed token payload whose CRC32C does not match its contents.
+    String json =
+        "{\"server_type\":\"ledger\",\"started_at_ms\":1745000000000,\"crc32c\":\"deadbeef\"}";
+    String encoded =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(json.getBytes(StandardCharsets.UTF_8));
 
     // Act & Assert
-    assertThatThrownBy(() -> CompletionToken.decode(corrupted))
-        .isInstanceOf(CoordinatorStateDeleterException.class);
+    assertThatThrownBy(() -> CompletionToken.decode(encoded))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_CRC_MISMATCH.buildCode());
   }
 
   @Test
@@ -100,19 +104,26 @@ class CompletionTokenTest {
 
     // Act & Assert
     assertThatThrownBy(() -> CompletionToken.decode("!!!not-base64!!!"))
-        .isInstanceOf(CoordinatorStateDeleterException.class);
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED.buildCode())
+        .hasCauseInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void decode_invalidJsonGiven_shouldThrowException() {
-    // Arrange
-    CompletionToken token =
-        CompletionToken.create(CompletionToken.ServerType.LEDGER, 1745000000000L);
-    String encoded = token.encode();
-    String truncated = encoded.substring(0, encoded.length() / 2);
+    // Arrange: valid base64url whose decoded payload is not valid JSON, so decoding fails while
+    // parsing the JSON (as opposed to while decoding base64).
+    String encoded =
+        Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString("{not valid json}".getBytes(StandardCharsets.UTF_8));
 
     // Act & Assert
-    assertThatThrownBy(() -> CompletionToken.decode(truncated))
-        .isInstanceOf(CoordinatorStateDeleterException.class);
+    assertThatThrownBy(() -> CompletionToken.decode(encoded))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED.buildCode())
+        .hasCauseInstanceOf(JsonProcessingException.class);
   }
 }

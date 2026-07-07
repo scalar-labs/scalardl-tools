@@ -58,12 +58,28 @@ class CoordinatorCleanupOrchestratorTest {
   }
 
   static Stream<Arguments> invalidTokenProvider() {
-    String invalidCrc = "aW52YWxpZC10b2tlbg"; // base64url("invalid-token")
+    String undecodableToken = "aW52YWxpZC10b2tlbg"; // base64url("invalid-token"), not valid JSON
     return Stream.of(
-        Arguments.of(invalidCrc, createAuditorToken(1000L)),
-        Arguments.of(createLedgerToken(1000L), invalidCrc),
-        Arguments.of(createAuditorToken(1000L), createAuditorToken(2000L)),
-        Arguments.of(createLedgerToken(1000L), createLedgerToken(2000L)));
+        // An undecodable ledger token.
+        Arguments.of(
+            undecodableToken,
+            createAuditorToken(1000L),
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED),
+        // An undecodable auditor token.
+        Arguments.of(
+            createLedgerToken(1000L),
+            undecodableToken,
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED),
+        // An auditor token supplied in the ledger slot.
+        Arguments.of(
+            createAuditorToken(1000L),
+            createAuditorToken(2000L),
+            CoordinatorStateDeleterError.LEDGER_TOKEN_WRONG_SERVER_TYPE),
+        // A ledger token supplied in the auditor slot.
+        Arguments.of(
+            createLedgerToken(1000L),
+            createLedgerToken(2000L),
+            CoordinatorStateDeleterError.AUDITOR_TOKEN_WRONG_SERVER_TYPE));
   }
 
   @BeforeEach
@@ -144,13 +160,16 @@ class CoordinatorCleanupOrchestratorTest {
 
   @ParameterizedTest
   @MethodSource("invalidTokenProvider")
-  void execute_invalidTokenGiven_shouldThrowException(String ledgerToken, String auditorToken) {
+  void execute_invalidTokenGiven_shouldThrowException(
+      String ledgerToken, String auditorToken, CoordinatorStateDeleterError expected) {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
         newOrchestrator(Coordinator.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
-    assertThatThrownBy(orchestrator::execute).isInstanceOf(CoordinatorStateDeleterException.class);
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(expected.buildCode());
   }
 
   @Test

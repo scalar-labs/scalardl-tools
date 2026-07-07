@@ -95,12 +95,15 @@ class RequestProofCleanupOrchestratorTest {
 
   @Test
   void execute_corruptedTokenGiven_shouldThrowException() {
-    // Arrange: a token that cannot be decoded (malformed base64url/JSON or CRC mismatch).
+    // Arrange: a token whose payload is not valid JSON, so decoding fails.
     String corruptedToken = "aW52YWxpZC10b2tlbg"; // base64url("invalid-token")
     RequestProofCleanupOrchestrator orchestrator = newOrchestrator(NAMESPACE, corruptedToken);
 
     // Act & Assert
-    assertThatThrownBy(orchestrator::execute).isInstanceOf(CoordinatorStateDeleterException.class);
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(
+            CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED.buildCode());
   }
 
   @Test
