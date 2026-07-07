@@ -13,7 +13,8 @@ import javax.annotation.concurrent.Immutable;
  *
  * <p>Each finalization command ({@code ledger-finalize-records}, {@code auditor-finalize-records})
  * emits a completion token upon successful completion. The two tokens are then passed to {@code
- * coordinator-state-cleanup}, which uses them to determine the safe deletion window.
+ * coordinator-state-cleanup}, which uses them to determine the safe deletion window; the auditor
+ * token is also consumed by {@code request-proof-cleanup}.
  *
  * <p>The payload is JSON containing the server type, the guarantee timestamp ({@code
  * started_at_ms}), and a CRC32C checksum. It is wrapped in base64url so that it forms a single,
