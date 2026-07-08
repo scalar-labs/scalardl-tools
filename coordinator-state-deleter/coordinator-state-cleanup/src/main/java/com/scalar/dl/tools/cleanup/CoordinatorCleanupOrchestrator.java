@@ -84,8 +84,8 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
    *
    * @param props the properties used by the ScalarDL Ledger
    * @param checkpointDir root directory for checkpoint state
-   * @param ledgerTokenString the ledger completion token
-   * @param auditorTokenString the auditor completion token
+   * @param ledgerTokenString the Ledger completion token
+   * @param auditorTokenString the Auditor completion token
    * @return a new orchestrator instance
    */
   public static CoordinatorCleanupOrchestrator create(
@@ -204,7 +204,7 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
     long deletableBeforeMs = Math.min(ledgerTimestamp, auditorTimestamp);
 
     logger.info(
-        "Completion tokens parsed: ledger started at {}, auditor started at {}",
+        "Completion tokens parsed: Ledger started at {}, Auditor started at {}",
         Instant.ofEpochMilli(ledgerTimestamp),
         Instant.ofEpochMilli(auditorTimestamp));
 

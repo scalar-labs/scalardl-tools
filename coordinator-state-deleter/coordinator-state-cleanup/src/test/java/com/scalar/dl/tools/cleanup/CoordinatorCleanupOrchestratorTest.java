@@ -60,22 +60,22 @@ class CoordinatorCleanupOrchestratorTest {
   static Stream<Arguments> invalidTokenProvider() {
     String undecodableToken = "aW52YWxpZC10b2tlbg"; // base64url("invalid-token"), not valid JSON
     return Stream.of(
-        // An undecodable ledger token.
+        // An undecodable Ledger token.
         Arguments.of(
             undecodableToken,
             createAuditorToken(1000L),
             CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED),
-        // An undecodable auditor token.
+        // An undecodable Auditor token.
         Arguments.of(
             createLedgerToken(1000L),
             undecodableToken,
             CoordinatorStateDeleterError.COMPLETION_TOKEN_DECODE_FAILED),
-        // An auditor token supplied in the ledger slot.
+        // An Auditor token supplied in the Ledger slot.
         Arguments.of(
             createAuditorToken(1000L),
             createAuditorToken(2000L),
             CoordinatorStateDeleterError.LEDGER_TOKEN_WRONG_SERVER_TYPE),
-        // A ledger token supplied in the auditor slot.
+        // A Ledger token supplied in the Auditor slot.
         Arguments.of(
             createLedgerToken(1000L),
             createLedgerToken(2000L),
