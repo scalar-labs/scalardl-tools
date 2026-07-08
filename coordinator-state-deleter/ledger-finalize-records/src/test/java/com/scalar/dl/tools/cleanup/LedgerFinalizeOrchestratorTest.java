@@ -79,7 +79,8 @@ class LedgerFinalizeOrchestratorTest {
     // Act & Assert
     assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
         .isInstanceOf(CoordinatorStateDeleterException.class)
-        .hasMessageContaining("JDBC transaction manager");
+        .hasMessageContaining("jdbc")
+        .hasMessageContaining("not supported");
   }
 
   @Test

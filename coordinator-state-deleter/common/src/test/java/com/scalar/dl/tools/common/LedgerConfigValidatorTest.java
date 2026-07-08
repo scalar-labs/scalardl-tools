@@ -35,7 +35,22 @@ class LedgerConfigValidatorTest {
     // Act Assert
     assertThatThrownBy(() -> LedgerConfigValidator.validate(databaseConfig))
         .isInstanceOf(CoordinatorStateDeleterException.class)
-        .hasMessageContaining("JDBC transaction manager")
+        .hasMessageContaining("jdbc")
+        .hasMessageContaining("not supported");
+  }
+
+  @Test
+  void
+      validate_singleCrudOperationTransactionManagerGiven_shouldThrowCoordinatorStateDeleterException() {
+    // Arrange
+    Properties props = baseProperties();
+    props.setProperty(DatabaseConfig.TRANSACTION_MANAGER, "single-crud-operation");
+    DatabaseConfig databaseConfig = new DatabaseConfig(props);
+
+    // Act Assert
+    assertThatThrownBy(() -> LedgerConfigValidator.validate(databaseConfig))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining("single-crud-operation")
         .hasMessageContaining("not supported");
   }
 

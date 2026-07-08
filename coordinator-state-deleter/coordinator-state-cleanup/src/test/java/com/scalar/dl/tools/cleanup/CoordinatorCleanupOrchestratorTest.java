@@ -131,7 +131,8 @@ class CoordinatorCleanupOrchestratorTest {
                 CoordinatorCleanupOrchestrator.create(
                     props, tempDir, createLedgerToken(1000L), createAuditorToken(2000L)))
         .isInstanceOf(CoordinatorStateDeleterException.class)
-        .hasMessageContaining("JDBC transaction manager");
+        .hasMessageContaining("jdbc")
+        .hasMessageContaining("not supported");
   }
 
   @Test

@@ -10,27 +10,26 @@ import java.util.Objects;
  */
 public final class LedgerConfigValidator {
 
-  private static final String JDBC_TRANSACTION_MANAGER = "jdbc";
-
   private LedgerConfigValidator() {}
 
   /**
    * Throws if the configuration is not supported by the Ledger-side tools.
    *
    * @param databaseConfig the ScalarDB database configuration
-   * @throws CoordinatorStateDeleterException if the JDBC transaction manager is used, or if the
-   *     Coordinator group commit is enabled
+   * @throws CoordinatorStateDeleterException if the transaction manager is not the Consensus Commit
+   *     transaction manager, or if the Coordinator group commit is enabled
    */
   public static void validate(DatabaseConfig databaseConfig) {
     Objects.requireNonNull(databaseConfig, "databaseConfig must not be null");
-    throwIfJdbcTransactionManager(databaseConfig);
+    throwIfNotConsensusCommitTransactionManager(databaseConfig);
     throwIfGroupCommitEnabled(databaseConfig);
   }
 
-  private static void throwIfJdbcTransactionManager(DatabaseConfig databaseConfig) {
-    if (JDBC_TRANSACTION_MANAGER.equalsIgnoreCase(databaseConfig.getTransactionManager())) {
+  private static void throwIfNotConsensusCommitTransactionManager(DatabaseConfig databaseConfig) {
+    String transactionManager = databaseConfig.getTransactionManager();
+    if (!ConsensusCommitConfig.TRANSACTION_MANAGER_NAME.equals(transactionManager)) {
       throw new CoordinatorStateDeleterException(
-          CoordinatorStateDeleterError.JDBC_TRANSACTION_MANAGER_NOT_SUPPORTED);
+          CoordinatorStateDeleterError.UNSUPPORTED_TRANSACTION_MANAGER, transactionManager);
     }
   }
 

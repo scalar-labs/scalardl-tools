@@ -71,10 +71,10 @@ public enum CoordinatorStateDeleterError implements ScalarDlToolsError {
       "The configured storage '%s' is not supported.",
       "",
       "Use a supported storage."),
-  JDBC_TRANSACTION_MANAGER_NOT_SUPPORTED(
+  UNSUPPORTED_TRANSACTION_MANAGER(
       Category.USER_ERROR,
       "011",
-      "The JDBC transaction manager is not supported.",
+      "The configured transaction manager '%s' is not supported.",
       "",
       "This tool supports only the ScalarDB Consensus Commit transaction manager."),
   GROUP_COMMIT_NOT_SUPPORTED(
