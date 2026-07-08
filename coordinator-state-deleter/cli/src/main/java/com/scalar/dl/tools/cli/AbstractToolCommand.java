@@ -14,6 +14,12 @@ import java.util.concurrent.Callable;
  */
 public abstract class AbstractToolCommand extends CommonOptions implements Callable<Integer> {
 
+  /** Exit code returned on success. */
+  public static final int SUCCESS_EXIT_CODE = 0;
+
+  /** Exit code returned on any failure. */
+  public static final int FAILURE_EXIT_CODE = 1;
+
   @Override
   public final Integer call() {
     try {
@@ -23,7 +29,7 @@ public abstract class AbstractToolCommand extends CommonOptions implements Calla
     } catch (Exception e) {
       Common.printError(e);
       logStackTrace(e);
-      return 1;
+      return FAILURE_EXIT_CODE;
     }
   }
 

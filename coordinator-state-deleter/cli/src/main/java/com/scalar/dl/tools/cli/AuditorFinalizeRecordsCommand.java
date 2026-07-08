@@ -25,6 +25,9 @@ import picocli.CommandLine.Command;
       "Hand the emitted token to the Ledger operator for the 'coordinator-state-cleanup' command."
     })
 public class AuditorFinalizeRecordsCommand extends AbstractToolCommand {
+  // This is deliberately the only command that composes two orchestrators. The CLI is the sole
+  // consumer, so the two-phase Auditor workflow is sequenced here rather than extracted into a
+  // shared composing orchestrator.
 
   @Override
   protected Integer execute(Properties props, Path checkpointDir) throws Exception {
@@ -47,7 +50,7 @@ public class AuditorFinalizeRecordsCommand extends AbstractToolCommand {
     }
 
     Common.printOutput(Common.completionTokenOutput(auditorToken));
-    return 0;
+    return SUCCESS_EXIT_CODE;
   }
 
   @VisibleForTesting

@@ -41,7 +41,7 @@ public class CoordinatorStateCleanupCommand extends AbstractToolCommand {
     // Emit the success output only after close() so a failure while releasing resources cannot
     // produce a success output followed by an error output.
     Common.printOutput(null);
-    return 0;
+    return SUCCESS_EXIT_CODE;
   }
 
   @VisibleForTesting

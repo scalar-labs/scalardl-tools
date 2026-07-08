@@ -28,7 +28,7 @@ public class LedgerFinalizeRecordsCommand extends AbstractToolCommand {
     // Emit the success output only after close() so a failure while releasing resources cannot
     // produce a success output followed by an error output.
     Common.printOutput(Common.completionTokenOutput(token));
-    return 0;
+    return SUCCESS_EXIT_CODE;
   }
 
   @VisibleForTesting

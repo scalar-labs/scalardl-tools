@@ -28,16 +28,13 @@ public class CommonOptions {
       description = "Directory to persist resumable-scan state.")
   protected String checkpointDir;
 
-  // Defaults to true: the finalize/cleanup commands are heavyweight, state-mutating operations that
-  // an operator cannot cheaply re-run, so a failure must surface full diagnostics immediately
-  // rather than forcing an opt-in re-run just to obtain the stack trace.
+  // The finalize/cleanup commands are heavyweight, state-mutating operations that an operator
+  // cannot cheaply re-run, so by default a failure surfaces the full stack trace immediately rather
+  // than forcing an opt-in re-run just to obtain it; --no-stacktrace opts out of that output.
   @Option(
-      names = {"--stacktrace"},
-      negatable = true,
-      defaultValue = "true",
-      description =
-          "Output the Java stack trace to stderr on failure. Use --no-stacktrace to disable.")
-  protected boolean stacktraceEnabled;
+      names = {"--no-stacktrace"},
+      description = "Do not output the Java stack trace to stderr on failure.")
+  protected boolean stacktraceSuppressed;
 
   @Option(
       names = {"-h", "--help"},
@@ -55,13 +52,13 @@ public class CommonOptions {
   }
 
   /**
-   * Logs the full stack trace of the given exception when {@code --stacktrace} is set. The error
-   * message itself is always emitted separately via {@link Common#printError(Exception)}.
+   * Logs the full stack trace of the given exception unless {@code --no-stacktrace} is set. The
+   * error message itself is always emitted separately via {@link Common#printError(Exception)}.
    *
    * @param e the exception to log
    */
   protected void logStackTrace(Exception e) {
-    if (stacktraceEnabled) {
+    if (!stacktraceSuppressed) {
       logger.error("The command failed with an exception.", e);
     }
   }
