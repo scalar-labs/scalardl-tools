@@ -1,0 +1,66 @@
+# Delete the ScalarDB schema created by schema-loader.yaml. Run at teardown so the
+# shared E2E Cosmos account does not accumulate tables/data/registrations across
+# runs (keeps RU down and each run clean).
+#
+# Reuses the schema-loader-config ConfigMap and ghcr-secret created during deploy,
+# so it needs no extra envsubst variables beyond ${LEDGER_NS} / ${AUDITOR_NS} /
+# ${SCHEMA_LOADER_IMAGE}. The ledger Job also drops the Consensus Commit
+# coordinator tables (--coordinator); the auditor side has none.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-loader-delete-ledger
+  namespace: ${LEDGER_NS}
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: schema-loader-delete-ledger
+          image: ${SCHEMA_LOADER_IMAGE}
+          args: ["--config", "/config/database.properties", "-D", "--coordinator"]
+          env:
+            - name: SCHEMA_TYPE
+              value: "ledger"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: schema-loader-config
+
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-loader-delete-auditor
+  namespace: ${AUDITOR_NS}
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: schema-loader-delete-auditor
+          image: ${SCHEMA_LOADER_IMAGE}
+          args: ["--config", "/config/database.properties", "-D"]
+          env:
+            - name: SCHEMA_TYPE
+              value: "auditor"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: schema-loader-config

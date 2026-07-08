@@ -1,0 +1,86 @@
+plugins {
+    id 'java-library'
+}
+
+// The E2E module hosts source sets that drive REAL running ScalarDL servers.
+//   populate: generates "old data" against a 3.13.0 Ledger+Auditor.
+//   verify:   runs the CLI tools against 3.14.0-SNAPSHOT and asserts the outcome.
+sourceSets {
+    populate {
+        java.srcDir file('src/populate/java')
+        resources.srcDir file('src/populate/resources')
+    }
+    verify {
+        java.srcDir file('src/verify/java')
+        resources.srcDir file('src/verify/resources')
+    }
+}
+
+configurations {
+    populateImplementation.extendsFrom implementation
+    populateRuntimeOnly.extendsFrom runtimeOnly
+    verifyImplementation.extendsFrom testImplementation
+    verifyRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    populateImplementation "com.scalar-labs:scalardl-java-client-sdk:${scalardlVersion}"
+    populateImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+
+    // The verify source set runs the actual CLI in-process, so it depends on the CLI project
+    // (which pulls in the four orchestrator modules + client SDK), plus ScalarDB for reading Cosmos
+    // back when asserting.
+    verifyImplementation project(':cli')
+    // For AuditorInternalValues (asset_lock table/column names, lock-type values) used by the
+    // Cosmos-level assertions.
+    verifyImplementation project(':common')
+    verifyImplementation "com.scalar-labs:scalardb:${scalarDbVersion}"
+    verifyImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    // The CLI declares picocli as 'implementation', so it is not on our compile classpath; the
+    // verify test builds a CommandLine directly, so depend on picocli explicitly.
+    verifyImplementation "info.picocli:picocli:${picoCliVersion}"
+}
+
+spotless {
+    java {
+        target 'src/*/java/**/*.java'
+        importOrder()
+        removeUnusedImports()
+        googleJavaFormat(googleJavaFormatVersion)
+    }
+}
+
+// 'check' has no test source set here, so make it also compile the populate/verify
+// source sets (in addition to spotlessCheck) so CI catches compile breaks.
+tasks.named('check') {
+    dependsOn 'compilePopulateJava', 'compileVerifyJava'
+}
+
+// Drives committed + stranded auditor-mode writes against the running 3.13.0 servers and writes a
+// seed-metadata file. Connection details come from -De2e.* system properties.
+tasks.register('e2ePopulate', JavaExec) {
+    group 'verification'
+    description 'Generate committed + stranded auditor-mode data against running ScalarDL servers.'
+    classpath = sourceSets.populate.runtimeClasspath
+    mainClass = 'com.scalar.dl.tools.e2e.populate.PopulateMain'
+    systemProperties(
+        System.getProperties().findAll {
+            it.key.toString().startsWith('e2e.')
+        } as Map<String, ? extends Object>)
+    outputs.upToDateWhen { false }
+}
+
+// Runs the CLI 3 commands in-process against the running 3.14.0-SNAPSHOT servers + Cosmos and
+// asserts the outcome. Forwards -De2e.* (server targets) and -Dscalardb* (Cosmos) system properties.
+tasks.register('minikubeE2eTest', Test) {
+    useJUnitPlatform()
+    group 'verification'
+    description 'Run the coordinator-state-deleter CLI against running ScalarDL servers.'
+    testClassesDirs = sourceSets.verify.output.classesDirs
+    classpath = sourceSets.verify.runtimeClasspath
+    systemProperties(
+        System.getProperties().findAll {
+            it.key.toString().startsWith('e2e.') || it.key.toString().startsWith('scalardb')
+        } as Map<String, ? extends Object>)
+    outputs.upToDateWhen { false }
+}

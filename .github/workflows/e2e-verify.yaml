@@ -1,0 +1,215 @@
+name: E2E Verify (full pipeline)
+
+# The real end-to-end test for coordinator-state-deleter:
+#   1. deploy ScalarDL 3.13.0 on minikube (Cosmos storage)
+#   2. populate committed + stranded auditor-mode data (3.13.0 on-disk format)
+#   3. switch servers to 3.14.0-SNAPSHOT (the tool's upgrade use case)
+#   4. run the CLI 3 commands against 3.14 + Cosmos and assert the outcome
+#
+# Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT (ghcr pull + GitHub
+# Packages read for the 4.0.0-SNAPSHOT client SDK).
+
+on:
+  # Temporary: validate on the feature branch via push AND on PRs before merge.
+  # Remove both 'push' and 'pull_request' when merging to master (rely on
+  # workflow_dispatch; add a nightly schedule then if wanted).
+  push:
+    branches: [add-e2e]
+    paths:
+      - 'coordinator-state-deleter/**'
+      - '.github/workflows/e2e-verify.yaml'
+  pull_request:
+    paths:
+      - 'coordinator-state-deleter/**'
+      - '.github/workflows/e2e-verify.yaml'
+  workflow_dispatch:
+    inputs:
+      populate_version:
+        description: 'ScalarDL version for populate (old data)'
+        default: '3.13.0'
+      verify_version:
+        description: 'ScalarDL version for verify (tool run)'
+        default: '3.14.0-SNAPSHOT'
+      populate_count:
+        description: 'Number of committed assets to create'
+        default: '4'
+
+defaults:
+  run:
+    working-directory: coordinator-state-deleter
+
+concurrency:
+  group: e2e-cosmos
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: populate 3.13 -> verify 3.14
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      RUN_ID: ${{ github.run_id }}
+      POPULATE_VERSION: ${{ github.event.inputs.populate_version || '3.13.0' }}
+      VERIFY_VERSION: ${{ github.event.inputs.verify_version || '3.14.0-SNAPSHOT' }}
+      POPULATE_COUNT: ${{ github.event.inputs.populate_count || '4' }}
+      GHCR_USER: ${{ github.actor }}
+      GPR_USERNAME: ${{ github.actor }}
+      GPR_PASSWORD: ${{ secrets.CR_PAT }}
+      COSMOS_URI: ${{ secrets.COSMOS_URI }}
+      COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+      CR_PAT: ${{ secrets.CR_PAT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up minikube
+        uses: medyagh/setup-minikube@latest
+        with:
+          cpus: '4'
+          memory: '8192'
+
+      - name: Deploy ScalarDL (populate version)
+        env:
+          LEDGER_VERSION: ${{ env.POPULATE_VERSION }}
+          AUDITOR_VERSION: ${{ env.POPULATE_VERSION }}
+          SCHEMA_LOADER_VERSION: ${{ env.POPULATE_VERSION }}
+        run: ./ci/e2e/cluster.sh deploy
+
+      - name: Populate committed data
+        run: |
+          set -euo pipefail
+          LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
+          # kubectl port-forwards from a previous step survive into this one and keep
+          # their local ports bound (now pointing at deleted pods after a redeploy),
+          # which surfaces as "connection refused" mid-run. Kill any leftovers first.
+          pkill -f 'kubectl.*port-forward' 2>/dev/null || true
+          sleep 2
+          kubectl -n "$LNS" port-forward svc/ledger 50051:50051 50052:50052 >/tmp/pf-l.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-a.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor-privileged 40052:40052 >/tmp/pf-ap.log 2>&1 &
+          for p in 50051 50052 40051 40052; do
+            ok=""; for _ in $(seq 1 30); do
+              if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
+              sleep 1; done
+            [ -n "$ok" ] || { echo "::error::localhost:$p not reachable"; exit 1; }
+          done
+          ./gradlew :e2e:e2ePopulate \
+            -De2e.mode=committed \
+            -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
+            -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
+            -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e -De2e.populate.count="${POPULATE_COUNT}"
+
+      - name: Generate stranded lock (Ledger down)
+        run: |
+          set -euo pipefail
+          LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
+          # kubectl port-forwards from a previous step survive into this one and keep
+          # their local ports bound (now pointing at deleted pods after a redeploy),
+          # which surfaces as "connection refused" mid-run. Kill any leftovers first.
+          pkill -f 'kubectl.*port-forward' 2>/dev/null || true
+          sleep 2
+          kubectl -n "$LNS" scale deployment/scalardl-ledger --replicas=0
+          kubectl -n "$LNS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s
+          kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-a2.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor-privileged 40052:40052 >/tmp/pf-ap2.log 2>&1 &
+          for p in 40051 40052; do
+            ok=""; for _ in $(seq 1 30); do
+              if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
+              sleep 1; done
+            [ -n "$ok" ] || { echo "::error::localhost:$p not reachable"; exit 1; }
+          done
+          ./gradlew :e2e:e2ePopulate \
+            -De2e.mode=stranded \
+            -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
+            -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
+            -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e
+          echo "Waiting 20s for the held lock to pass the 15s valid period ..."
+          sleep 20
+
+      - name: Switch servers to verify version
+        env:
+          LEDGER_VERSION: ${{ env.VERIFY_VERSION }}
+          AUDITOR_VERSION: ${{ env.VERIFY_VERSION }}
+        run: ./ci/e2e/cluster.sh redeploy
+
+      - name: Run verify (CLI 3 commands)
+        run: |
+          set -euo pipefail
+          LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
+          # kubectl port-forwards from a previous step survive into this one and keep
+          # their local ports bound (now pointing at deleted pods after a redeploy),
+          # which surfaces as "connection refused" mid-run. Kill any leftovers first.
+          pkill -f 'kubectl.*port-forward' 2>/dev/null || true
+          sleep 2
+          kubectl -n "$LNS" port-forward svc/ledger 50051:50051 50052:50052 >/tmp/pf-lv.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-av.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor-privileged 40052:40052 >/tmp/pf-apv.log 2>&1 &
+          for p in 50051 50052 40051 40052; do
+            ok=""; for _ in $(seq 1 30); do
+              if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
+              sleep 1; done
+            [ -n "$ok" ] || { echo "::error::localhost:$p not reachable"; exit 1; }
+          done
+          ./gradlew :e2e:minikubeE2eTest \
+            -Dscalardb.cosmos.uri="${COSMOS_URI}" \
+            -Dscalardb.cosmos.password="${COSMOS_KEY}" \
+            -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
+            -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
+            -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e
+
+      - name: Upload verify test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-verify-report
+          path: coordinator-state-deleter/e2e/build/reports/tests/minikubeE2eTest/
+          if-no-files-found: warn
+
+      - name: Upload seed-metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-seed-metadata
+          path: coordinator-state-deleter/e2e/build/e2e/seed-metadata.json
+          if-no-files-found: warn
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          mkdir -p /tmp/e2e-diag
+          cp /tmp/pf-*.log /tmp/e2e-diag/ 2>/dev/null
+          for ns in "ledger-e2e-${RUN_ID}" "auditor-e2e-${RUN_ID}"; do
+            kubectl -n "$ns" get all -o wide            > "/tmp/e2e-diag/${ns}-get-all.txt" 2>&1
+            kubectl -n "$ns" describe pods              > "/tmp/e2e-diag/${ns}-describe-pods.txt" 2>&1
+            kubectl -n "$ns" get events --sort-by=.lastTimestamp > "/tmp/e2e-diag/${ns}-events.txt" 2>&1
+            for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
+              safe=$(echo "$p" | tr '/' '_')
+              kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=300 > "/tmp/e2e-diag/${ns}-${safe}.log" 2>&1
+            done
+          done
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-verify-diagnostics
+          path: /tmp/e2e-diag/
+
+      - name: Drop Cosmos schema
+        if: always()
+        # Fail-soft: cleanup best-effort. Must run before namespaces are deleted
+        # (it uses the in-namespace ConfigMap + ghcr-secret).
+        run: ./ci/e2e/cluster.sh drop-schema || echo "schema drop failed (non-fatal)"
+
+      - name: Tear down namespaces
+        if: always()
+        run: ./ci/e2e/cluster.sh clean

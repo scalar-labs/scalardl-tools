@@ -1,0 +1,147 @@
+# ScalarDL Auditor — deployed into ${AUDITOR_NS}, points at the Ledger in ${LEDGER_NS}.
+#
+# envsubst variables (see cluster.sh):
+#   ${AUDITOR_NS}   k8s namespace for the auditor
+#   ${LEDGER_NS}    namespace where the ledger Service lives (for cross-ns DNS)
+#   ${AUDITOR_IMAGE} full image ref, e.g. ghcr.io/scalar-labs/scalardl-auditor:3.13.0
+#   ${COSMOS_URI}   Cosmos DB account URI
+#   ${COSMOS_KEY}   Cosmos DB primary key
+#
+# Auth is HMAC. servers.authentication.hmac.secret_key MUST match the value in
+# ledger.yaml. Disposable test values only.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${AUDITOR_NS}
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auditor-config
+  namespace: ${AUDITOR_NS}
+data:
+  auditor.properties: |
+    scalar.db.storage=cosmos
+    scalar.db.contact_points=${COSMOS_URI}
+    scalar.db.password=${COSMOS_KEY}
+
+    # Ports (gRPC / privileged / admin). Prometheus disabled.
+    scalar.dl.auditor.server.port=40051
+    scalar.dl.auditor.server.privileged_port=40052
+    scalar.dl.auditor.server.admin_port=40053
+    scalar.dl.auditor.server.prometheus_exporter_port=-1
+    scalar.dl.auditor.server.decommissioning_duration_secs=0
+
+    # Reach the Ledger via its cross-namespace ClusterIP DNS name.
+    scalar.dl.auditor.ledger.host=ledger.${LEDGER_NS}.svc.cluster.local
+    scalar.dl.auditor.ledger.port=50051
+    scalar.dl.auditor.ledger.privileged_port=50052
+
+    # HMAC authentication (clients and Ledger<->Auditor). The secret_key below
+    # MUST equal ledger.yaml's scalar.dl.ledger.servers.authentication.hmac.secret_key.
+    scalar.dl.auditor.authentication.method=hmac
+    scalar.dl.auditor.authentication.hmac.cipher_key=e2e-hmac-cipher-key-disposable-0123456789abcdef
+    scalar.dl.auditor.servers.authentication.hmac.secret_key=e2e-servers-hmac-secret-disposable-0123456789
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalardl-auditor
+  namespace: ${AUDITOR_NS}
+  labels:
+    app: scalardl-auditor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scalardl-auditor
+  template:
+    metadata:
+      labels:
+        app: scalardl-auditor
+    spec:
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: scalardl-auditor
+          image: ${AUDITOR_IMAGE}
+          # docker-entrypoint.sh execs "$@"; point --config at the mounted file.
+          args: ["./bin/scalar-auditor", "--config=/etc/scalardl/auditor.properties"]
+          ports:
+            - name: grpc
+              containerPort: 40051
+            - name: privileged
+              containerPort: 40052
+            - name: admin
+              containerPort: 40053
+          readinessProbe:
+            tcpSocket:
+              port: 40051
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: 40051
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/scalardl
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: auditor-config
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: auditor
+  namespace: ${AUDITOR_NS}
+spec:
+  type: ClusterIP
+  selector:
+    app: scalardl-auditor
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 40051
+      targetPort: 40051
+    - name: admin
+      protocol: TCP
+      port: 40053
+      targetPort: 40053
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: auditor-privileged
+  namespace: ${AUDITOR_NS}
+spec:
+  type: ClusterIP
+  selector:
+    app: scalardl-auditor
+  ports:
+    - name: privileged
+      protocol: TCP
+      port: 40052
+      targetPort: 40052

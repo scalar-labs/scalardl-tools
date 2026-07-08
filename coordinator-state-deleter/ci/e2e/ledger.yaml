@@ -1,0 +1,136 @@
+# ScalarDL Ledger — deployed into ${LEDGER_NS}.
+#
+# envsubst variables (see cluster.sh):
+#   ${LEDGER_NS}   k8s namespace for the ledger
+#   ${LEDGER_IMAGE} full image ref, e.g. ghcr.io/scalar-labs/scalardl-ledger:3.13.0
+#   ${COSMOS_URI}  Cosmos DB account URI
+#   ${COSMOS_KEY}  Cosmos DB primary key
+#
+# Auth is HMAC (not digital signature): the Ledger and Auditor authenticate each
+# other with a shared servers.authentication.hmac.secret_key, which avoids the
+# server-to-server certificate registration that digital-signature mode needs.
+# The secret/cipher values below are throwaway test values for this disposable
+# E2E cluster only; never reuse them. The auditor manifest MUST use the SAME
+# servers.authentication.hmac.secret_key value.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${LEDGER_NS}
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ledger-config
+  namespace: ${LEDGER_NS}
+data:
+  ledger.properties: |
+    scalar.db.storage=cosmos
+    scalar.db.contact_points=${COSMOS_URI}
+    scalar.db.password=${COSMOS_KEY}
+
+    # Ports (gRPC / privileged / admin). Prometheus disabled.
+    scalar.dl.ledger.server.port=50051
+    scalar.dl.ledger.server.privileged_port=50052
+    scalar.dl.ledger.server.admin_port=50053
+    scalar.dl.ledger.server.prometheus_exporter_port=-1
+    scalar.dl.ledger.server.decommissioning_duration_secs=0
+
+    # Auditor / proof mode. Required so the Auditor can pair with this Ledger.
+    scalar.dl.ledger.proof.enabled=true
+    scalar.dl.ledger.auditor.enabled=true
+
+    # HMAC authentication (clients and Ledger<->Auditor).
+    scalar.dl.ledger.authentication.method=hmac
+    scalar.dl.ledger.authentication.hmac.cipher_key=e2e-hmac-cipher-key-disposable-0123456789abcdef
+    scalar.dl.ledger.servers.authentication.hmac.secret_key=e2e-servers-hmac-secret-disposable-0123456789
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalardl-ledger
+  namespace: ${LEDGER_NS}
+  labels:
+    app: scalardl-ledger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scalardl-ledger
+  template:
+    metadata:
+      labels:
+        app: scalardl-ledger
+    spec:
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: scalardl-ledger
+          image: ${LEDGER_IMAGE}
+          # docker-entrypoint.sh execs "$@", so pass the full server command and
+          # point --config at our mounted properties (overrides the baked default).
+          args: ["./bin/scalar-ledger", "--config=/etc/scalardl/ledger.properties"]
+          ports:
+            - name: grpc
+              containerPort: 50051
+            - name: privileged
+              containerPort: 50052
+            - name: admin
+              containerPort: 50053
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/scalardl
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: ledger-config
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger
+  namespace: ${LEDGER_NS}
+spec:
+  type: ClusterIP
+  selector:
+    app: scalardl-ledger
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: 50051
+      targetPort: 50051
+    - name: privileged
+      protocol: TCP
+      port: 50052
+      targetPort: 50052
+    - name: admin
+      protocol: TCP
+      port: 50053
+      targetPort: 50053

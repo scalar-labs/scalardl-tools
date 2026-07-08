@@ -1,24 +1,16 @@
 name: CI
 
 on:
+  # Temporary: validate on the feature branch via push. Remove this 'push' block
+  # when merging to master (rely on pull_request + workflow_dispatch).
   push:
-    branches: [master]
+    branches: [add-e2e]
     paths:
-      - 'coordinator-state-deleter/common/**'
-      - 'coordinator-state-deleter/resumable-scan/**'
-      - 'coordinator-state-deleter/coordinator-state-cleanup/**'
-      - 'coordinator-state-deleter/ledger-finalize-records/**'
-      - 'coordinator-state-deleter/auditor-finalize-records/**'
-      - 'coordinator-state-deleter/request-proof-cleanup/**'
+      - 'coordinator-state-deleter/**'
       - '.github/workflows/ci.yaml'
   pull_request:
     paths:
-      - 'coordinator-state-deleter/common/**'
-      - 'coordinator-state-deleter/resumable-scan/**'
-      - 'coordinator-state-deleter/coordinator-state-cleanup/**'
-      - 'coordinator-state-deleter/ledger-finalize-records/**'
-      - 'coordinator-state-deleter/auditor-finalize-records/**'
-      - 'coordinator-state-deleter/request-proof-cleanup/**'
+      - 'coordinator-state-deleter/**'
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
 
@@ -44,6 +36,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run check
+        # GPR credentials are needed to resolve the scalardl-java-client-sdk
+        # 4.0.0-SNAPSHOT from GitHub Packages (used by cli/e2e and the orchestrators).
+        env:
+          GPR_USERNAME: ${{ github.actor }}
+          GPR_PASSWORD: ${{ secrets.CR_PAT }}
         run: |
           ./gradlew \
             :common:check \
@@ -51,7 +48,9 @@ jobs:
             :coordinator-state-cleanup:check \
             :ledger-finalize-records:check \
             :auditor-finalize-records:check \
-            :request-proof-cleanup:check
+            :request-proof-cleanup:check \
+            :cli:check \
+            :e2e:check
 
       - name: Upload test reports
         if: always()
@@ -65,10 +64,16 @@ jobs:
             coordinator-state-deleter/ledger-finalize-records/build/reports/tests/test/
             coordinator-state-deleter/auditor-finalize-records/build/reports/tests/test/
             coordinator-state-deleter/request-proof-cleanup/build/reports/tests/test/
+            coordinator-state-deleter/cli/build/reports/tests/test/
 
   integration-test:
     name: Cosmos DB integration test (resumable-scan)
     needs: check
+    # Skip the whole Cosmos integration chain on the temporary add-e2e push so it
+    # doesn't run heavy 5-job Cosmos tests (and contend on RU with e2e-verify) on
+    # every iteration. The chain is 'needs'-linked, so skipping this skips the rest.
+    # Runs normally on pull_request.
+    if: github.event_name != 'push' || github.ref_name != 'add-e2e'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
