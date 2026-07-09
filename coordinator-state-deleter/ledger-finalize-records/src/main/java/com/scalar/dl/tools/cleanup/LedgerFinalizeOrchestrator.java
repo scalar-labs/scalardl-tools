@@ -74,8 +74,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       StorageFactory storageFactory = StorageFactory.create(props);
       admin = storageFactory.getStorageAdmin();
       txManager = TransactionFactory.create(props).getTransactionManager();
-      ResumableScannerFactory scannerFactory =
-          new ResumableScannerFactory(new DatabaseConfig(props));
+      ResumableScannerFactory scannerFactory = new ResumableScannerFactory(databaseConfig);
       return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, checkpointDir);
     } catch (Exception e) {
       if (txManager != null) {
