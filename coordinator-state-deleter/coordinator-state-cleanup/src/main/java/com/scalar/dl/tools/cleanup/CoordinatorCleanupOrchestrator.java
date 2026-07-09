@@ -9,6 +9,8 @@ import com.scalar.db.transaction.consensuscommit.Coordinator;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
+import com.scalar.dl.tools.common.LedgerConfigValidator;
+import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -87,6 +89,7 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
    * @param ledgerTokenString the Ledger completion token
    * @param auditorTokenString the Auditor completion token
    * @return a new orchestrator instance
+   * @throws CoordinatorStateDeleterException if the configuration is not supported
    */
   public static CoordinatorCleanupOrchestrator create(
       Properties props,
@@ -94,6 +97,8 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
       @Nullable String ledgerTokenString,
       @Nullable String auditorTokenString) {
     DatabaseConfig dbConfig = new DatabaseConfig(props);
+    StorageValidator.validate(dbConfig);
+    LedgerConfigValidator.validate(dbConfig);
     DistributedStorage storage = StorageFactory.create(props).getStorage();
     try {
       ResumableScannerFactory scannerFactory = new ResumableScannerFactory(dbConfig);

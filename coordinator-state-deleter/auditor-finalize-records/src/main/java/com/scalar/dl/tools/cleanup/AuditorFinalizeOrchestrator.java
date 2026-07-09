@@ -13,6 +13,8 @@ import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
+import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -73,6 +75,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
    * @param checkpointDir root directory for checkpoint state
    * @return a new orchestrator instance
    * @throws IOException if the client configuration cannot be loaded
+   * @throws CoordinatorStateDeleterException if the configuration is not supported
    */
   // TODO: unify auditorProps and clientProps into a single Properties so callers only supply one
   //  configuration. We plan to make AuditorClient buildable without requiring additional client
@@ -84,6 +87,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
     AuditorClient auditorClient = null;
     try {
       DatabaseConfig databaseConfig = new DatabaseConfig(auditorProps);
+      StorageValidator.validate(databaseConfig);
       StorageFactory storageFactory = StorageFactory.create(auditorProps);
       admin = storageFactory.getStorageAdmin();
       storage = storageFactory.getStorage();

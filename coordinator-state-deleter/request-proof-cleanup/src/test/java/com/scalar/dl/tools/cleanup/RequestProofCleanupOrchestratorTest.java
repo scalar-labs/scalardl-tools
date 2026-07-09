@@ -1,15 +1,19 @@
 package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.scalar.db.api.DistributedStorage;
+import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
@@ -18,9 +22,11 @@ import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
+import java.util.Properties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 @SuppressWarnings("resource")
 class RequestProofCleanupOrchestratorTest {
@@ -54,6 +60,41 @@ class RequestProofCleanupOrchestratorTest {
   private RequestProofCleanupOrchestrator newOrchestrator(String namespace, String auditorToken) {
     return new RequestProofCleanupOrchestrator(
         storage, scannerFactory, tempDir, namespace, auditorToken);
+  }
+
+  @Test
+  void create_nonCosmosStorageGiven_shouldThrowCoordinatorStateDeleterException() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cassandra");
+
+    // Act & Assert
+    assertThatThrownBy(
+            () -> RequestProofCleanupOrchestrator.create(props, tempDir, createAuditorToken(3000L)))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining("not supported");
+  }
+
+  @Test
+  void create_cosmosStorageGiven_shouldNotThrow() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cosmos");
+
+    StorageFactory storageFactory = mock(StorageFactory.class);
+    when(storageFactory.getStorage()).thenReturn(mock(DistributedStorage.class));
+
+    try (MockedStatic<StorageFactory> storageFactoryStatic = mockStatic(StorageFactory.class)) {
+      storageFactoryStatic
+          .when(() -> StorageFactory.create(any(Properties.class)))
+          .thenReturn(storageFactory);
+
+      // Act & Assert
+      assertThatCode(
+              () ->
+                  RequestProofCleanupOrchestrator.create(props, tempDir, createAuditorToken(3000L)))
+          .doesNotThrowAnyException();
+    }
   }
 
   @Test

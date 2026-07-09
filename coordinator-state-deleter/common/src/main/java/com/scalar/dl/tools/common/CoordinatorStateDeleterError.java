@@ -65,6 +65,24 @@ public enum CoordinatorStateDeleterError implements ScalarDlToolsError {
       "The checkpoint directory path is invalid: %s.",
       "",
       "Provide a valid filesystem path for the checkpoint directory."),
+  UNSUPPORTED_STORAGE(
+      Category.USER_ERROR,
+      "010",
+      "The configured storage '%s' is not supported.",
+      "",
+      "Use a supported storage."),
+  UNSUPPORTED_TRANSACTION_MANAGER(
+      Category.USER_ERROR,
+      "011",
+      "The configured transaction manager '%s' is not supported.",
+      "",
+      "This tool supports only the ScalarDB Consensus Commit transaction manager."),
+  GROUP_COMMIT_NOT_SUPPORTED(
+      Category.USER_ERROR,
+      "012",
+      "The Coordinator group commit is not supported.",
+      "",
+      "This tool supports only configurations with the Coordinator group commit disabled."),
 
   //
   // Errors for the internal error category

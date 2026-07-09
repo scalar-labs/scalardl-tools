@@ -1,11 +1,13 @@
 package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,7 +15,11 @@ import static org.mockito.Mockito.when;
 
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
+import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.service.StorageFactory;
+import com.scalar.db.service.TransactionFactory;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
@@ -22,9 +28,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.Properties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 @SuppressWarnings("resource")
 class LedgerFinalizeOrchestratorTest {
@@ -47,6 +55,60 @@ class LedgerFinalizeOrchestratorTest {
 
   private LedgerFinalizeOrchestrator newOrchestrator() {
     return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+  }
+
+  @Test
+  void create_nonCosmosStorageGiven_shouldThrowCoordinatorStateDeleterException() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cassandra");
+
+    // Act & Assert
+    assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining("not supported");
+  }
+
+  @Test
+  void create_jdbcTransactionManagerGiven_shouldThrowCoordinatorStateDeleterException() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cosmos");
+    props.setProperty(DatabaseConfig.TRANSACTION_MANAGER, "jdbc");
+
+    // Act & Assert
+    assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining("jdbc")
+        .hasMessageContaining("not supported");
+  }
+
+  @Test
+  void create_cosmosStorageGiven_shouldNotThrow() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cosmos");
+
+    StorageFactory storageFactory = mock(StorageFactory.class);
+    when(storageFactory.getStorageAdmin()).thenReturn(mock(DistributedStorageAdmin.class));
+    TransactionFactory transactionFactory = mock(TransactionFactory.class);
+    when(transactionFactory.getTransactionManager())
+        .thenReturn(mock(DistributedTransactionManager.class));
+
+    try (MockedStatic<StorageFactory> storageFactoryStatic = mockStatic(StorageFactory.class);
+        MockedStatic<TransactionFactory> transactionFactoryStatic =
+            mockStatic(TransactionFactory.class)) {
+      storageFactoryStatic
+          .when(() -> StorageFactory.create(any(Properties.class)))
+          .thenReturn(storageFactory);
+      transactionFactoryStatic
+          .when(() -> TransactionFactory.create(any(Properties.class)))
+          .thenReturn(transactionFactory);
+
+      // Act & Assert
+      assertThatCode(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+          .doesNotThrowAnyException();
+    }
   }
 
   @Test

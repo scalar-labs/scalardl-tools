@@ -8,6 +8,8 @@ plugins {
 }
 
 dependencies {
+    api "com.scalar-labs:scalardb:${scalarDbVersion}"
+
     errorprone "com.google.errorprone:error_prone_core:${errorproneVersion}"
     spotbugs "com.github.spotbugs:spotbugs:${spotbugsVersion}"
     compileOnly "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
