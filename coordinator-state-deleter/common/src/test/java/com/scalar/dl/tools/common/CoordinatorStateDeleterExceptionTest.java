@@ -15,7 +15,7 @@ class CoordinatorStateDeleterExceptionTest {
 
     // Assert
     assertThat(exception.getMessage())
-        .isEqualTo("DL-TOOLS-1007: The auditor completion token is required for the initial run.");
+        .isEqualTo("DL-TOOLS-1007: The Auditor completion token is required for the initial run.");
     assertThat(exception.getCategory()).isEqualTo(Category.USER_ERROR);
   }
 

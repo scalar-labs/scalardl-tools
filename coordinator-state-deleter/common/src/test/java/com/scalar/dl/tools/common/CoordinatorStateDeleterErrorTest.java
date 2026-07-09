@@ -61,7 +61,7 @@ class CoordinatorStateDeleterErrorTest {
     // Assert
     assertThat(message)
         .isEqualTo(
-            "DL-TOOLS-1004: Both ledger and auditor completion tokens are required for the "
+            "DL-TOOLS-1004: Both Ledger and Auditor completion tokens are required for the "
                 + "initial run.");
   }
 
