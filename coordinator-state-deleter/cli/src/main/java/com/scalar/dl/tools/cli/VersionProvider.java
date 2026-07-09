@@ -8,7 +8,7 @@ import picocli.CommandLine.IVersionProvider;
  */
 public class VersionProvider implements IVersionProvider {
 
-  private static final String PRODUCT_NAME = "Coordinator State Deleter";
+  private static final String PRODUCT_NAME = "ScalarDL Cleanup";
 
   @Override
   public String[] getVersion() {

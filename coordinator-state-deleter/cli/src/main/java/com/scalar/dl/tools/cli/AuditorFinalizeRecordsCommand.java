@@ -9,7 +9,7 @@ import java.util.Properties;
 import picocli.CommandLine.Command;
 
 /**
- * {@code auditor-finalize-records}: a single Auditor-side command that runs two phases in sequence.
+ * {@code finalize-auditor}: a single Auditor-side command that runs two phases in sequence.
  *
  * <ol>
  *   <li>Finalize every unreleased asset lock across all {@code asset_lock} tables, producing a
@@ -19,10 +19,10 @@ import picocli.CommandLine.Command;
  * </ol>
  */
 @Command(
-    name = "auditor-finalize-records",
+    name = "finalize-auditor",
     description = {
       "Finalize unreleased asset locks, clean up settled request proof records, and emit a completion token.",
-      "Hand the emitted token to the Ledger operator for the 'coordinator-state-cleanup' command."
+      "Hand the emitted token to the Ledger operator for the 'cleanup-coordinator' command."
     })
 public class AuditorFinalizeRecordsCommand extends AbstractToolCommand {
   // This is deliberately the only command that composes two orchestrators. The CLI is the sole

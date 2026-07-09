@@ -69,8 +69,8 @@ public class CoordinatorStateDeleterTest {
   }
 
   /**
-   * Runs {@code ledger-finalize-records} against a non-existent properties file so it fails before
-   * reaching any orchestrator.
+   * Runs {@code finalize-ledger} against a non-existent properties file so it fails before reaching
+   * any orchestrator.
    */
   private int executeFailingLedgerCommand(boolean disableStacktrace) {
     String missingProperties = tempDir.resolve("missing.properties").toString();
@@ -78,7 +78,7 @@ public class CoordinatorStateDeleterTest {
     if (disableStacktrace) {
       return CoordinatorStateDeleter.createCommandLine()
           .execute(
-              "ledger-finalize-records",
+              "finalize-ledger",
               "--no-stacktrace",
               "--properties",
               missingProperties,
@@ -87,11 +87,7 @@ public class CoordinatorStateDeleterTest {
     }
     return CoordinatorStateDeleter.createCommandLine()
         .execute(
-            "ledger-finalize-records",
-            "--properties",
-            missingProperties,
-            "--checkpoint-dir",
-            checkpoint);
+            "finalize-ledger", "--properties", missingProperties, "--checkpoint-dir", checkpoint);
   }
 
   @Test
@@ -117,7 +113,7 @@ public class CoordinatorStateDeleterTest {
   @Test
   void execute_missingRequiredOptionGiven_shouldEmitUserErrorJsonAndReturnOne() throws Exception {
     // Act
-    int exitCode = CoordinatorStateDeleter.createCommandLine().execute("ledger-finalize-records");
+    int exitCode = CoordinatorStateDeleter.createCommandLine().execute("finalize-ledger");
 
     // Assert
     assertThat(exitCode).isEqualTo(1);
@@ -130,7 +126,7 @@ public class CoordinatorStateDeleterTest {
     int exitCode =
         CoordinatorStateDeleter.createCommandLine()
             .execute(
-                "ledger-finalize-records",
+                "finalize-ledger",
                 "--properties",
                 "/path/to/server.properties",
                 "--checkpoint-dir",

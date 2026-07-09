@@ -8,28 +8,28 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
- * {@code coordinator-state-cleanup}: validates the two completion tokens, derives the
- * deletable-before boundary as the earlier of their guarantee timestamps, and deletes every
- * coordinator-state record created before it.
+ * {@code cleanup-coordinator}: validates the two completion tokens, derives the deletable-before
+ * boundary as the earlier of their guarantee timestamps, and deletes every coordinator-state record
+ * created before it.
  *
  * <p>The tokens are required only on the first run; on a resumed run the boundary persisted in the
  * checkpoint is reused and any passed tokens are ignored (the orchestrator logs a warning).
  */
 @Command(
-    name = "coordinator-state-cleanup",
+    name = "cleanup-coordinator",
     description = "Delete coordinator-state records that are safe to remove given both tokens.")
 public class CoordinatorStateCleanupCommand extends AbstractToolCommand {
 
   @Option(
       names = {"--ledger-token"},
       paramLabel = "LEDGER_TOKEN",
-      description = "The completion token emitted by the 'ledger-finalize-records' command.")
+      description = "The completion token emitted by the 'finalize-ledger' command.")
   private String ledgerToken;
 
   @Option(
       names = {"--auditor-token"},
       paramLabel = "AUDITOR_TOKEN",
-      description = "The completion token emitted by the 'auditor-finalize-records' command.")
+      description = "The completion token emitted by the 'finalize-auditor' command.")
   private String auditorToken;
 
   @Override

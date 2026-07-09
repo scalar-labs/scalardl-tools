@@ -40,19 +40,19 @@ public enum CoordinatorStateDeleterError implements ScalarDlToolsError {
       "005",
       "The ledger token has the wrong server type: %s.",
       "",
-      "Provide the token emitted by 'ledger-finalize-records' as the ledger completion token."),
+      "Provide the token emitted by 'finalize-ledger' as the ledger completion token."),
   AUDITOR_TOKEN_WRONG_SERVER_TYPE(
       Category.USER_ERROR,
       "006",
       "The auditor token has the wrong server type: %s.",
       "",
-      "Provide the token emitted by 'auditor-finalize-records' as the auditor completion token."),
+      "Provide the token emitted by 'finalize-auditor' as the auditor completion token."),
   AUDITOR_COMPLETION_TOKEN_REQUIRED(
       Category.USER_ERROR,
       "007",
       "The auditor completion token is required for the initial run.",
       "",
-      "Provide the auditor completion token emitted by 'auditor-finalize-records'."),
+      "Provide the auditor completion token emitted by 'finalize-auditor'."),
   CONFIGURATION_LOAD_FAILED(
       Category.USER_ERROR,
       "008",

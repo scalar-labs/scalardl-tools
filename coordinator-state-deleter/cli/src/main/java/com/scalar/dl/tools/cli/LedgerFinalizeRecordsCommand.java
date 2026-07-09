@@ -7,15 +7,15 @@ import java.util.Properties;
 import picocli.CommandLine.Command;
 
 /**
- * {@code ledger-finalize-records}: scans every transactional table managed by the Ledger-side
- * ScalarDB and finalizes records still in a non-terminal state, then emits a completion token
- * consumed by {@code coordinator-state-cleanup}.
+ * {@code finalize-ledger}: scans every transactional table managed by the Ledger-side ScalarDB and
+ * finalizes records still in a non-terminal state, then emits a completion token consumed by {@code
+ * cleanup-coordinator}.
  */
 @Command(
-    name = "ledger-finalize-records",
+    name = "finalize-ledger",
     description = {
       "Finalize non-terminal records across all transactional tables and emit a completion token.",
-      "Pass the emitted token to the 'coordinator-state-cleanup' command."
+      "Pass the emitted token to the 'cleanup-coordinator' command."
     })
 public class LedgerFinalizeRecordsCommand extends AbstractToolCommand {
 

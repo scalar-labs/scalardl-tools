@@ -15,7 +15,7 @@ import picocli.CommandLine.Spec;
  * subcommands into a single binary.
  */
 @Command(
-    name = "coordinator-state-deleter",
+    name = "scalardl-cleanup",
     mixinStandardHelpOptions = true,
     versionProvider = VersionProvider.class,
     subcommands = {

@@ -23,13 +23,13 @@ dependencies {
 
 application {
     mainClass = 'com.scalar.dl.tools.cli.CoordinatorStateDeleter'
-    applicationName = 'coordinator-state-deleter'
+    applicationName = 'scalardl-cleanup'
 }
 
 jar {
     manifest {
         attributes(
-            'Implementation-Title': 'coordinator-state-deleter',
+            'Implementation-Title': 'scalardl-cleanup',
             'Implementation-Version': project.version
         )
     }
