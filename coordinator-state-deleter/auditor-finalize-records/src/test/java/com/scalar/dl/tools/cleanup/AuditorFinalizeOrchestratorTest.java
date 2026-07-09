@@ -21,9 +21,12 @@ import com.scalar.db.api.Scan;
 import com.scalar.db.api.Scanner;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
+import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
+import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
@@ -36,6 +39,7 @@ import java.util.Properties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
@@ -229,6 +233,116 @@ class AuditorFinalizeOrchestratorTest {
     AuditorFinalizeState finalState = new AuditorFinalizeStateManager(tempDir).load();
     assertThat(finalState).isNotNull();
     assertThat(finalState.getCompletedNamespaces()).containsExactlyInAnyOrder("default", "ns1");
+  }
+
+  /** Path of the deferred-finalizations file the orchestrator uses for the default namespace. */
+  private Path defaultDeferredFinalizationsPath() {
+    return AuditorFinalizeOrchestrator.deferredFinalizationsPath(
+        new AuditorFinalizeStateManager(tempDir), NAMESPACE);
+  }
+
+  @Test
+  void execute_finalizationDeferredDuringGiven_shouldCompleteAndClearLog() throws Exception {
+    // Arrange - during the scan a lock is deferred (its recovery returned NOT_RECOVERABLE),
+    // simulated here by the scanner appending to the deferred log.
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME))
+        .thenReturn(false);
+    AppendOnlyLog seededLog = new AppendOnlyLog(defaultDeferredFinalizationsPath());
+    when(scanner.scan(eq(NAMESPACE), eq("asset_lock"), any()))
+        .thenAnswer(
+            invocation -> {
+              seededLog.append("active-asset");
+              return new ScanResult(1);
+            });
+    // The deferred lock is releasable by the time the post-scan retry runs.
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenReturn(LockRecoveryResult.SUCCEEDED);
+
+    // Act
+    String token = orchestrator().execute();
+
+    // Assert - the deferred lock is retried with its logical namespace, the log is cleared, the
+    // namespace is marked completed, and a token is emitted.
+    ArgumentCaptor<AssetLockRecoveryRequest> captor =
+        ArgumentCaptor.forClass(AssetLockRecoveryRequest.class);
+    verify(auditorClient).recover(captor.capture());
+    assertThat(captor.getValue().getNamespace()).isEqualTo("default");
+    assertThat(captor.getValue().getAssetId()).isEqualTo("active-asset");
+    assertThat(seededLog.load()).isEmpty();
+    assertThat(CompletionToken.decode(token).getServerType())
+        .isEqualTo(CompletionToken.ServerType.AUDITOR);
+
+    AuditorFinalizeState state = new AuditorFinalizeStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getCompletedNamespaces()).containsExactly("default");
+  }
+
+  @Test
+  void execute_deferredLockStillActiveOnRetryGiven_shouldAbortAndKeepLogAndNotComplete()
+      throws Exception {
+    // Arrange — the deferred lock is still active when the post-scan retry runs.
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME))
+        .thenReturn(false);
+    AppendOnlyLog seededLog = new AppendOnlyLog(defaultDeferredFinalizationsPath());
+    when(scanner.scan(eq(NAMESPACE), eq("asset_lock"), any()))
+        .thenAnswer(
+            invocation -> {
+              seededLog.append("active-asset");
+              return new ScanResult(1);
+            });
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenReturn(LockRecoveryResult.NOT_RECOVERABLE);
+
+    // Act & Assert — the run aborts with a descriptive error and emits no token.
+    assertThatThrownBy(() -> orchestrator().execute())
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(CoordinatorStateDeleterError.ASSET_LOCK_STILL_ACTIVE.buildCode())
+        .hasMessageContaining("active-asset");
+
+    // The still-active lock is kept in the log so it is retried, and the namespace is not
+    // completed.
+    assertThat(seededLog.load()).containsExactly("active-asset");
+    AuditorFinalizeState state = new AuditorFinalizeStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getCompletedNamespaces()).isEmpty();
+  }
+
+  @Test
+  void execute_someDeferredLocksFinalizedOnRetryGiven_shouldKeepOnlyStillActiveInLog()
+      throws Exception {
+    // Arrange — the scan defers three locks; on retry two finalize and one is still active.
+    when(admin.tableExists(NAMESPACE, AuditorInternalValues.NAMESPACE_TABLE_NAME))
+        .thenReturn(false);
+    AppendOnlyLog seededLog = new AppendOnlyLog(defaultDeferredFinalizationsPath());
+    when(scanner.scan(eq(NAMESPACE), eq("asset_lock"), any()))
+        .thenAnswer(
+            invocation -> {
+              seededLog.append("finalized-1");
+              seededLog.append("still-active");
+              seededLog.append("finalized-2");
+              return new ScanResult(3);
+            });
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenAnswer(
+            invocation -> {
+              AssetLockRecoveryRequest request = invocation.getArgument(0);
+              return request.getAssetId().equals("still-active")
+                  ? LockRecoveryResult.NOT_RECOVERABLE
+                  : LockRecoveryResult.SUCCEEDED;
+            });
+
+    // Act & Assert — the run aborts because one lock is still active.
+    assertThatThrownBy(() -> orchestrator().execute())
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining(CoordinatorStateDeleterError.ASSET_LOCK_STILL_ACTIVE.buildCode())
+        .hasMessageContaining("still-active");
+
+    // The log is rewritten to hold only the still-active lock; the finalized ones are dropped so it
+    // cannot grow across re-runs. The namespace is not marked completed.
+    assertThat(seededLog.load()).containsExactly("still-active");
+    AuditorFinalizeState state = new AuditorFinalizeStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getCompletedNamespaces()).isEmpty();
   }
 
   @Test

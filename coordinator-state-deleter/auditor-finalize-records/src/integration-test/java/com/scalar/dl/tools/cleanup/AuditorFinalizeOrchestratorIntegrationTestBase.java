@@ -1,6 +1,7 @@
 package com.scalar.dl.tools.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -18,7 +19,9 @@ import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,6 +29,7 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -206,6 +210,71 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
                 recoverKey("default", "asset-6"),
                 recoverKey("default", "read-future")));
     assertThat(capturedRecoverKeys()).isEqualTo(expected);
+  }
+
+  @Test
+  public void execute_lockNotRecoverableThenRecoverableGiven_shouldDeferAndRecoverOnRetry(
+      @TempDir Path checkpointDir) throws Exception {
+    // Arrange — a single READ lock. Its first recovery attempt (during the scan) reports the lock
+    // as still active (NOT_RECOVERABLE); by the time of the post-scan retry it can be released.
+    storageAdmin.truncateTable(NAMESPACE, AuditorInternalValues.ASSET_LOCK_TABLE_NAME);
+    putLockRecord("read-active", AuditorInternalValues.LOCK_TYPE_READ, OLD_TIMESTAMP);
+
+    AtomicInteger attempts = new AtomicInteger();
+    when(auditorClient.recover(any()))
+        .thenAnswer(
+            invocation -> {
+              AssetLockRecoveryRequest request = invocation.getArgument(0);
+              recoverKeys.add(recoverKey(request.getNamespace(), request.getAssetId()));
+              return attempts.getAndIncrement() == 0
+                  ? LockRecoveryResult.NOT_RECOVERABLE
+                  : LockRecoveryResult.SUCCEEDED;
+            });
+
+    // Act
+    AuditorFinalizeOrchestrator orchestrator = createOrchestrator(checkpointDir);
+    String completionToken = orchestrator.execute();
+
+    // Assert — the lock was recovered on the post-scan retry (attempted once during the scan and
+    // once on retry) and the run completed with a token.
+    assertThat(attempts.get()).isEqualTo(2);
+    assertThat(capturedRecoverKeys()).containsExactly(recoverKey("default", "read-active"));
+    assertThat(completionToken).isNotEmpty();
+
+    // The deferred log is cleared and the namespace is marked completed.
+    Path deferredFinalizationsFile =
+        checkpointDir
+            .resolve(AuditorFinalizeStateManager.SUBDIRECTORY)
+            .resolve(NAMESPACE + ".deferred");
+    assertThat(Files.exists(deferredFinalizationsFile)).isFalse();
+    AuditorFinalizeState state = new AuditorFinalizeStateManager(checkpointDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getCompletedNamespaces()).containsExactly("default");
+  }
+
+  @Test
+  public void execute_lockRemainsNotRecoverableGiven_shouldAbortAndKeepDeferredLog(
+      @TempDir Path checkpointDir) throws Exception {
+    // Arrange — a single READ lock whose recovery always reports it as still active.
+    storageAdmin.truncateTable(NAMESPACE, AuditorInternalValues.ASSET_LOCK_TABLE_NAME);
+    putLockRecord("read-active", AuditorInternalValues.LOCK_TYPE_READ, OLD_TIMESTAMP);
+    when(auditorClient.recover(any())).thenReturn(LockRecoveryResult.NOT_RECOVERABLE);
+
+    // Act & Assert — the run aborts and emits no token.
+    AuditorFinalizeOrchestrator orchestrator = createOrchestrator(checkpointDir);
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(CoordinatorStateDeleterException.class)
+        .hasMessageContaining("read-active");
+
+    // The deferred log is kept and the namespace is not marked completed, so a resume retries it.
+    Path deferredFinalizationsFile =
+        checkpointDir
+            .resolve(AuditorFinalizeStateManager.SUBDIRECTORY)
+            .resolve(NAMESPACE + ".deferred");
+    assertThat(Files.exists(deferredFinalizationsFile)).isTrue();
+    AuditorFinalizeState state = new AuditorFinalizeStateManager(checkpointDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getCompletedNamespaces()).isEmpty();
   }
 
   @Test

@@ -1,10 +1,8 @@
 package com.scalar.dl.tools.cleanup;
 
-import com.scalar.db.api.Result;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
-import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import javax.annotation.concurrent.ThreadSafe;
@@ -20,21 +18,19 @@ public final class LockFinalizer {
   }
 
   /**
-   * Finalizes a lock record by issuing the synchronous {@code RecoverAssetLock} RPC. The RPC
-   * completes recovery before returning, so a {@code SUCCEEDED} or {@code NOT_NEEDED} result
-   * confirms the lock is released; no re-read is required.
+   * Finalizes the lock for the given asset by issuing the synchronous {@code RecoverAssetLock} RPC
+   * and returns the {@link Result}. The RPC completes recovery before returning, so the result is
+   * authoritative and no re-read is required.
+   *
+   * <p>{@link Result#NOT_FINALIZED} is returned rather than thrown so that a single still-active
+   * lock (e.g. a read lock kept fresh by an active reader) need not abort the run mid-scan; the
+   * caller decides how to handle it (see {@link FinalizeAssetLockHandler}).
+   *
+   * @return {@link Result#FINALIZED} if the lock was already released, or {@link
+   *     Result#NOT_FINALIZED} if it is still active and could not be finalized yet
+   * @throws CoordinatorStateDeleterException if the RPC returns {@code FAILED}
    */
-  public void execute(String namespace, Result result) {
-    String assetId = result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
-    if (assetId == null) {
-      // The id column is the partition key of the asset_lock table, so it should never be null for
-      // a real record; guard against unexpected/corrupted data.
-      throw new IllegalStateException(
-          "Column "
-              + AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME
-              + " not found in the result");
-    }
-
+  public Result execute(String namespace, String assetId) {
     AssetLockRecoveryRequest rpcRequest =
         AssetLockRecoveryRequest.newBuilder().setNamespace(namespace).setAssetId(assetId).build();
 
@@ -43,16 +39,16 @@ public final class LockFinalizer {
       throw new CoordinatorStateDeleterException(
           CoordinatorStateDeleterError.RECOVER_ASSET_LOCK_RPC_FAILED, assetId, namespace);
     }
+    return rpcResult == LockRecoveryResult.NOT_RECOVERABLE
+        ? Result.NOT_FINALIZED
+        : Result.FINALIZED;
+  }
 
-    // TODO: NOT_RECOVERABLE means the lock is still active and currently aborts the whole run. A
-    //  follow-up will instead defer such locks and retry them after the scan, so a single active
-    //  lock no longer blocks finalization.
-    if (rpcResult == LockRecoveryResult.NOT_RECOVERABLE) {
-      throw new RuntimeException(
-          String.format(
-              "RecoverAssetLock RPC returned NOT_RECOVERABLE for asset %s in namespace %s",
-              assetId, namespace));
-    }
-    // SUCCEEDED or NOT_NEEDED: the lock has been released.
+  /** The result of a finalization attempt. */
+  public enum Result {
+    /** The lock was finalized: released, or already released / never held. */
+    FINALIZED,
+    /** The lock could not be finalized because it is still active. */
+    NOT_FINALIZED
   }
 }

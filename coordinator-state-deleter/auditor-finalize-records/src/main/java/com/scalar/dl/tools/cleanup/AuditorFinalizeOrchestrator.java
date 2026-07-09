@@ -13,6 +13,7 @@ import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
@@ -216,9 +217,18 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
   }
 
   /**
+   * Returns the path of the deferred-finalizations file for a namespace's {@code asset_lock} table.
+   */
+  @VisibleForTesting
+  static Path deferredFinalizationsPath(
+      AuditorFinalizeStateManager stateManager, String physicalNamespace) {
+    return stateManager.getStateDir().resolve(physicalNamespace + ".deferred");
+  }
+
+  /**
    * Scans a single namespace's {@code asset_lock} table using a resumable scanner, finalizes
-   * unreleased locks via the {@link LockFinalizer}, and marks the namespace as completed in the
-   * checkpoint state.
+   * unreleased locks via the {@link LockFinalizer}, retries any finalizations deferred during the
+   * scan, and marks the namespace as completed in the checkpoint state.
    */
   private void processAssetLockTable(
       AuditorFinalizeStateManager stateManager,
@@ -233,8 +243,11 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
     logger.info("Processing asset_lock table in namespace: {}", logicalNamespace);
 
     LockFinalizer lockFinalizer = new LockFinalizer(auditorClient);
+    AppendOnlyLog deferredFinalizations =
+        new AppendOnlyLog(deferredFinalizationsPath(stateManager, physicalNamespace));
     FinalizeAssetLockHandler handler =
-        new FinalizeAssetLockHandler(stateChecker, lockFinalizer, logicalNamespace);
+        new FinalizeAssetLockHandler(
+            stateChecker, lockFinalizer, logicalNamespace, deferredFinalizations);
 
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
       ScanResult scanResult =
@@ -248,8 +261,48 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
           handler.getFinalizedCount());
     }
 
+    // Locks that could not be finalized mid-scan (e.g. read locks kept fresh by active readers) are
+    // deferred rather than aborting the sweep. Retry finalizing them now that the scan is done, by
+    // which point the readers may have finished. The namespace is complete only once they are all
+    // finalized.
+    retryDeferredFinalizations(logicalNamespace, lockFinalizer, deferredFinalizations);
+
     state.markNamespaceCompleted(logicalNamespace);
     stateManager.persist(state);
+  }
+
+  /**
+   * Retries finalization for every asset lock deferred during the scan. If all are now finalized
+   * the sweep proceeds; otherwise the run aborts so the operator can re-run once the affected
+   * assets quiesce.
+   */
+  private void retryDeferredFinalizations(
+      String logicalNamespace, LockFinalizer lockFinalizer, AppendOnlyLog deferredFinalizations) {
+    // De-duplicate: the same asset id can appear more than once (e.g. re-appended by a fresh
+    // re-scan on a re-run, or by a page reprocessed after a mid-scan crash).
+    Set<String> assetIds = new LinkedHashSet<>(deferredFinalizations.load());
+    if (assetIds.isEmpty()) {
+      return;
+    }
+    Set<String> stillActive = new LinkedHashSet<>();
+    for (String assetId : assetIds) {
+      if (lockFinalizer.execute(logicalNamespace, assetId) == LockFinalizer.Result.NOT_FINALIZED) {
+        stillActive.add(assetId);
+      }
+    }
+    if (!stillActive.isEmpty()) {
+      // Rewrite the log with only the still-active locks, dropping the ones just finalized and any
+      // duplicates so the file cannot grow across repeated re-runs, then abort. A resumed run
+      // re-scans the table from scratch (the scanner clears its own checkpoint on completion), so a
+      // crash mid-rewrite is recovered anyway.
+      deferredFinalizations.clear();
+      stillActive.forEach(deferredFinalizations::append);
+      throw new CoordinatorStateDeleterException(
+          CoordinatorStateDeleterError.ASSET_LOCK_STILL_ACTIVE,
+          stillActive.iterator().next(),
+          logicalNamespace);
+    }
+    deferredFinalizations.clear();
   }
 
   /**

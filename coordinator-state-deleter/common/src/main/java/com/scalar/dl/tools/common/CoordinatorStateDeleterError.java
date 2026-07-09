@@ -83,6 +83,12 @@ public enum CoordinatorStateDeleterError implements ScalarDlToolsError {
       "The Coordinator group commit is not supported.",
       "",
       "This tool supports only configurations with the Coordinator group commit disabled."),
+  ASSET_LOCK_STILL_ACTIVE(
+      Category.USER_ERROR,
+      "013",
+      "The asset lock for asset %s in namespace %s is still active and could not be recovered.",
+      "",
+      "Re-run 'finalize-auditor' after activity on the affected assets subsides."),
 
   //
   // Errors for the internal error category

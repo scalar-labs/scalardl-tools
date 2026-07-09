@@ -4,15 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.scalar.db.api.Result;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
-import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,23 +27,17 @@ class LockFinalizerTest {
     finalizer = new LockFinalizer(auditorClient);
   }
 
-  private Result createScanResult() {
-    Result result = mock(Result.class);
-    when(result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME))
-        .thenReturn("asset1");
-    return result;
-  }
-
   @Test
-  void execute_shouldSendRpcWithNamespaceAndAssetId() {
+  void execute_succeededGiven_shouldSendRpcWithNamespaceAndAssetIdAndReturnRecovered() {
     // Arrange
     when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
         .thenReturn(LockRecoveryResult.SUCCEEDED);
 
     // Act
-    finalizer.execute("ns1", createScanResult());
+    LockFinalizer.Result result = finalizer.execute("ns1", "asset1");
 
-    // Assert — the RPC carries the namespace and the asset id from the scan result.
+    // Assert — the RPC carries the given namespace and asset id, and SUCCEEDED maps to RECOVERED.
+    assertThat(result).isEqualTo(LockFinalizer.Result.FINALIZED);
     ArgumentCaptor<AssetLockRecoveryRequest> captor =
         ArgumentCaptor.forClass(AssetLockRecoveryRequest.class);
     verify(auditorClient).recover(captor.capture());
@@ -55,27 +46,24 @@ class LockFinalizerTest {
   }
 
   @Test
-  void execute_notNeededGiven_shouldNotThrow() {
-    // Arrange — NOT_NEEDED means the lock is already released.
+  void execute_notNeededGiven_shouldReturnRecovered() {
+    // Arrange — NOT_NEEDED means the lock is already released, which is also RECOVERED.
     when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
         .thenReturn(LockRecoveryResult.NOT_NEEDED);
 
-    // Act & Assert — no exception is thrown.
-    finalizer.execute("default", createScanResult());
-    verify(auditorClient).recover(any(AssetLockRecoveryRequest.class));
+    // Act & Assert
+    assertThat(finalizer.execute("default", "asset1")).isEqualTo(LockFinalizer.Result.FINALIZED);
   }
 
   @Test
-  void execute_assetIdMissingGiven_shouldThrowExceptionWithoutCallingRecover() {
-    // Arrange — the scan result has no id column.
-    Result result = mock(Result.class);
-    when(result.getText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME)).thenReturn(null);
+  void execute_notRecoverableGiven_shouldReturnNotRecoverableWithoutThrowing() {
+    // Arrange — NOT_RECOVERABLE means the lock is still active; the caller decides what to do.
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenReturn(LockRecoveryResult.NOT_RECOVERABLE);
 
-    // Act & Assert — the RPC is never issued for a record without an asset id.
-    assertThatThrownBy(() -> finalizer.execute("default", result))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
-    verify(auditorClient, never()).recover(any(AssetLockRecoveryRequest.class));
+    // Act & Assert — the result is returned rather than aborting the run here.
+    assertThat(finalizer.execute("default", "asset1"))
+        .isEqualTo(LockFinalizer.Result.NOT_FINALIZED);
   }
 
   @Test
@@ -85,7 +73,7 @@ class LockFinalizerTest {
         .thenThrow(new RuntimeException("RPC unavailable"));
 
     // Act & Assert
-    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+    assertThatThrownBy(() -> finalizer.execute("default", "asset1"))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("RPC unavailable");
   }
@@ -97,21 +85,9 @@ class LockFinalizerTest {
         .thenReturn(LockRecoveryResult.FAILED);
 
     // Act & Assert
-    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+    assertThatThrownBy(() -> finalizer.execute("default", "asset1"))
         .isInstanceOf(CoordinatorStateDeleterException.class)
         .hasMessageContaining(
             CoordinatorStateDeleterError.RECOVER_ASSET_LOCK_RPC_FAILED.buildCode());
-  }
-
-  @Test
-  void execute_rpcNotRecoverableGiven_shouldThrowException() {
-    // Arrange
-    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
-        .thenReturn(LockRecoveryResult.NOT_RECOVERABLE);
-
-    // Act & Assert
-    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
-        .isInstanceOf(RuntimeException.class)
-        .hasMessageContaining("NOT_RECOVERABLE");
   }
 }
