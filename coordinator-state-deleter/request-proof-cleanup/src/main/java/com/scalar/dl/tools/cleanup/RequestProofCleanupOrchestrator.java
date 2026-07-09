@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Orchestrates the {@code request-proof-cleanup} workflow.
  *
- * <p>This class receives the auditor completion token (from {@code auditor-finalize-records}), uses
+ * <p>This class receives the Auditor completion token (from {@code auditor-finalize-records}), uses
  * its guarantee timestamp as the deletable-before boundary, scans the Auditor's single global
  * {@code request_proof} table, and deletes every record whose {@code registered_at} is before that
  * boundary.
@@ -89,7 +89,7 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
    *
    * @param props the properties used by the ScalarDL Auditor
    * @param checkpointDir root directory for checkpoint state
-   * @param auditorTokenString the auditor completion token
+   * @param auditorTokenString the Auditor completion token
    * @return a new orchestrator instance
    */
   public static RequestProofCleanupOrchestrator create(
@@ -119,7 +119,7 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
 
   /**
    * Executes the full cleanup workflow: load or initialize state, scan the {@code request_proof}
-   * table, and delete deletable records. On the first run, the auditor completion token is parsed
+   * table, and delete deletable records. On the first run, the Auditor completion token is parsed
    * to determine the deletable-before timestamp. On subsequent runs, the timestamp is restored from
    * the checkpoint.
    *
@@ -186,7 +186,7 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
     return state;
   }
 
-  /** Parses and validates the auditor token, then returns its guarantee timestamp. */
+  /** Parses and validates the Auditor token, then returns its guarantee timestamp. */
   private long parseDeletableBeforeMs() {
     CompletionToken auditorToken = CompletionToken.decode(auditorTokenString);
     if (auditorToken.getServerType() != CompletionToken.ServerType.AUDITOR) {
@@ -197,7 +197,7 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
 
     long guaranteeTimestamp = auditorToken.getStartedAtMs();
     logger.info(
-        "Completion token parsed: auditor guarantee timestamp is {}",
+        "Completion token parsed: Auditor guarantee timestamp is {}",
         Instant.ofEpochMilli(guaranteeTimestamp));
 
     return guaranteeTimestamp;

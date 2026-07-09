@@ -68,7 +68,7 @@ class RequestProofCleanupOrchestratorTest {
     // Assert
     verify(scanner).scan(eq(NAMESPACE), eq(TABLE), any());
 
-    // The boundary (the auditor token timestamp) is observable via the persisted state.
+    // The boundary (the Auditor token timestamp) is observable via the persisted state.
     RequestProofCleanupState state = new RequestProofCleanupStateManager(tempDir).load();
     assertThat(state).isNotNull();
     assertThat(state.getDeletableBeforeMs()).isEqualTo(3000L);
