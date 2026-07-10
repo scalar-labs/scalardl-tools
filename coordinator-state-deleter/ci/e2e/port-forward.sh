@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Shared kubectl port-forward helpers for the E2E cluster, used by cluster.sh and
+# Shared kubectl port-forward helpers for the E2E cluster, used by manage-cluster.sh and
 # .github/workflows/e2e-verify.yaml. Source this file — it only defines functions
 # (and PF_PIDS); it runs nothing on its own. Because callers source it, the
 # port-forwards start in the caller's shell and survive for a subsequent command
 # (e.g. gradle) in the same step.
 #
-#   source ci/e2e/pf-lib.sh
+#   source ci/e2e/port-forward.sh
 #   pf_reset                                        # kill leftovers from prior steps
 #   pf_start "$LNS" svc/ledger  50051:50051 50052:50052
 #   pf_start "$ANS" svc/auditor 40051:40051 40052:40052

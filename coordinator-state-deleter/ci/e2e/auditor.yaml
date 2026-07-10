@@ -1,6 +1,6 @@
 # ScalarDL Auditor — deployed into ${AUDITOR_NS}, points at the Ledger in ${LEDGER_NS}.
 #
-# envsubst variables (see cluster.sh):
+# envsubst variables (see manage-cluster.sh):
 #   ${AUDITOR_NS}   k8s namespace for the auditor
 #   ${LEDGER_NS}    namespace where the ledger Service lives (for cross-ns DNS)
 #   ${AUDITOR_IMAGE} full image ref, e.g. ghcr.io/scalar-labs/scalardl-auditor:3.13.0
@@ -8,7 +8,7 @@
 #   ${COSMOS_KEY}   Cosmos DB primary key
 #
 # Auth is HMAC. SERVERS_HMAC_SECRET / HMAC_CIPHER_KEY are injected by
-# cluster.sh (single source, shared with ledger.yaml) so the secret can't drift.
+# manage-cluster.sh (single source, shared with ledger.yaml) so the secret can't drift.
 
 apiVersion: v1
 kind: Namespace
@@ -41,7 +41,7 @@ data:
     scalar.dl.auditor.ledger.privileged_port=50052
 
     # HMAC authentication (clients and Ledger<->Auditor). The servers secret is the
-    # same value injected into ledger.yaml (single source in cluster.sh).
+    # same value injected into ledger.yaml (single source in manage-cluster.sh).
     scalar.dl.auditor.authentication.method=hmac
     scalar.dl.auditor.authentication.hmac.cipher_key=${HMAC_CIPHER_KEY}
     scalar.dl.auditor.servers.authentication.hmac.secret_key=${SERVERS_HMAC_SECRET}

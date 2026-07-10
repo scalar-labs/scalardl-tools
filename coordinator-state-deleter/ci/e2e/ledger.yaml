@@ -1,6 +1,6 @@
 # ScalarDL Ledger — deployed into ${LEDGER_NS}.
 #
-# envsubst variables (see cluster.sh):
+# envsubst variables (see manage-cluster.sh):
 #   ${LEDGER_NS}   k8s namespace for the ledger
 #   ${LEDGER_IMAGE} full image ref, e.g. ghcr.io/scalar-labs/scalardl-ledger:3.13.0
 #   ${COSMOS_URI}  Cosmos DB account URI
@@ -9,7 +9,7 @@
 # Auth is HMAC (not digital signature): the Ledger and Auditor authenticate each
 # other with a shared servers.authentication.hmac.secret_key, which avoids the
 # server-to-server certificate registration that digital-signature mode needs.
-# SERVERS_HMAC_SECRET / HMAC_CIPHER_KEY are injected by cluster.sh (defined
+# SERVERS_HMAC_SECRET / HMAC_CIPHER_KEY are injected by manage-cluster.sh (defined
 # once there) into both this and auditor.yaml, so the shared secret can't drift.
 # Disposable test values for this ephemeral cluster only; never reuse them.
 

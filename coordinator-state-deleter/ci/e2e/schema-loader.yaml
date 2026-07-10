@@ -1,6 +1,6 @@
 # Schema-loader Jobs — run BEFORE deploying the servers.
 #
-# envsubst variables (see cluster.sh):
+# envsubst variables (see manage-cluster.sh):
 #   ${LEDGER_NS} / ${AUDITOR_NS}   namespaces (must already exist)
 #   ${SCHEMA_LOADER_IMAGE}         e.g. ghcr.io/scalar-labs/scalardl-schema-loader:3.13.0
 #   ${COSMOS_URI} / ${COSMOS_KEY}  Cosmos DB account URI / primary key

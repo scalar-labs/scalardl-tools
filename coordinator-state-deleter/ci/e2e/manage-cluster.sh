@@ -25,8 +25,8 @@
 #   RUN_ID=local                 # namespace suffix, e.g. a CI run id
 #
 # Usage:
-#   COSMOS_URI=... COSMOS_KEY=... CR_PAT=... GHCR_USER=... ./cluster.sh smoke
-#   ./cluster.sh deploy | redeploy | drop-schema | clean
+#   COSMOS_URI=... COSMOS_KEY=... CR_PAT=... GHCR_USER=... ./manage-cluster.sh smoke
+#   ./manage-cluster.sh deploy | redeploy | drop-schema | clean
 
 set -euo pipefail
 
@@ -108,8 +108,8 @@ wait_for_deploy() {
 
 # Shared kubectl port-forward helpers (pf_reset/pf_start/pf_wait/pf_kill), also
 # used by e2e-verify.yaml so the fiddly tunnel logic lives in one place.
-# shellcheck source=pf-lib.sh
-source "$HERE/pf-lib.sh"
+# shellcheck source=port-forward.sh
+source "$HERE/port-forward.sh"
 trap pf_kill EXIT
 
 require_vars() {
@@ -205,7 +205,7 @@ case "${1:-smoke}" in
     pf_start "$AUDITOR_NS" svc/auditor 40051:40051 40052:40052
     pf_wait 50051 50052 40051 40052
     echo
-    echo "SMOKE OK: both servers Ready and reachable via port-forward. Tear down with:  ./cluster.sh clean"
+    echo "SMOKE OK: both servers Ready and reachable via port-forward. Tear down with:  ./manage-cluster.sh clean"
     ;;
   drop-schema)
     # Delete the ScalarDB schema so the shared Cosmos account stays clean between
@@ -218,7 +218,7 @@ case "${1:-smoke}" in
     echo "DROP-SCHEMA OK"
     ;;
   *)
-    echo "usage: cluster.sh [smoke|deploy|redeploy|drop-schema|clean]" >&2
+    echo "usage: manage-cluster.sh [smoke|deploy|redeploy|drop-schema|clean]" >&2
     exit 1
     ;;
 esac

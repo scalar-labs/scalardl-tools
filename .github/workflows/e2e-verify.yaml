@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   e2e:
-    name: populate 3.13 -> verify 3.14
+    name: populate → upgrade → verify
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
@@ -81,13 +81,13 @@ jobs:
           LEDGER_VERSION: ${{ env.POPULATE_VERSION }}
           AUDITOR_VERSION: ${{ env.POPULATE_VERSION }}
           SCHEMA_LOADER_VERSION: ${{ env.POPULATE_VERSION }}
-        run: ./ci/e2e/cluster.sh deploy
+        run: ./ci/e2e/manage-cluster.sh deploy
 
       - name: Populate committed data
         run: |
           set -euo pipefail
           LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
-          source ci/e2e/pf-lib.sh
+          source ci/e2e/port-forward.sh
           pf_reset
           pf_start "$LNS" svc/ledger  50051:50051 50052:50052
           pf_start "$ANS" svc/auditor 40051:40051 40052:40052
@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
-          source ci/e2e/pf-lib.sh
+          source ci/e2e/port-forward.sh
           pf_reset
           # Take the Ledger down so the auditor-mode write cannot commit (stranded lock).
           kubectl -n "$LNS" scale deployment/scalardl-ledger --replicas=0
@@ -114,20 +114,20 @@ jobs:
             -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
             -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
             -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e
-          echo "Waiting 20s for the held lock to pass the 15s valid period ..."
-          sleep 20
+          echo "Waiting 16s for the held lock to pass the 15s valid period ..."
+          sleep 16
 
       - name: Switch servers to verify version
         env:
           LEDGER_VERSION: ${{ env.VERIFY_VERSION }}
           AUDITOR_VERSION: ${{ env.VERIFY_VERSION }}
-        run: ./ci/e2e/cluster.sh redeploy
+        run: ./ci/e2e/manage-cluster.sh redeploy
 
       - name: Run verify (CLI 3 commands)
         run: |
           set -euo pipefail
           LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
-          source ci/e2e/pf-lib.sh
+          source ci/e2e/port-forward.sh
           pf_reset
           pf_start "$LNS" svc/ledger  50051:50051 50052:50052
           pf_start "$ANS" svc/auditor 40051:40051 40052:40052
@@ -182,8 +182,8 @@ jobs:
         if: always()
         # Fail-soft: cleanup best-effort. Must run before namespaces are deleted
         # (it uses the in-namespace ConfigMap + ghcr-secret).
-        run: ./ci/e2e/cluster.sh drop-schema || echo "schema drop failed (non-fatal)"
+        run: ./ci/e2e/manage-cluster.sh drop-schema || echo "schema drop failed (non-fatal)"
 
       - name: Tear down namespaces
         if: always()
-        run: ./ci/e2e/cluster.sh clean
+        run: ./ci/e2e/manage-cluster.sh clean
