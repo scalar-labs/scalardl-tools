@@ -69,11 +69,11 @@ fi
 diag_and_die() {
   local ns="$1" msg="$2"
   echo "::error::${msg}"
-  echo "----- pods (${ns}) -----";           kubectl -n "$ns" get pods -o wide || true
+  echo "----- pods (${ns}) -----";            kubectl -n "$ns" get pods -o wide || true
   echo "----- events (${ns}) -----";          kubectl -n "$ns" get events --sort-by=.lastTimestamp || true
   echo "----- describe pods (${ns}) -----";   kubectl -n "$ns" describe pods || true
   echo "----- logs (${ns}) -----"
-  for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
+  for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null || true); do
     echo "### $p"
     kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=200 || true
   done
@@ -133,6 +133,9 @@ deploy_all() {
   done
 
   echo "==> load schemas (ledger + coordinator, auditor)"
+  # Jobs are immutable, so delete any leftovers first to keep re-runs idempotent.
+  kubectl -n "$LEDGER_NS"  delete job schema-loader-ledger  --ignore-not-found || true
+  kubectl -n "$AUDITOR_NS" delete job schema-loader-auditor --ignore-not-found || true
   render schema-loader.yaml | kubectl apply -f -
   wait_for_job "$LEDGER_NS"  schema-loader-ledger  300
   wait_for_job "$AUDITOR_NS" schema-loader-auditor 300
@@ -178,6 +181,9 @@ case "${1:-}" in
     export SL_JOB_SUFFIX="-delete"
     export SL_LEDGER_ARGS='["--config", "/config/database.properties", "-D", "--coordinator"]'
     export SL_AUDITOR_ARGS='["--config", "/config/database.properties", "-D"]'
+    # Delete leftovers first (Jobs are immutable) so drop-schema is re-runnable.
+    kubectl -n "$LEDGER_NS"  delete job schema-loader-ledger-delete  --ignore-not-found || true
+    kubectl -n "$AUDITOR_NS" delete job schema-loader-auditor-delete --ignore-not-found || true
     render schema-loader.yaml | kubectl apply -f -
     wait_for_job "$LEDGER_NS"  schema-loader-ledger-delete  300
     wait_for_job "$AUDITOR_NS" schema-loader-auditor-delete 300
