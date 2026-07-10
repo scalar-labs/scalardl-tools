@@ -67,13 +67,19 @@ clean() {
   kubectl delete namespace "$LEDGER_NS" "$AUDITOR_NS" --ignore-not-found
 }
 
-# Scale the Ledger to 0 and wait for its pod to disappear. With the Ledger down, the next
-# auditor-mode put/get cannot commit, so the Auditor is left holding the lock — used to
-# seed stranded locks for the recovery test.
+# Scale the Ledger to 0 and wait for its pod to disappear.
 stop_ledger() {
   echo "==> scale down the Ledger"
   kubectl -n "$LEDGER_NS" scale deployment/scalardl-ledger --replicas=0
-  kubectl -n "$LEDGER_NS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s
+  # `kubectl wait --for=delete` errors with "no matching resources found" if the pod is already
+  # gone — the Ledger was already scaled down, or the pod was deleted in the window between the
+  # scale and the wait. Treat a failed wait as success unless a pod actually still remains.
+  if ! kubectl -n "$LEDGER_NS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s 2>/dev/null; then
+    if [[ -n "$(kubectl -n "$LEDGER_NS" get pods -l app=scalardl-ledger -o name)" ]]; then
+      echo "::error::Ledger pod did not terminate within 120s"
+      exit 1
+    fi
+  fi
 }
 
 # Dump everything useful about a namespace's workloads, then fail.

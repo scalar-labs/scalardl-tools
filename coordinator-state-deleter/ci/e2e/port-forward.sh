@@ -13,7 +13,7 @@ pf_check_tcp() { timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" 2>/dev/null; 
 
 # Kill any leftover kubectl port-forwards.
 pf_reset() {
-  pkill -f 'kubectl.*port-forward' 2>/dev/null || true
+  pkill -f 'kubectl.*port-forward.*(ledger|auditor)' 2>/dev/null || true
   sleep 2
 }
 
@@ -41,6 +41,8 @@ pf_wait() {
     done
     [ -n "$ok" ] || {
       echo "::error::localhost:$p not reachable through port-forward"
+      echo "=== port-forward logs ==="
+      tail -n 50 /tmp/pf-*.log 2>/dev/null || true
       return 1
     }
   done
