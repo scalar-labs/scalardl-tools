@@ -49,9 +49,15 @@ export SCHEMA_LOADER_IMAGE="ghcr.io/scalar-labs/scalardl-schema-loader:${SCHEMA_
 export SERVERS_HMAC_SECRET="e2e-servers-hmac-secret-disposable-0123456789"
 export HMAC_CIPHER_KEY="e2e-hmac-cipher-key-disposable-0123456789abcdef"
 
+# schema-loader.yaml is parametrized for both create and delete. These are the
+# create defaults (used by deploy); the drop-schema mode overrides them below.
+export SL_JOB_SUFFIX=""
+export SL_LEDGER_ARGS='["--config", "/config/database.properties", "--coordinator"]'
+export SL_AUDITOR_ARGS='["--config", "/config/database.properties"]'
+
 # Only these placeholders are substituted; anything else (e.g. $@ inside scripts)
 # is left untouched.
-SUBST_VARS='${LEDGER_NS} ${AUDITOR_NS} ${LEDGER_IMAGE} ${AUDITOR_IMAGE} ${SCHEMA_LOADER_IMAGE} ${COSMOS_URI} ${COSMOS_KEY} ${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KEY}'
+SUBST_VARS='${LEDGER_NS} ${AUDITOR_NS} ${LEDGER_IMAGE} ${AUDITOR_IMAGE} ${SCHEMA_LOADER_IMAGE} ${COSMOS_URI} ${COSMOS_KEY} ${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KEY} ${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS}'
 
 render() { envsubst "$SUBST_VARS" < "$HERE/$1"; }
 
@@ -209,11 +215,15 @@ case "${1:-smoke}" in
     ;;
   drop-schema)
     # Delete the ScalarDB schema so the shared Cosmos account stays clean between
-    # runs. Reuses the existing schema-loader-config ConfigMap + ghcr-secret.
+    # runs, by re-rendering schema-loader.yaml with delete args + a distinct name
+    # suffix (a completed create Job can't be re-applied under the same name).
     echo "==> delete ScalarDB schema (Cosmos cleanup)"
-    render schema-loader-delete.yaml | kubectl apply -f -
-    wait_for_job "$LEDGER_NS"  schema-loader-delete-ledger  300
-    wait_for_job "$AUDITOR_NS" schema-loader-delete-auditor 300
+    export SL_JOB_SUFFIX="-delete"
+    export SL_LEDGER_ARGS='["--config", "/config/database.properties", "-D", "--coordinator"]'
+    export SL_AUDITOR_ARGS='["--config", "/config/database.properties", "-D"]'
+    render schema-loader.yaml | kubectl apply -f -
+    wait_for_job "$LEDGER_NS"  schema-loader-ledger-delete  300
+    wait_for_job "$AUDITOR_NS" schema-loader-auditor-delete 300
     echo
     echo "DROP-SCHEMA OK"
     ;;

@@ -1,21 +1,26 @@
-# Schema-loader Jobs — run BEFORE deploying the servers.
+# Schema-loader Jobs — create the ScalarDB schema before deploying the servers,
+# and (with different args) delete it at teardown. Both modes share this one file;
+# manage-cluster.sh sets the envsubst variables per mode:
+#
+#   deploy      : SL_JOB_SUFFIX=""        SL_*_ARGS = create args
+#   drop-schema : SL_JOB_SUFFIX="-delete" SL_*_ARGS = create args + "-D"
+#
+# The suffix keeps the delete Jobs distinct from the create Jobs (a completed Job
+# is immutable and cannot be re-applied under the same name in the same namespace).
 #
 # envsubst variables (see manage-cluster.sh):
 #   ${LEDGER_NS} / ${AUDITOR_NS}   namespaces (must already exist)
 #   ${SCHEMA_LOADER_IMAGE}         e.g. ghcr.io/scalar-labs/scalardl-schema-loader:3.13.0
 #   ${COSMOS_URI} / ${COSMOS_KEY}  Cosmos DB account URI / primary key
+#   ${SL_JOB_SUFFIX}               "" (create) or "-delete"
+#   ${SL_LEDGER_ARGS} / ${SL_AUDITOR_ARGS}   the schema-loader CLI args (JSON array)
 #
 # The image entrypoint runs:  java -jar /app.jar -f ${SCHEMA_TYPE}-schema.json $@
-# The schema JSON (ledger-schema.json / auditor-schema.json) is baked into the
-# image, but database.properties is NOT present in the 3.13.0 image, so we mount
-# our own via a ConfigMap and point --config at it. This also avoids relying on
-# ${env:...} resolution inside a baked properties file.
-#
-# The ledger Job also passes --coordinator so ScalarDB's Consensus Commit
-# coordinator table (coordinator.state) is created. That table is NOT in
-# ledger-schema.json (which only defines scalar.*), yet it is exactly what the
-# ledger commits to and what coordinator-state-cleanup later prunes. The auditor
-# side has no coordinator table, so its Job omits --coordinator.
+# The schema JSON is baked into the image, but database.properties is NOT present
+# in the 3.13.0 image, so we mount our own via a ConfigMap and point --config at it.
+# The ledger args pass --coordinator (create) so ScalarDB's Consensus Commit
+# coordinator table — not in ledger-schema.json but what the ledger commits to and
+# coordinator-state-cleanup prunes — is created/deleted; the auditor side has none.
 
 apiVersion: v1
 kind: ConfigMap
@@ -46,7 +51,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: schema-loader-ledger
+  name: schema-loader-ledger${SL_JOB_SUFFIX}
   namespace: ${LEDGER_NS}
 spec:
   backoffLimit: 2
@@ -58,7 +63,7 @@ spec:
       containers:
         - name: schema-loader-ledger
           image: ${SCHEMA_LOADER_IMAGE}
-          args: ["--config", "/config/database.properties", "--coordinator"]
+          args: ${SL_LEDGER_ARGS}
           env:
             - name: SCHEMA_TYPE
               value: "ledger"
@@ -76,7 +81,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: schema-loader-auditor
+  name: schema-loader-auditor${SL_JOB_SUFFIX}
   namespace: ${AUDITOR_NS}
 spec:
   backoffLimit: 2
@@ -88,7 +93,7 @@ spec:
       containers:
         - name: schema-loader-auditor
           image: ${SCHEMA_LOADER_IMAGE}
-          args: ["--config", "/config/database.properties"]
+          args: ${SL_AUDITOR_ARGS}
           env:
             - name: SCHEMA_TYPE
               value: "auditor"
