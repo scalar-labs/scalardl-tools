@@ -94,7 +94,7 @@ jobs:
           sleep 2
           kubectl -n "$LNS" port-forward svc/ledger 50051:50051 50052:50052 >/tmp/pf-l.log 2>&1 &
           kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-a.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor-privileged 40052:40052 >/tmp/pf-ap.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor 40052:40052 >/tmp/pf-ap.log 2>&1 &
           for p in 50051 50052 40051 40052; do
             ok=""; for _ in $(seq 1 30); do
               if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
@@ -119,7 +119,7 @@ jobs:
           kubectl -n "$LNS" scale deployment/scalardl-ledger --replicas=0
           kubectl -n "$LNS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s
           kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-a2.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor-privileged 40052:40052 >/tmp/pf-ap2.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor 40052:40052 >/tmp/pf-ap2.log 2>&1 &
           for p in 40051 40052; do
             ok=""; for _ in $(seq 1 30); do
               if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
@@ -151,7 +151,7 @@ jobs:
           sleep 2
           kubectl -n "$LNS" port-forward svc/ledger 50051:50051 50052:50052 >/tmp/pf-lv.log 2>&1 &
           kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-av.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor-privileged 40052:40052 >/tmp/pf-apv.log 2>&1 &
+          kubectl -n "$ANS" port-forward svc/auditor 40052:40052 >/tmp/pf-apv.log 2>&1 &
           for p in 50051 50052 40051 40052; do
             ok=""; for _ in $(seq 1 30); do
               if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi

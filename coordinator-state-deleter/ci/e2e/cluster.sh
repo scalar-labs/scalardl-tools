@@ -214,11 +214,11 @@ case "${1:-smoke}" in
     deploy_all
     # Mirror how the gradle E2E process reaches the servers: kubectl port-forward
     # from the host. Ledger gRPC 50051 + privileged 50052; Auditor gRPC 40051
-    # (svc/auditor) + privileged 40052 (svc/auditor-privileged).
+    # (svc/auditor) + privileged 40052 (svc/auditor).
     echo "==> port-forward servers to host and verify reachability"
     start_port_forward "$LEDGER_NS"  svc/ledger             50051:50051 50052:50052
     start_port_forward "$AUDITOR_NS" svc/auditor            40051:40051
-    start_port_forward "$AUDITOR_NS" svc/auditor-privileged 40052:40052
+    start_port_forward "$AUDITOR_NS" svc/auditor 40052:40052
     for port in 50051 50052 40051 40052; do
       if check_tcp "$port"; then
         echo "  localhost:$port reachable"

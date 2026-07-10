@@ -124,24 +124,11 @@ spec:
       protocol: TCP
       port: 40051
       targetPort: 40051
-    - name: admin
-      protocol: TCP
-      port: 40053
-      targetPort: 40053
-
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: auditor-privileged
-  namespace: ${AUDITOR_NS}
-spec:
-  type: ClusterIP
-  selector:
-    app: scalardl-auditor
-  ports:
     - name: privileged
       protocol: TCP
       port: 40052
       targetPort: 40052
+    - name: admin
+      protocol: TCP
+      port: 40053
+      targetPort: 40053
