@@ -26,31 +26,31 @@ defaults:
   run:
     working-directory: coordinator-state-deleter
 
+# Serialize every run that touches the shared Cosmos account.
 concurrency:
-  group: e2e-cosmos
-  cancel-in-progress: false
+  group: cosmos
 
 jobs:
   e2e:
     name: deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     env:
       SCALARDL_VERSION: ${{ github.event.inputs.scalardl_version || '3.13.0' }}
-      GHCR_USER: ${{ github.actor }}
-      COSMOS_URI: ${{ secrets.COSMOS_URI }}
-      COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
-      CR_PAT: ${{ secrets.CR_PAT }}
+      GHCR_USER: ${{ github.repository_owner }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up minikube
-        uses: medyagh/setup-minikube@latest
+        uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
         with:
           cpus: '4'
           memory: '8192'
 
       - name: Deploy ScalarDL + load schema
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          CR_PAT: ${{ secrets.CR_PAT }}
         run: ./ci/e2e/manage-cluster.sh deploy
 
       - name: Collect diagnostics on failure
@@ -70,6 +70,10 @@ jobs:
 
       - name: Drop Cosmos schema
         if: always()
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          CR_PAT: ${{ secrets.CR_PAT }}
         # Fatal on purpose: the shared Cosmos account must be left clean, so a failed
         # drop fails the job to alert an operator (who then drops it manually).
         run: ./ci/e2e/manage-cluster.sh drop-schema
