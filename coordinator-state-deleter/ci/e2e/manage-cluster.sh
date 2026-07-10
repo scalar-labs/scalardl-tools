@@ -22,7 +22,6 @@
 #   LEDGER_VERSION=3.13.0
 #   AUDITOR_VERSION=3.13.0
 #   SCHEMA_LOADER_VERSION=3.13.0
-#   RUN_ID=local                 # namespace suffix, e.g. a CI run id
 #
 # Usage:
 #   COSMOS_URI=... COSMOS_KEY=... CR_PAT=... GHCR_USER=... ./manage-cluster.sh smoke
@@ -32,13 +31,18 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-: "${RUN_ID:=local}"
-export LEDGER_NS="ledger-e2e-${RUN_ID}"
-export AUDITOR_NS="auditor-e2e-${RUN_ID}"
+# Fixed namespace names. Each CI run gets its own throwaway minikube cluster (and
+# runs are serialized by the e2e-cosmos concurrency group), so there is never more
+# than one run's resources in a cluster — no need to make these unique per run.
+export LEDGER_NS="ledger-e2e"
+export AUDITOR_NS="auditor-e2e"
 
-: "${LEDGER_VERSION:=3.13.0}"
-: "${AUDITOR_VERSION:=3.13.0}"
-: "${SCHEMA_LOADER_VERSION:=3.13.0}"
+# Local default only; the e2e-verify workflow always sets these three explicitly
+# per phase (populate vs verify version).
+: "${SCALARDL_VERSION:=3.13.0}"
+: "${LEDGER_VERSION:=$SCALARDL_VERSION}"
+: "${AUDITOR_VERSION:=$SCALARDL_VERSION}"
+: "${SCHEMA_LOADER_VERSION:=$SCALARDL_VERSION}"
 export LEDGER_IMAGE="ghcr.io/scalar-labs/scalardl-ledger:${LEDGER_VERSION}"
 export AUDITOR_IMAGE="ghcr.io/scalar-labs/scalardl-auditor:${AUDITOR_VERSION}"
 export SCHEMA_LOADER_IMAGE="ghcr.io/scalar-labs/scalardl-schema-loader:${SCHEMA_LOADER_VERSION}"
@@ -63,7 +67,9 @@ render() { envsubst "$SUBST_VARS" < "$HERE/$1"; }
 
 clean() {
   echo "Deleting namespaces ${LEDGER_NS} and ${AUDITOR_NS} ..."
-  kubectl delete namespace "$LEDGER_NS" "$AUDITOR_NS" --ignore-not-found --wait=false
+  # Wait for deletion to finish: with fixed names, a back-to-back deploy would fail
+  # if the previous namespace were still Terminating.
+  kubectl delete namespace "$LEDGER_NS" "$AUDITOR_NS" --ignore-not-found
 }
 
 if [[ "${1:-}" == "clean" ]]; then

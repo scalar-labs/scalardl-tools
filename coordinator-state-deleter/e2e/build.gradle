@@ -71,7 +71,8 @@ tasks.register('e2ePopulate', JavaExec) {
 }
 
 // Runs the CLI 3 commands in-process against the running 3.14.0-SNAPSHOT servers + Cosmos and
-// asserts the outcome. Forwards -De2e.* (server targets) and -Dscalardb* (Cosmos) system properties.
+// asserts the outcome. Forwards -De2e.* system properties; server/Cosmos config is read from
+// build/client.properties (rendered by the workflow, shared with populate).
 tasks.register('minikubeE2eTest', Test) {
     useJUnitPlatform()
     group 'verification'
@@ -80,7 +81,7 @@ tasks.register('minikubeE2eTest', Test) {
     classpath = sourceSets.verify.runtimeClasspath
     systemProperties(
         System.getProperties().findAll {
-            it.key.toString().startsWith('e2e.') || it.key.toString().startsWith('scalardb')
+            it.key.toString().startsWith('e2e.')
         } as Map<String, ? extends Object>)
     outputs.upToDateWhen { false }
 }

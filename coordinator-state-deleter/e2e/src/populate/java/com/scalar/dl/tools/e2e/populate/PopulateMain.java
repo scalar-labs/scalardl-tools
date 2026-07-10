@@ -25,50 +25,42 @@ import java.util.Properties;
  * Ledger + Auditor (3.13.0) so the cleanup tools have realistic "old data" to reclaim, then writes
  * a seed-metadata file describing what was created.
  *
- * <p>Connection and workload parameters are read from {@code -De2e.*} system properties. The client
- * talks to the servers over gRPC (via kubectl port-forward on the host); it never touches Cosmos
- * directly — the servers do.
+ * <p>Client config is loaded from {@code build/client.properties} (rendered by the workflow from
+ * ci/e2e/client.properties, shared with verify); workload parameters ({@code e2e.mode}, {@code
+ * e2e.populate.count}, {@code e2e.output.dir}) come from {@code -De2e.*} system properties. The
+ * client talks to the servers over gRPC (via kubectl port-forward on the host); it never touches
+ * Cosmos directly — the servers do.
  *
  * <p>Two modes ({@code -De2e.mode}):
  *
  * <ul>
  *   <li>{@code committed} (default) — with both servers up, bootstrap the client, register the
  *       contract, and run N committed writes. Produces "old data".
- *   <li>{@code stranded} — with the Ledger scaled to 0, run a single write. The Auditor takes a
- *       write lock and writes a request_proof, but the write cannot commit, leaving a stranded held
- *       lock (the scenario auditor-finalize-records exists for). Assumes {@code committed} already
- *       ran (so the client identity and contract are registered): it neither bootstraps nor
- *       registers, since both require the Ledger.
+ *   <li>{@code stranded} — with the Ledger scaled to 0, run a put and a get. The Auditor takes a
+ *       WRITE lock (put, + request_proof) and a READ lock (get, no request_proof) during ordering,
+ *       but neither can complete on the Ledger, leaving two stranded held locks (the scenario
+ *       auditor-finalize-records exists for). Assumes {@code committed} already ran (so the client
+ *       identity and both contracts are registered): it neither bootstraps nor registers, since
+ *       both require the Ledger.
  * </ul>
  */
 public final class PopulateMain {
 
-  private static final String CONTRACT_ID = "PutAsset";
+  private static final String PUT_CONTRACT_ID = "PutAsset";
+  private static final String GET_CONTRACT_ID = "GetAsset";
+  // The stranded READ lock is taken on an existing committed asset (written by the committed run).
+  private static final String STRANDED_READ_ASSET_ID = "e2e-asset-0";
+  // Rendered by the workflow (from ci/e2e/client.properties); relative to the e2e module dir.
+  private static final String CLIENT_PROPERTIES_PATH = "build/client.properties";
 
   private PopulateMain() {}
 
   public static void main(String[] args) throws Exception {
-    String entityId = prop("e2e.client.entity.id", "e2e-client");
-    String runId = prop("e2e.run.id", "local");
-    String mode = prop("e2e.mode", "committed");
-    Path outputDir = Paths.get(prop("e2e.output.dir", "build/e2e"));
+    String mode = getProperty("e2e.mode", "committed");
+    Path outputDir = Paths.get(getProperty("e2e.output.dir", "build/e2e"));
 
-    Properties props = new Properties();
-    props.setProperty("scalar.dl.client.server.host", prop("e2e.ledger.host", "localhost"));
-    props.setProperty("scalar.dl.client.server.port", prop("e2e.ledger.port", "50051"));
-    props.setProperty(
-        "scalar.dl.client.server.privileged_port", prop("e2e.ledger.privileged_port", "50052"));
-    props.setProperty("scalar.dl.client.auditor.enabled", "true");
-    props.setProperty("scalar.dl.client.auditor.host", prop("e2e.auditor.host", "localhost"));
-    props.setProperty("scalar.dl.client.auditor.port", prop("e2e.auditor.port", "40051"));
-    props.setProperty(
-        "scalar.dl.client.auditor.privileged_port", prop("e2e.auditor.privileged_port", "40052"));
-    props.setProperty("scalar.dl.client.authentication.method", "hmac");
-    props.setProperty("scalar.dl.client.entity.id", entityId);
-    props.setProperty(
-        "scalar.dl.client.entity.identity.hmac.secret_key",
-        prop("e2e.client.hmac.secret", "e2e-client-hmac-secret-disposable-0123456789"));
-
+    Properties props = loadClientProperties();
+    String entityId = props.getProperty(ClientConfig.ENTITY_ID, "e2e-client");
     ObjectMapper mapper = new ObjectMapper();
     ClientServiceFactory factory = new ClientServiceFactory();
     try {
@@ -76,19 +68,25 @@ public final class PopulateMain {
         // autoBootstrap=true registers this client's HMAC secret on both servers and the
         // linearizable-validation contract used by auditor mode.
         ClientService client = factory.create(new ClientConfig(props), true);
-        registerContractIdempotently(client);
-        int count = Integer.parseInt(prop("e2e.populate.count", "4"));
-        List<String> ids = runCommitted(client, mapper, runId, count);
-        mergeSeedMetadata(mapper, outputDir, runId, entityId, "committedAssetIds", ids);
+        registerContractIdempotently(client, PUT_CONTRACT_ID, PutAssetContract.class);
+        registerContractIdempotently(client, GET_CONTRACT_ID, GetAssetContract.class);
+        int count = Integer.parseInt(getProperty("e2e.populate.count", "4"));
+        List<String> ids = runCommitted(client, mapper, count);
+        mergeSeedMetadata(mapper, outputDir, entityId, "committedAssetIds", ids);
         System.out.println("Populate(committed) complete: " + ids.size() + " committed assets");
       } else if ("stranded".equals(mode)) {
         // The Ledger is down, so we cannot bootstrap or register (both hit the Ledger). Reuse the
-        // identity/contract registered by the earlier committed run.
+        // identity/contracts registered by the earlier committed run. Leave both a held WRITE lock
+        // (put) and a held READ lock (get) for auditor-finalize-records to recover.
         ClientService client = factory.create(new ClientConfig(props), false);
-        String id = runStranded(client, mapper, runId);
+        String writeId = runStrandedWrite(client, mapper);
+        String readId = runStrandedRead(client, mapper);
         mergeSeedMetadata(
-            mapper, outputDir, runId, entityId, "strandedAssetIds", Collections.singletonList(id));
-        System.out.println("Populate(stranded) complete: stranded asset " + id);
+            mapper, outputDir, entityId, "strandedAssetIds", Collections.singletonList(writeId));
+        mergeSeedMetadata(
+            mapper, outputDir, entityId, "strandedReadAssetIds", Collections.singletonList(readId));
+        System.out.println(
+            "Populate(stranded) complete: WRITE lock on " + writeId + ", READ lock on " + readId);
       } else {
         throw new IllegalArgumentException("Unknown e2e.mode: " + mode);
       }
@@ -99,80 +97,113 @@ public final class PopulateMain {
   }
 
   /**
-   * Registers the contract, tolerating a prior registration. The shared E2E Cosmos account persists
+   * Loads the client properties from {@code build/client.properties}, which the workflow renders
+   * from ci/e2e/client.properties (with the Cosmos credentials filled in) and shares with verify.
+   * The path is relative to the e2e module dir (this task's working dir). Its {@code
+   * scalar.dl.client.*} keys configure the client; the {@code scalar.db.*} keys are ignored by
+   * ClientConfig.
+   */
+  private static Properties loadClientProperties() throws IOException {
+    Properties props = new Properties();
+    try (InputStream in = Files.newInputStream(Paths.get(CLIENT_PROPERTIES_PATH))) {
+      props.load(in);
+    }
+    return props;
+  }
+
+  /**
+   * Registers a contract, tolerating a prior registration. The shared E2E Cosmos account persists
    * registrations across runs, so a repeat registration returns CONTRACT_ALREADY_REGISTERED, which
    * is benign here.
    */
-  private static void registerContractIdempotently(ClientService client) throws IOException {
+  private static void registerContractIdempotently(
+      ClientService client, String contractId, Class<?> contractClass) throws IOException {
     try {
-      client.registerContract(
-          CONTRACT_ID, PutAssetContract.class.getName(), classBytes(PutAssetContract.class));
-      System.out.println("Registered contract " + CONTRACT_ID);
+      client.registerContract(contractId, contractClass.getName(), classBytes(contractClass));
+      System.out.println("Registered contract " + contractId);
     } catch (ClientException e) {
       if (e.getStatusCode() == StatusCode.CONTRACT_ALREADY_REGISTERED) {
-        System.out.println("Contract " + CONTRACT_ID + " already registered; reusing");
+        System.out.println("Contract " + contractId + " already registered; reusing");
       } else {
         throw e;
       }
     }
   }
 
-  private static List<String> runCommitted(
-      ClientService client, ObjectMapper mapper, String runId, int count) {
+  private static List<String> runCommitted(ClientService client, ObjectMapper mapper, int count) {
     List<String> ids = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      String assetId = "e2e-" + runId + "-asset-" + i;
+      String assetId = "e2e-asset-" + i;
       ObjectNode arg = mapper.createObjectNode();
       arg.put("asset_id", assetId);
       arg.put("amount", 100 + i);
       // In auditor mode a normally-returning executeContract means the write was committed on the
       // Ledger AND validated by the Auditor, so the asset/request_proof/coordinator.state/released
       // asset_lock records now exist in Cosmos.
-      client.executeContract(CONTRACT_ID, arg);
+      client.executeContract(PUT_CONTRACT_ID, arg);
       ids.add(assetId);
       System.out.println("Committed asset " + assetId);
     }
     return ids;
   }
 
-  private static String runStranded(ClientService client, ObjectMapper mapper, String runId) {
-    String assetId = "e2e-" + runId + "-stranded-0";
+  /** Leaves a held WRITE lock: a put whose Auditor ordering succeeds but Ledger commit cannot. */
+  private static String runStrandedWrite(ClientService client, ObjectMapper mapper) {
+    String assetId = "e2e-stranded-0";
     ObjectNode arg = mapper.createObjectNode();
     arg.put("asset_id", assetId);
     arg.put("amount", 999);
+    executeExpectingLedgerDown(client, PUT_CONTRACT_ID, arg, "write", assetId);
+    return assetId;
+  }
+
+  /**
+   * Leaves a held READ lock: a get on an existing committed asset whose Auditor ordering takes a
+   * READ lock but whose Ledger execution cannot complete.
+   */
+  private static String runStrandedRead(ClientService client, ObjectMapper mapper) {
+    String assetId = STRANDED_READ_ASSET_ID;
+    ObjectNode arg = mapper.createObjectNode();
+    arg.put("asset_id", assetId);
+    executeExpectingLedgerDown(client, GET_CONTRACT_ID, arg, "read", assetId);
+    return assetId;
+  }
+
+  /** Runs a contract that must fail because the Ledger is down, leaving the Auditor lock held. */
+  private static void executeExpectingLedgerDown(
+      ClientService client, String contractId, ObjectNode arg, String lockKind, String assetId) {
     boolean threw = false;
     try {
-      client.executeContract(CONTRACT_ID, arg);
+      client.executeContract(contractId, arg);
     } catch (RuntimeException expected) {
       threw = true;
       System.out.println(
-          "Stranded write failed as expected ("
+          "Stranded "
+              + lockKind
+              + " on "
+              + assetId
+              + " failed as expected ("
               + expected.getClass().getSimpleName()
-              + "): the Auditor holds the lock but the Ledger could not commit");
+              + "): the Auditor holds the "
+              + lockKind
+              + " lock but the Ledger could not complete");
     }
     if (!threw) {
       throw new IllegalStateException(
-          "Stranded write unexpectedly succeeded; the Ledger was supposed to be down");
+          "Stranded " + lockKind + " unexpectedly succeeded; the Ledger was supposed to be down");
     }
-    return assetId;
   }
 
   /**
    * Reads the seed-metadata file if present, sets {@code arrayField} to {@code ids}, writes back.
    */
   private static void mergeSeedMetadata(
-      ObjectMapper mapper,
-      Path outputDir,
-      String runId,
-      String entityId,
-      String arrayField,
-      List<String> ids)
+      ObjectMapper mapper, Path outputDir, String entityId, String arrayField, List<String> ids)
       throws IOException {
     Files.createDirectories(outputDir);
     File file = outputDir.resolve("seed-metadata.json").toFile();
     ObjectNode root =
         file.exists() ? (ObjectNode) mapper.readTree(file) : mapper.createObjectNode();
-    root.put("runId", runId);
     root.put("entityId", entityId);
     ArrayNode arr = root.putArray(arrayField);
     ids.forEach(arr::add);
@@ -195,7 +226,7 @@ public final class PopulateMain {
     }
   }
 
-  private static String prop(String key, String defaultValue) {
+  private static String getProperty(String key, String defaultValue) {
     String v = System.getProperty(key);
     return (v == null || v.isEmpty()) ? defaultValue : v;
   }

@@ -1,19 +1,15 @@
 name: E2E Verify (full pipeline)
 
 # The real end-to-end test for coordinator-state-deleter:
-#   1. deploy ScalarDL 3.13.0 on minikube (Cosmos storage)
-#   2. populate committed + stranded auditor-mode data (3.13.0 on-disk format)
-#   3. switch servers to 3.14.0-SNAPSHOT (the tool's upgrade use case)
-#   4. run the CLI 3 commands against 3.14 + Cosmos and assert the outcome
+#   1. deploy ScalarDL - 3.13 on minikube
+#   2. populate committed + stranded auditor-mode data
+#   3. switch servers to 3.14 +
+#   4. run the CLI 3 commands against 3.14 + and assert the outcome
 #
-# Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT (ghcr pull + GitHub
-# Packages read for the 4.0.0-SNAPSHOT client SDK).
+# Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
 on:
-  # Temporary: validate on the feature branch via push AND on PRs before merge.
-  # Remove both 'push' and 'pull_request' when merging to master (rely on
-  # workflow_dispatch; add a nightly schedule then if wanted).
-  push:
+  push: # TODO: remove this after review
     branches: [add-e2e]
     paths:
       - 'coordinator-state-deleter/**'
@@ -22,17 +18,15 @@ on:
     paths:
       - 'coordinator-state-deleter/**'
       - '.github/workflows/e2e-verify.yaml'
-  workflow_dispatch:
+  workflow_dispatch: # These defaults pre-fill the dispatch form. Non-dispatch triggers
+    # (push/pull_request/schedule) fall back to the same values in the job env below.
     inputs:
       populate_version:
-        description: 'ScalarDL version for populate (old data)'
+        description: 'ScalarDL version for populate / old data'
         default: '3.13.0'
       verify_version:
-        description: 'ScalarDL version for verify (tool run)'
+        description: 'ScalarDL version for verify / tool run'
         default: '3.14.0-SNAPSHOT'
-      populate_count:
-        description: 'Number of committed assets to create'
-        default: '4'
 
 defaults:
   run:
@@ -48,10 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
-      RUN_ID: ${{ github.run_id }}
       POPULATE_VERSION: ${{ github.event.inputs.populate_version || '3.13.0' }}
       VERIFY_VERSION: ${{ github.event.inputs.verify_version || '3.14.0-SNAPSHOT' }}
-      POPULATE_COUNT: ${{ github.event.inputs.populate_count || '4' }}
       GHCR_USER: ${{ github.actor }}
       GPR_USERNAME: ${{ github.actor }}
       GPR_PASSWORD: ${{ secrets.CR_PAT }}
@@ -60,6 +52,13 @@ jobs:
       CR_PAT: ${{ secrets.CR_PAT }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Render client.properties (inject Cosmos credentials)
+        # Shared by populate and verify at a fixed path both gradle tasks read (e2e module build
+        # dir). Only ${COSMOS_URI}/${COSMOS_KEY} are substituted.
+        run: |
+          mkdir -p e2e/build
+          envsubst '${COSMOS_URI} ${COSMOS_KEY}' < ci/e2e/client.properties > e2e/build/client.properties
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -86,22 +85,18 @@ jobs:
       - name: Populate committed data
         run: |
           set -euo pipefail
-          LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
+          LNS="ledger-e2e"; ANS="auditor-e2e"
           source ci/e2e/port-forward.sh
           pf_reset
           pf_start "$LNS" svc/ledger  50051:50051 50052:50052
           pf_start "$ANS" svc/auditor 40051:40051 40052:40052
           pf_wait 50051 50052 40051 40052
-          ./gradlew :e2e:e2ePopulate \
-            -De2e.mode=committed \
-            -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
-            -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
-            -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e -De2e.populate.count="${POPULATE_COUNT}"
+          ./gradlew :e2e:e2ePopulate -De2e.mode=committed
 
       - name: Generate stranded lock (Ledger down)
         run: |
           set -euo pipefail
-          LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
+          LNS="ledger-e2e"; ANS="auditor-e2e"
           source ci/e2e/port-forward.sh
           pf_reset
           # Take the Ledger down so the auditor-mode write cannot commit (stranded lock).
@@ -109,11 +104,7 @@ jobs:
           kubectl -n "$LNS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s
           pf_start "$ANS" svc/auditor 40051:40051 40052:40052
           pf_wait 40051 40052
-          ./gradlew :e2e:e2ePopulate \
-            -De2e.mode=stranded \
-            -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
-            -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
-            -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e
+          ./gradlew :e2e:e2ePopulate -De2e.mode=stranded
           echo "Waiting 16s for the held lock to pass the 15s valid period ..."
           sleep 16
 
@@ -126,18 +117,13 @@ jobs:
       - name: Run verify (CLI 3 commands)
         run: |
           set -euo pipefail
-          LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
+          LNS="ledger-e2e"; ANS="auditor-e2e"
           source ci/e2e/port-forward.sh
           pf_reset
           pf_start "$LNS" svc/ledger  50051:50051 50052:50052
           pf_start "$ANS" svc/auditor 40051:40051 40052:40052
           pf_wait 50051 50052 40051 40052
-          ./gradlew :e2e:minikubeE2eTest \
-            -Dscalardb.cosmos.uri="${COSMOS_URI}" \
-            -Dscalardb.cosmos.password="${COSMOS_KEY}" \
-            -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
-            -De2e.auditor.host=127.0.0.1 -De2e.auditor.port=40051 -De2e.auditor.privileged_port=40052 \
-            -De2e.run.id="${RUN_ID}" -De2e.output.dir=build/e2e
+          ./gradlew :e2e:minikubeE2eTest
 
       - name: Upload verify test report
         if: always()
@@ -161,7 +147,7 @@ jobs:
           set +e
           mkdir -p /tmp/e2e-diag
           cp /tmp/pf-*.log /tmp/e2e-diag/ 2>/dev/null
-          for ns in "ledger-e2e-${RUN_ID}" "auditor-e2e-${RUN_ID}"; do
+          for ns in ledger-e2e auditor-e2e; do
             kubectl -n "$ns" get all -o wide            > "/tmp/e2e-diag/${ns}-get-all.txt" 2>&1
             kubectl -n "$ns" describe pods              > "/tmp/e2e-diag/${ns}-describe-pods.txt" 2>&1
             kubectl -n "$ns" get events --sort-by=.lastTimestamp > "/tmp/e2e-diag/${ns}-events.txt" 2>&1
@@ -180,9 +166,8 @@ jobs:
 
       - name: Drop Cosmos schema
         if: always()
-        # Fail-soft: cleanup best-effort. Must run before namespaces are deleted
-        # (it uses the in-namespace ConfigMap + ghcr-secret).
-        run: ./ci/e2e/manage-cluster.sh drop-schema || echo "schema drop failed (non-fatal)"
+        # Must run before namespace teardown (it uses the in-namespace ConfigMap + ghcr-secret).
+        run: ./ci/e2e/manage-cluster.sh drop-schema
 
       - name: Tear down namespaces
         if: always()

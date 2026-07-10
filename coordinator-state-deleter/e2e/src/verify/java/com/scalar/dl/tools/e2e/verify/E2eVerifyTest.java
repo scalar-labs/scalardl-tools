@@ -11,6 +11,7 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.tools.cli.CoordinatorStateDeleter;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,58 +29,46 @@ import org.junit.jupiter.api.TestInstance;
  * the running 3.14.0-SNAPSHOT Ledger + Auditor (and the shared Cosmos DB), exercising the real CLI
  * wiring and the real Auditor {@code RecoverAssetLock} gRPC path against data written by 3.13.0.
  *
- * <p>Beyond exit codes and tokens, this reads Cosmos directly to assert that the stranded held lock
- * seeded by populate is actually released by {@code auditor-finalize-records} (held before,
- * released after) — proving the RecoverAssetLock path did real work, not just returned 0.
+ * <p>Beyond exit codes and tokens, this reads Cosmos directly to assert that both stranded held
+ * locks seeded by populate — a WRITE lock (put) and a READ lock (get) — are actually released by
+ * {@code auditor-finalize-records} (held before, released after), proving the RecoverAssetLock path
+ * did real work for both lock types, not just returned 0.
  *
- * <p>Connection details come from system properties: {@code -Dscalardb.cosmos.uri} / {@code
- * -Dscalardb.cosmos.password} for Cosmos, and {@code -De2e.*} for the port-forwarded server
- * targets. The stranded asset id is read from the seed-metadata file written by populate.
+ * <p>Connection details come from {@code build/client.properties} (rendered by the workflow from
+ * ci/e2e/client.properties, shared with populate: ScalarDB Cosmos + ScalarDL client config). The
+ * stranded asset ids are read from the seed-metadata file written by populate.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class E2eVerifyTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  // Rendered by the workflow (from ci/e2e/client.properties); relative to the e2e module dir.
+  private static final String CLIENT_PROPERTIES_PATH = "build/client.properties";
 
   private Path propertiesFile;
   private Path checkpointRoot;
   private DistributedStorage storage;
   private String strandedAssetId;
+  private String strandedReadAssetId;
 
   @BeforeAll
   void setUp() throws Exception {
-    String cosmosUri = required("scalardb.cosmos.uri");
-    String cosmosKey = required("scalardb.cosmos.password");
-
+    // The CLI and these tests share the properties file the workflow renders from
+    // ci/e2e/client.properties (Cosmos credentials filled in via envsubst).
+    propertiesFile = Paths.get(CLIENT_PROPERTIES_PATH);
     Properties props = new Properties();
-    props.setProperty("scalar.db.storage", "cosmos");
-    props.setProperty("scalar.db.contact_points", cosmosUri);
-    props.setProperty("scalar.db.password", cosmosKey);
-    props.setProperty("scalar.dl.client.server.host", prop("e2e.ledger.host", "127.0.0.1"));
-    props.setProperty("scalar.dl.client.server.port", prop("e2e.ledger.port", "50051"));
-    props.setProperty(
-        "scalar.dl.client.server.privileged_port", prop("e2e.ledger.privileged_port", "50052"));
-    props.setProperty("scalar.dl.client.auditor.enabled", "true");
-    props.setProperty("scalar.dl.client.auditor.host", prop("e2e.auditor.host", "127.0.0.1"));
-    props.setProperty("scalar.dl.client.auditor.port", prop("e2e.auditor.port", "40051"));
-    props.setProperty(
-        "scalar.dl.client.auditor.privileged_port", prop("e2e.auditor.privileged_port", "40052"));
-    props.setProperty("scalar.dl.client.authentication.method", "hmac");
-    props.setProperty("scalar.dl.client.entity.id", prop("e2e.client.entity.id", "e2e-client"));
-    props.setProperty(
-        "scalar.dl.client.entity.identity.hmac.secret_key",
-        prop("e2e.client.hmac.secret", "e2e-client-hmac-secret-disposable-0123456789"));
-
-    Path dir = Files.createTempDirectory("e2e-verify");
-    propertiesFile = dir.resolve("client.properties");
-    try (java.io.OutputStream out = Files.newOutputStream(propertiesFile)) {
-      props.store(out, "e2e verify");
+    try (InputStream in = Files.newInputStream(propertiesFile)) {
+      props.load(in);
     }
-    checkpointRoot = Files.createDirectories(dir.resolve("checkpoints"));
 
-    // Storage handle for Cosmos-level assertions (StorageFactory ignores the scalar.dl.* keys).
+    checkpointRoot =
+        Files.createDirectories(Files.createTempDirectory("e2e-verify").resolve("checkpoints"));
+
+    // Storage handle for Cosmos-level assertions (StorageFactory reads scalar.db.* and ignores the
+    // scalar.dl.* keys in the same file).
     storage = StorageFactory.create(props).getStorage();
-    strandedAssetId = readStrandedAssetId();
+    strandedAssetId = readSeedAssetId("strandedAssetIds");
+    strandedReadAssetId = readSeedAssetId("strandedReadAssetIds");
   }
 
   @AfterAll
@@ -97,13 +86,20 @@ public class E2eVerifyTest {
     String ledgerToken = ledger.completionToken();
     assertThat(ledgerToken).as("ledger completion token").isNotEmpty();
 
-    // Sanity: the stranded lock seeded by populate must still be HELD before recovery. This also
-    // confirms the populate stranded-lock generation actually worked.
-    assertThat(strandedLockHeld())
-        .as("stranded asset %s should hold a lock before auditor-finalize", strandedAssetId)
+    // Sanity: the stranded locks seeded by populate must still be HELD before recovery (WRITE from
+    // the put, READ from the get). This also confirms the populate stranded-lock generation worked.
+    assertThat(strandedLockHeld(strandedAssetId))
+        .as(
+            "stranded WRITE-lock asset %s should hold a lock before auditor-finalize",
+            strandedAssetId)
+        .isTrue();
+    assertThat(strandedLockHeld(strandedReadAssetId))
+        .as(
+            "stranded READ-lock asset %s should hold a lock before auditor-finalize",
+            strandedReadAssetId)
         .isTrue();
 
-    // 2) Auditor side: release the stranded lock via the real RecoverAssetLock gRPC path and clean
+    // 2) Auditor side: release the stranded locks via the real RecoverAssetLock gRPC path and clean
     //    settled request_proof records, emit the auditor token.
     CliResult auditor = run("auditor-finalize-records", checkpoint("auditor"));
     assertThat(auditor.exitCode)
@@ -112,9 +108,16 @@ public class E2eVerifyTest {
     String auditorToken = auditor.completionToken();
     assertThat(auditorToken).as("auditor completion token").isNotEmpty();
 
-    // The core assertion: RecoverAssetLock actually released the stranded lock.
-    assertThat(strandedLockHeld())
-        .as("stranded asset %s lock should be released after auditor-finalize", strandedAssetId)
+    // The core assertion: RecoverAssetLock actually released both stranded locks (WRITE and READ).
+    assertThat(strandedLockHeld(strandedAssetId))
+        .as(
+            "stranded WRITE-lock asset %s should be released after auditor-finalize",
+            strandedAssetId)
+        .isFalse();
+    assertThat(strandedLockHeld(strandedReadAssetId))
+        .as(
+            "stranded READ-lock asset %s should be released after auditor-finalize",
+            strandedReadAssetId)
         .isFalse();
 
     // 3) Delete coordinator-state records that are safe given both tokens.
@@ -133,16 +136,16 @@ public class E2eVerifyTest {
   }
 
   /**
-   * Returns whether the stranded asset's {@code asset_lock} row is currently held (present with a
+   * Returns whether the given asset's {@code asset_lock} row is currently held (present with a
    * non-NONE lock type). The partition key of the asset_lock table is the asset id itself.
    */
-  private boolean strandedLockHeld() throws Exception {
+  private boolean strandedLockHeld(String assetId) throws Exception {
     Get get =
         Get.newBuilder()
             .namespace(AuditorInternalValues.DEFAULT_BASE_NAMESPACE)
             .table(AuditorInternalValues.ASSET_LOCK_TABLE_NAME)
             .partitionKey(
-                Key.ofText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME, strandedAssetId))
+                Key.ofText(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME, assetId))
             .build();
     Optional<com.scalar.db.api.Result> row = storage.get(get);
     if (!row.isPresent()) {
@@ -152,12 +155,12 @@ public class E2eVerifyTest {
     return lockType != AuditorInternalValues.LOCK_TYPE_NONE;
   }
 
-  private String readStrandedAssetId() throws Exception {
+  private String readSeedAssetId(String field) throws Exception {
     Path seed = Paths.get(prop("e2e.output.dir", "build/e2e")).resolve("seed-metadata.json");
     JsonNode root = MAPPER.readTree(seed.toFile());
-    JsonNode ids = root.get("strandedAssetIds");
+    JsonNode ids = root.get(field);
     if (ids == null || !ids.isArray() || ids.isEmpty()) {
-      throw new IllegalStateException("No strandedAssetIds in seed-metadata: " + seed);
+      throw new IllegalStateException("No " + field + " in seed-metadata: " + seed);
     }
     return ids.get(0).asText();
   }
@@ -195,14 +198,6 @@ public class E2eVerifyTest {
   private static String prop(String key, String defaultValue) {
     String v = System.getProperty(key);
     return (v == null || v.isEmpty()) ? defaultValue : v;
-  }
-
-  private static String required(String key) {
-    String v = System.getProperty(key);
-    if (v == null || v.isEmpty()) {
-      throw new IllegalStateException("System property " + key + " must be set");
-    }
-    return v;
   }
 
   /** Parsed result of one CLI invocation: {@code {"status_code":..,"output":{..}}}. */
