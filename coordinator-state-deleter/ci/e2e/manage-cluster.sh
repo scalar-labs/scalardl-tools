@@ -6,10 +6,11 @@
 #
 # Modes:
 #   deploy       load the ScalarDB schema, deploy Ledger + Auditor, wait until healthy
+#   stop-ledger  scale the Ledger to 0 and wait for its pod to be deleted
 #   drop-schema  delete the ScalarDB schema (Cosmos cleanup)
 #   clean        delete the k8s namespaces
 #
-# Required environment (all modes except clean):
+# Required environment (deploy and drop-schema only):
 #   COSMOS_URI   Cosmos DB account URI
 #   COSMOS_KEY   Cosmos DB primary key
 #   CR_PAT       ghcr Personal Access Token with read:packages
@@ -20,7 +21,7 @@
 #
 # Usage:
 #   COSMOS_URI=... COSMOS_KEY=... CR_PAT=... GHCR_USER=... ./manage-cluster.sh deploy
-#   ./manage-cluster.sh drop-schema | clean
+#   ./manage-cluster.sh stop-ledger | drop-schema | clean
 
 set -euo pipefail
 
@@ -55,15 +56,25 @@ SUBST_VARS+='${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS}'
 
 render() { envsubst "$SUBST_VARS" < "$HERE/$1"; }
 
+require_vars() {
+  for v in COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER; do
+    if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
+  done
+}
+
 clean() {
   echo "Deleting namespaces ${LEDGER_NS} and ${AUDITOR_NS} ..."
   kubectl delete namespace "$LEDGER_NS" "$AUDITOR_NS" --ignore-not-found
 }
 
-if [[ "${1:-}" == "clean" ]]; then
-  clean
-  exit 0
-fi
+# Scale the Ledger to 0 and wait for its pod to disappear. With the Ledger down, the next
+# auditor-mode put/get cannot commit, so the Auditor is left holding the lock — used to
+# seed stranded locks for the recovery test.
+stop_ledger() {
+  echo "==> scale down the Ledger"
+  kubectl -n "$LEDGER_NS" scale deployment/scalardl-ledger --replicas=0
+  kubectl -n "$LEDGER_NS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s
+}
 
 # Dump everything useful about a namespace's workloads, then fail.
 diag_and_die() {
@@ -106,12 +117,6 @@ wait_for_deploy() {
   fi
 }
 
-require_vars() {
-  for v in COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER; do
-    if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
-  done
-}
-
 # Deploy schema + servers and block until both Deployments are available and pass a
 # gRPC health check. Leaves the servers running.
 deploy_all() {
@@ -152,15 +157,20 @@ deploy_all() {
     /usr/local/bin/grpc_health_probe -addr=:40051
 }
 
-require_vars
-
 case "${1:-}" in
   deploy)
+    require_vars
     deploy_all
     echo
     echo "DEPLOY OK: servers Ready in $LEDGER_NS / $AUDITOR_NS."
     ;;
+  stop-ledger)
+    stop_ledger
+    echo
+    echo "STOP-LEDGER OK: $LEDGER_NS/scalardl-ledger scaled to 0."
+    ;;
   drop-schema)
+    require_vars
     # If neither namespace exists, there is nothing to drop.
     if ! kubectl get namespace "$LEDGER_NS" >/dev/null 2>&1 \
         && ! kubectl get namespace "$AUDITOR_NS" >/dev/null 2>&1; then
@@ -183,8 +193,11 @@ case "${1:-}" in
     echo
     echo "DROP-SCHEMA OK"
     ;;
+  clean)
+    clean
+    ;;
   *)
-    echo "usage: manage-cluster.sh [deploy|drop-schema|clean]" >&2
+    echo "usage: manage-cluster.sh [deploy|stop-ledger|drop-schema|clean]" >&2
     exit 1
     ;;
 esac
