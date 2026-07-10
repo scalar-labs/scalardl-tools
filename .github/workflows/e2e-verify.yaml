@@ -87,20 +87,11 @@ jobs:
         run: |
           set -euo pipefail
           LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
-          # kubectl port-forwards from a previous step survive into this one and keep
-          # their local ports bound (now pointing at deleted pods after a redeploy),
-          # which surfaces as "connection refused" mid-run. Kill any leftovers first.
-          pkill -f 'kubectl.*port-forward' 2>/dev/null || true
-          sleep 2
-          kubectl -n "$LNS" port-forward svc/ledger 50051:50051 50052:50052 >/tmp/pf-l.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-a.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor 40052:40052 >/tmp/pf-ap.log 2>&1 &
-          for p in 50051 50052 40051 40052; do
-            ok=""; for _ in $(seq 1 30); do
-              if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
-              sleep 1; done
-            [ -n "$ok" ] || { echo "::error::localhost:$p not reachable"; exit 1; }
-          done
+          source ci/e2e/pf-lib.sh
+          pf_reset
+          pf_start "$LNS" svc/ledger  50051:50051 50052:50052
+          pf_start "$ANS" svc/auditor 40051:40051 40052:40052
+          pf_wait 50051 50052 40051 40052
           ./gradlew :e2e:e2ePopulate \
             -De2e.mode=committed \
             -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
@@ -111,21 +102,13 @@ jobs:
         run: |
           set -euo pipefail
           LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
-          # kubectl port-forwards from a previous step survive into this one and keep
-          # their local ports bound (now pointing at deleted pods after a redeploy),
-          # which surfaces as "connection refused" mid-run. Kill any leftovers first.
-          pkill -f 'kubectl.*port-forward' 2>/dev/null || true
-          sleep 2
+          source ci/e2e/pf-lib.sh
+          pf_reset
+          # Take the Ledger down so the auditor-mode write cannot commit (stranded lock).
           kubectl -n "$LNS" scale deployment/scalardl-ledger --replicas=0
           kubectl -n "$LNS" wait --for=delete pod -l app=scalardl-ledger --timeout=120s
-          kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-a2.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor 40052:40052 >/tmp/pf-ap2.log 2>&1 &
-          for p in 40051 40052; do
-            ok=""; for _ in $(seq 1 30); do
-              if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
-              sleep 1; done
-            [ -n "$ok" ] || { echo "::error::localhost:$p not reachable"; exit 1; }
-          done
+          pf_start "$ANS" svc/auditor 40051:40051 40052:40052
+          pf_wait 40051 40052
           ./gradlew :e2e:e2ePopulate \
             -De2e.mode=stranded \
             -De2e.ledger.host=127.0.0.1 -De2e.ledger.port=50051 -De2e.ledger.privileged_port=50052 \
@@ -144,20 +127,11 @@ jobs:
         run: |
           set -euo pipefail
           LNS="ledger-e2e-${RUN_ID}"; ANS="auditor-e2e-${RUN_ID}"
-          # kubectl port-forwards from a previous step survive into this one and keep
-          # their local ports bound (now pointing at deleted pods after a redeploy),
-          # which surfaces as "connection refused" mid-run. Kill any leftovers first.
-          pkill -f 'kubectl.*port-forward' 2>/dev/null || true
-          sleep 2
-          kubectl -n "$LNS" port-forward svc/ledger 50051:50051 50052:50052 >/tmp/pf-lv.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor 40051:40051 >/tmp/pf-av.log 2>&1 &
-          kubectl -n "$ANS" port-forward svc/auditor 40052:40052 >/tmp/pf-apv.log 2>&1 &
-          for p in 50051 50052 40051 40052; do
-            ok=""; for _ in $(seq 1 30); do
-              if timeout 2 bash -c "exec 3<>/dev/tcp/127.0.0.1/$p" 2>/dev/null; then ok=1; break; fi
-              sleep 1; done
-            [ -n "$ok" ] || { echo "::error::localhost:$p not reachable"; exit 1; }
-          done
+          source ci/e2e/pf-lib.sh
+          pf_reset
+          pf_start "$LNS" svc/ledger  50051:50051 50052:50052
+          pf_start "$ANS" svc/auditor 40051:40051 40052:40052
+          pf_wait 50051 50052 40051 40052
           ./gradlew :e2e:minikubeE2eTest \
             -Dscalardb.cosmos.uri="${COSMOS_URI}" \
             -Dscalardb.cosmos.password="${COSMOS_KEY}" \

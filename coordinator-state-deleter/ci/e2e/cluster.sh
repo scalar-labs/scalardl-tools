@@ -43,9 +43,15 @@ export LEDGER_IMAGE="ghcr.io/scalar-labs/scalardl-ledger:${LEDGER_VERSION}"
 export AUDITOR_IMAGE="ghcr.io/scalar-labs/scalardl-auditor:${AUDITOR_VERSION}"
 export SCHEMA_LOADER_IMAGE="ghcr.io/scalar-labs/scalardl-schema-loader:${SCHEMA_LOADER_VERSION}"
 
-# Only these placeholders are substituted; anything else (e.g. $@ inside PEMs) is
-# left untouched.
-SUBST_VARS='${LEDGER_NS} ${AUDITOR_NS} ${LEDGER_IMAGE} ${AUDITOR_IMAGE} ${SCHEMA_LOADER_IMAGE} ${COSMOS_URI} ${COSMOS_KEY}'
+# HMAC auth values injected into BOTH ledger.yaml and auditor.yaml so the shared
+# Ledger<->Auditor secret is defined in exactly one place (ledger and auditor MUST
+# use the same servers secret). Disposable test values for this ephemeral cluster.
+export SERVERS_HMAC_SECRET="e2e-servers-hmac-secret-disposable-0123456789"
+export HMAC_CIPHER_KEY="e2e-hmac-cipher-key-disposable-0123456789abcdef"
+
+# Only these placeholders are substituted; anything else (e.g. $@ inside scripts)
+# is left untouched.
+SUBST_VARS='${LEDGER_NS} ${AUDITOR_NS} ${LEDGER_IMAGE} ${AUDITOR_IMAGE} ${SCHEMA_LOADER_IMAGE} ${COSMOS_URI} ${COSMOS_KEY} ${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KEY}'
 
 render() { envsubst "$SUBST_VARS" < "$HERE/$1"; }
 
@@ -100,32 +106,11 @@ wait_for_deploy() {
   fi
 }
 
-# Background kubectl port-forwards; killed on exit so we never leak tunnels.
-PF_PIDS=()
-kill_port_forwards() {
-  for pid in "${PF_PIDS[@]:-}"; do
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
-  done
-}
-trap kill_port_forwards EXIT
-
-# TCP connect check (bash builtin, no extra tooling on the host).
-check_tcp() { timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" 2>/dev/null; }
-
-# Start a port-forward and block until the local port actually accepts a
-# connection, so callers can rely on the tunnel being live.
-start_port_forward() {
-  local ns="$1" target="$2"; shift 2   # remaining args: local:remote pairs
-  kubectl -n "$ns" port-forward "$target" "$@" >/dev/null 2>&1 &
-  PF_PIDS+=("$!")
-  local first_local="${1%%:*}" waited=0
-  until check_tcp "$first_local"; do
-    if (( waited >= 30 )); then
-      echo "::error::port-forward to $ns/$target ($*) never became reachable"; exit 1
-    fi
-    sleep 1; waited=$((waited + 1))
-  done
-}
+# Shared kubectl port-forward helpers (pf_reset/pf_start/pf_wait/pf_kill), also
+# used by e2e-verify.yaml so the fiddly tunnel logic lives in one place.
+# shellcheck source=pf-lib.sh
+source "$HERE/pf-lib.sh"
+trap pf_kill EXIT
 
 require_vars() {
   for v in COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER; do
@@ -213,19 +198,12 @@ case "${1:-smoke}" in
   smoke)
     deploy_all
     # Mirror how the gradle E2E process reaches the servers: kubectl port-forward
-    # from the host. Ledger gRPC 50051 + privileged 50052; Auditor gRPC 40051
-    # (svc/auditor) + privileged 40052 (svc/auditor).
+    # from the host (ledger 50051/50052, auditor 40051/40052).
     echo "==> port-forward servers to host and verify reachability"
-    start_port_forward "$LEDGER_NS"  svc/ledger             50051:50051 50052:50052
-    start_port_forward "$AUDITOR_NS" svc/auditor            40051:40051
-    start_port_forward "$AUDITOR_NS" svc/auditor 40052:40052
-    for port in 50051 50052 40051 40052; do
-      if check_tcp "$port"; then
-        echo "  localhost:$port reachable"
-      else
-        echo "::error::localhost:$port not reachable through port-forward"; exit 1
-      fi
-    done
+    pf_reset
+    pf_start "$LEDGER_NS"  svc/ledger  50051:50051 50052:50052
+    pf_start "$AUDITOR_NS" svc/auditor 40051:40051 40052:40052
+    pf_wait 50051 50052 40051 40052
     echo
     echo "SMOKE OK: both servers Ready and reachable via port-forward. Tear down with:  ./cluster.sh clean"
     ;;

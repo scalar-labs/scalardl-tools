@@ -9,9 +9,9 @@
 # Auth is HMAC (not digital signature): the Ledger and Auditor authenticate each
 # other with a shared servers.authentication.hmac.secret_key, which avoids the
 # server-to-server certificate registration that digital-signature mode needs.
-# The secret/cipher values below are throwaway test values for this disposable
-# E2E cluster only; never reuse them. The auditor manifest MUST use the SAME
-# servers.authentication.hmac.secret_key value.
+# SERVERS_HMAC_SECRET / HMAC_CIPHER_KEY are injected by cluster.sh (defined
+# once there) into both this and auditor.yaml, so the shared secret can't drift.
+# Disposable test values for this ephemeral cluster only; never reuse them.
 
 apiVersion: v1
 kind: Namespace
@@ -44,8 +44,8 @@ data:
 
     # HMAC authentication (clients and Ledger<->Auditor).
     scalar.dl.ledger.authentication.method=hmac
-    scalar.dl.ledger.authentication.hmac.cipher_key=e2e-hmac-cipher-key-disposable-0123456789abcdef
-    scalar.dl.ledger.servers.authentication.hmac.secret_key=e2e-servers-hmac-secret-disposable-0123456789
+    scalar.dl.ledger.authentication.hmac.cipher_key=${HMAC_CIPHER_KEY}
+    scalar.dl.ledger.servers.authentication.hmac.secret_key=${SERVERS_HMAC_SECRET}
 
 ---
 

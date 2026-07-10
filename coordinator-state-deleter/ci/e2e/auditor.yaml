@@ -7,8 +7,8 @@
 #   ${COSMOS_URI}   Cosmos DB account URI
 #   ${COSMOS_KEY}   Cosmos DB primary key
 #
-# Auth is HMAC. servers.authentication.hmac.secret_key MUST match the value in
-# ledger.yaml. Disposable test values only.
+# Auth is HMAC. SERVERS_HMAC_SECRET / HMAC_CIPHER_KEY are injected by
+# cluster.sh (single source, shared with ledger.yaml) so the secret can't drift.
 
 apiVersion: v1
 kind: Namespace
@@ -40,11 +40,11 @@ data:
     scalar.dl.auditor.ledger.port=50051
     scalar.dl.auditor.ledger.privileged_port=50052
 
-    # HMAC authentication (clients and Ledger<->Auditor). The secret_key below
-    # MUST equal ledger.yaml's scalar.dl.ledger.servers.authentication.hmac.secret_key.
+    # HMAC authentication (clients and Ledger<->Auditor). The servers secret is the
+    # same value injected into ledger.yaml (single source in cluster.sh).
     scalar.dl.auditor.authentication.method=hmac
-    scalar.dl.auditor.authentication.hmac.cipher_key=e2e-hmac-cipher-key-disposable-0123456789abcdef
-    scalar.dl.auditor.servers.authentication.hmac.secret_key=e2e-servers-hmac-secret-disposable-0123456789
+    scalar.dl.auditor.authentication.hmac.cipher_key=${HMAC_CIPHER_KEY}
+    scalar.dl.auditor.servers.authentication.hmac.secret_key=${SERVERS_HMAC_SECRET}
 
 ---
 
