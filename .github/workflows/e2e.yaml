@@ -7,11 +7,6 @@ name: E2E
 # Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
 on:
-  push: # TODO: remove after review — lets the branch be validated before a PR exists.
-    branches: [add-e2e-infra]
-    paths:
-      - 'coordinator-state-deleter/**'
-      - '.github/workflows/e2e.yaml'
   pull_request:
     paths:
       - 'coordinator-state-deleter/**'
