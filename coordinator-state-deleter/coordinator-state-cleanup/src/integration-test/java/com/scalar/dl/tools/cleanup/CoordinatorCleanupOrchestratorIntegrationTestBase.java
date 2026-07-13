@@ -17,7 +17,7 @@ import com.scalar.db.io.Key;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.Attribute;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import java.nio.file.Path;
@@ -80,8 +80,8 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
       throws Exception {
     Put put =
         Put.newBuilder()
-            .namespace(Coordinator.NAMESPACE)
-            .table(Coordinator.TABLE)
+            .namespace(CoordinatorStateAccessor.NAMESPACE)
+            .table(CoordinatorStateAccessor.TABLE)
             .partitionKey(Key.ofText(Attribute.ID, txId))
             .intValue(Attribute.STATE, state.get())
             .bigIntValue(Attribute.CREATED_AT, createdAt)
@@ -127,8 +127,8 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
   private void assertCoordinatorRecordPresent(String txId) throws Exception {
     Get get =
         Get.newBuilder()
-            .namespace(Coordinator.NAMESPACE)
-            .table(Coordinator.TABLE)
+            .namespace(CoordinatorStateAccessor.NAMESPACE)
+            .table(CoordinatorStateAccessor.TABLE)
             .partitionKey(Key.ofText(Attribute.ID, txId))
             .build();
     Optional<Result> result = storage.get(get);
@@ -138,8 +138,8 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
   private void assertCoordinatorRecordAbsent(String txId) throws Exception {
     Get get =
         Get.newBuilder()
-            .namespace(Coordinator.NAMESPACE)
-            .table(Coordinator.TABLE)
+            .namespace(CoordinatorStateAccessor.NAMESPACE)
+            .table(CoordinatorStateAccessor.TABLE)
             .partitionKey(Key.ofText(Attribute.ID, txId))
             .build();
     Optional<Result> result = storage.get(get);
@@ -190,7 +190,7 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
             storage,
             scannerFactory,
             checkpointDir,
-            Coordinator.NAMESPACE,
+            CoordinatorStateAccessor.NAMESPACE,
             ledgerToken,
             auditorToken);
     orchestrator.execute();
@@ -220,7 +220,7 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
             storage,
             scannerFactory,
             checkpointDir,
-            Coordinator.NAMESPACE,
+            CoordinatorStateAccessor.NAMESPACE,
             ledgerToken,
             auditorToken);
     orchestrator.execute();
@@ -244,7 +244,7 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     // Act
     CoordinatorCleanupOrchestrator orchestrator =
         new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, checkpointDir, Coordinator.NAMESPACE, null, null);
+            storage, scannerFactory, checkpointDir, CoordinatorStateAccessor.NAMESPACE, null, null);
     orchestrator.execute();
 
     // Assert
@@ -268,13 +268,13 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
             storage,
             scannerFactory,
             checkpointDir,
-            Coordinator.NAMESPACE,
+            CoordinatorStateAccessor.NAMESPACE,
             ledgerToken,
             auditorToken)
         .execute();
     // The second run against the completed checkpoint must be a safe no-op
     new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, checkpointDir, Coordinator.NAMESPACE, null, null)
+            storage, scannerFactory, checkpointDir, CoordinatorStateAccessor.NAMESPACE, null, null)
         .execute();
 
     // Assert
@@ -292,7 +292,8 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
     String auditorToken = createAuditorToken(DELETABLE_BEFORE_MS);
 
     // A spy that throws on the 3rd call, simulating a crash partway through the scan.
-    RecordDeleter interruptingDeleter = spy(new RecordDeleter(storage, Coordinator.NAMESPACE));
+    RecordDeleter interruptingDeleter =
+        spy(new RecordDeleter(storage, CoordinatorStateAccessor.NAMESPACE));
     AtomicLong deleteCount = new AtomicLong();
     doAnswer(
             invocation -> {
@@ -310,7 +311,7 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
             storage,
             scannerFactory,
             checkpointDir,
-            Coordinator.NAMESPACE,
+            CoordinatorStateAccessor.NAMESPACE,
             ledgerToken,
             auditorToken,
             interruptingDeleter);
@@ -326,7 +327,7 @@ public abstract class CoordinatorCleanupOrchestratorIntegrationTestBase {
 
     // Act 2: re-run against the same checkpoint without tokens, resuming the previous run.
     new CoordinatorCleanupOrchestrator(
-            storage, scannerFactory, checkpointDir, Coordinator.NAMESPACE, null, null)
+            storage, scannerFactory, checkpointDir, CoordinatorStateAccessor.NAMESPACE, null, null)
         .execute();
 
     // Assert: exactly the deletable records are gone, the rest remain, and the run completed.

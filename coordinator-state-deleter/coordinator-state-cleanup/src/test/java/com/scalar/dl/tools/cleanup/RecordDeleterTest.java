@@ -15,7 +15,7 @@ import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.Result;
 import com.scalar.db.exception.storage.ExecutionException;
 import com.scalar.db.io.Key;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,7 @@ class RecordDeleterTest {
   void execute_shouldDeleteAllSuccessfully() throws Exception {
     // Arrange
     doNothing().when(storage).delete(any(Delete.class));
-    RecordDeleter deleter = new RecordDeleter(storage, Coordinator.NAMESPACE);
+    RecordDeleter deleter = new RecordDeleter(storage, CoordinatorStateAccessor.NAMESPACE);
 
     // Act
     deleter.execute(createScanResult("tx1"));
@@ -56,7 +56,7 @@ class RecordDeleterTest {
   void execute_dbFailureGiven_shouldPropagateException() throws Exception {
     // Arrange
     doThrow(new ExecutionException("DB unavailable")).when(storage).delete(any(Delete.class));
-    RecordDeleter deleter = new RecordDeleter(storage, Coordinator.NAMESPACE);
+    RecordDeleter deleter = new RecordDeleter(storage, CoordinatorStateAccessor.NAMESPACE);
 
     // Act & Assert
     assertThatThrownBy(() -> deleter.execute(createScanResult("tx1")))
@@ -84,7 +84,7 @@ class RecordDeleterTest {
     verify(storage).delete(captor.capture());
     Delete captured = captor.getValue();
     assertThat(captured.forNamespace()).hasValue(namespace);
-    assertThat(captured.forTable()).hasValue(Coordinator.TABLE);
+    assertThat(captured.forTable()).hasValue(CoordinatorStateAccessor.TABLE);
     assertThat((Object) captured.getPartitionKey()).isEqualTo(Key.ofText("tx_id", "tx-abc"));
   }
 }

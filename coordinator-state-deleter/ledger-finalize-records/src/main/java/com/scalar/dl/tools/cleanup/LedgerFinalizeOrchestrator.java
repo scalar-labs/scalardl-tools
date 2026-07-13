@@ -6,7 +6,7 @@ import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
@@ -146,7 +146,8 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
   private List<String> discoverTables() throws Exception {
     String coordinatorTable =
-        ScalarDbUtils.getFullTableName(Coordinator.NAMESPACE, Coordinator.TABLE);
+        ScalarDbUtils.getFullTableName(
+            CoordinatorStateAccessor.NAMESPACE, CoordinatorStateAccessor.TABLE);
     List<String> tables = new ArrayList<>();
     for (String namespace : admin.getNamespaceNames()) {
       for (String table : admin.getNamespaceTableNames(namespace)) {

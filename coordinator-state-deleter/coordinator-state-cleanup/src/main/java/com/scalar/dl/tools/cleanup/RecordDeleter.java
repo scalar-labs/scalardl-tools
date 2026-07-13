@@ -4,7 +4,7 @@ import com.scalar.db.api.Delete;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.Result;
 import com.scalar.db.io.Key;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -35,7 +35,7 @@ public final class RecordDeleter {
 
     return Delete.newBuilder()
         .namespace(coordinatorNamespace)
-        .table(Coordinator.TABLE)
+        .table(CoordinatorStateAccessor.TABLE)
         .partitionKey(partitionKey)
         .build();
   }

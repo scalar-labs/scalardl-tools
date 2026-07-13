@@ -5,7 +5,7 @@ import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
@@ -119,7 +119,7 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
   private static String resolveCoordinatorNamespace(DatabaseConfig dbConfig) {
     return new ConsensusCommitConfig(dbConfig)
         .getCoordinatorNamespace()
-        .orElse(Coordinator.NAMESPACE);
+        .orElse(CoordinatorStateAccessor.NAMESPACE);
   }
 
   /**
@@ -228,7 +228,8 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
             new RecordDeletionChecker(deletableBeforeMs), recordDeleter);
 
     try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
-      ScanResult scanResult = scanner.scan(coordinatorNamespace, Coordinator.TABLE, handler);
+      ScanResult scanResult =
+          scanner.scan(coordinatorNamespace, CoordinatorStateAccessor.TABLE, handler);
 
       // The deletion count is per run (command execution) only. Tracking a cumulative total across
       // runs would require persisting it on every deletion, so we report only what this run did.

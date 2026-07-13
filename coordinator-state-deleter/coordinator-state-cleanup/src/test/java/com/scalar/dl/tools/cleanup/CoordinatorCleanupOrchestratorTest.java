@@ -14,7 +14,7 @@ import static org.mockito.Mockito.when;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterError;
 import com.scalar.dl.tools.common.CoordinatorStateDeleterException;
@@ -164,13 +164,14 @@ class CoordinatorCleanupOrchestratorTest {
     String ledgerToken = createLedgerToken(2000L);
     String auditorToken = createAuditorToken(3000L);
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, ledgerToken, auditorToken);
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, ledgerToken, auditorToken);
 
     // Act
     orchestrator.execute();
 
     // Assert
-    verify(scanner).scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any());
+    verify(scanner)
+        .scan(eq(CoordinatorStateAccessor.NAMESPACE), eq(CoordinatorStateAccessor.TABLE), any());
 
     // The boundary (earlier of the two token timestamps) is observable via the persisted state.
     CoordinatorCleanupState state = new CoordinatorCleanupStateManager(tempDir).load();
@@ -188,7 +189,7 @@ class CoordinatorCleanupOrchestratorTest {
     stateManager.persist(completedState);
 
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, null, null);
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, null, null);
 
     // Act
     orchestrator.execute();
@@ -206,7 +207,7 @@ class CoordinatorCleanupOrchestratorTest {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
         newOrchestrator(
-            Coordinator.NAMESPACE,
+            CoordinatorStateAccessor.NAMESPACE,
             createLedgerToken(ledgerTimestamp),
             createAuditorToken(auditorTimestamp));
 
@@ -225,7 +226,7 @@ class CoordinatorCleanupOrchestratorTest {
       String ledgerToken, String auditorToken, CoordinatorStateDeleterError expected) {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, ledgerToken, auditorToken);
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -236,10 +237,14 @@ class CoordinatorCleanupOrchestratorTest {
   @Test
   void execute_scanFailureGiven_shouldPropagateException() throws Exception {
     // Arrange
-    when(scanner.scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any()))
+    when(scanner.scan(
+            eq(CoordinatorStateAccessor.NAMESPACE), eq(CoordinatorStateAccessor.TABLE), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, createLedgerToken(2000L), createAuditorToken(3000L));
+        newOrchestrator(
+            CoordinatorStateAccessor.NAMESPACE,
+            createLedgerToken(2000L),
+            createAuditorToken(3000L));
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -251,10 +256,14 @@ class CoordinatorCleanupOrchestratorTest {
   @Test
   void execute_scanFailureGiven_shouldNotMarkCompleted() throws Exception {
     // Arrange
-    when(scanner.scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any()))
+    when(scanner.scan(
+            eq(CoordinatorStateAccessor.NAMESPACE), eq(CoordinatorStateAccessor.TABLE), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, createLedgerToken(2000L), createAuditorToken(3000L));
+        newOrchestrator(
+            CoordinatorStateAccessor.NAMESPACE,
+            createLedgerToken(2000L),
+            createAuditorToken(3000L));
 
     // Act
     assertThatThrownBy(orchestrator::execute).isInstanceOf(RuntimeException.class);
@@ -274,14 +283,15 @@ class CoordinatorCleanupOrchestratorTest {
     stateManager.persist(new CoordinatorCleanupState(500L));
 
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, null, null);
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, null, null);
 
     // Act
     orchestrator.execute();
 
     // Assert
     // The persisted boundary is reused (not recomputed) and the scan runs
-    verify(scanner).scan(eq(Coordinator.NAMESPACE), eq(Coordinator.TABLE), any());
+    verify(scanner)
+        .scan(eq(CoordinatorStateAccessor.NAMESPACE), eq(CoordinatorStateAccessor.TABLE), any());
     CoordinatorCleanupState state = stateManager.load();
     assertThat(state).isNotNull();
     assertThat(state.getDeletableBeforeMs()).isEqualTo(500L);
@@ -295,7 +305,10 @@ class CoordinatorCleanupOrchestratorTest {
 
     // Tokens that would compute a different boundary (2000) if they were not ignored
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, createLedgerToken(2000L), createAuditorToken(3000L));
+        newOrchestrator(
+            CoordinatorStateAccessor.NAMESPACE,
+            createLedgerToken(2000L),
+            createAuditorToken(3000L));
 
     // Act
     orchestrator.execute();
@@ -313,7 +326,7 @@ class CoordinatorCleanupOrchestratorTest {
       String ledgerToken, String auditorToken) {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, ledgerToken, auditorToken);
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, ledgerToken, auditorToken);
 
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
@@ -333,14 +346,17 @@ class CoordinatorCleanupOrchestratorTest {
     orchestrator.execute();
 
     // Assert
-    verify(scanner).scan(eq(customNamespace), eq(Coordinator.TABLE), any());
+    verify(scanner).scan(eq(customNamespace), eq(CoordinatorStateAccessor.TABLE), any());
   }
 
   @Test
   void close_shouldCloseStorage() {
     // Arrange
     CoordinatorCleanupOrchestrator orchestrator =
-        newOrchestrator(Coordinator.NAMESPACE, createLedgerToken(1000L), createAuditorToken(2000L));
+        newOrchestrator(
+            CoordinatorStateAccessor.NAMESPACE,
+            createLedgerToken(1000L),
+            createAuditorToken(2000L));
 
     // Act
     orchestrator.close();
