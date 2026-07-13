@@ -115,9 +115,6 @@ require_vars() {
 # Deploy schema + servers and block until both Deployments are available and pass a
 # gRPC health check. Leaves the servers running.
 deploy_all() {
-  echo "==> minikube start"
-  minikube status >/dev/null 2>&1 || minikube start --cpus=4 --memory=8192
-
   echo "==> create namespaces"
   kubectl create namespace "$LEDGER_NS" --dry-run=client -o yaml | kubectl apply -f -
   kubectl create namespace "$AUDITOR_NS" --dry-run=client -o yaml | kubectl apply -f -
@@ -153,10 +150,6 @@ deploy_all() {
     /usr/local/bin/grpc_health_probe -addr=:50051
   kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
     /usr/local/bin/grpc_health_probe -addr=:40051
-
-  echo "==> confirm auditor is not crashlooping"
-  kubectl -n "$AUDITOR_NS" get pods -o wide
-  kubectl -n "$AUDITOR_NS" logs deploy/scalardl-auditor --tail=30 || true
 }
 
 require_vars
