@@ -22,7 +22,7 @@ import com.scalar.db.io.Key;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.Attribute;
-import com.scalar.db.transaction.consensuscommit.Coordinator;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import java.nio.file.Path;
@@ -165,8 +165,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   private void updateCoordinatorStateToCommitted(String txId) throws Exception {
     Put put =
         Put.newBuilder()
-            .namespace(Coordinator.NAMESPACE)
-            .table(Coordinator.TABLE)
+            .namespace(CoordinatorStateAccessor.NAMESPACE)
+            .table(CoordinatorStateAccessor.TABLE)
             .partitionKey(Key.ofText(Attribute.ID, txId))
             .intValue(Attribute.STATE, TransactionState.COMMITTED.get())
             .bigIntValue(Attribute.CREATED_AT, System.currentTimeMillis())
