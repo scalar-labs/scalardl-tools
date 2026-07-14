@@ -1,8 +1,9 @@
 name: E2E
 
-# End-to-end test for coordinator-state-deleter. Currently brings ScalarDL Ledger +
-# Auditor up on minikube against a real Cosmos DB and runs the schema-loader; the CLI
-# test execution is added on top of this in follow-up changes. CI-only (needs secrets).
+# End-to-end test for coordinator-state-deleter. Brings ScalarDL Ledger + Auditor up on
+# minikube against a real Cosmos DB, loads the schema, and populates committed + stranded
+# auditor-mode "old data" with the ScalarDL HashStore CLI; the coordinator-state-deleter
+# verification is added on top of this in a follow-up. CI-only (needs secrets).
 #
 # Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       scalardl_version:
-        description: 'ScalarDL image tag (ledger / auditor / schema-loader)'
+        description: 'ScalarDL image tag (ledger / auditor / schema-loader) and HashStore CLI version'
         default: '3.13.0'
 
 defaults:
@@ -27,13 +28,31 @@ concurrency:
 
 jobs:
   e2e:
-    name: deploy
+    name: populate
     runs-on: ubuntu-latest
     env:
       SCALARDL_VERSION: ${{ github.event.inputs.scalardl_version || '3.13.0' }}
       GHCR_USER: ${{ github.repository_owner }}
+      # Records generated per category (committed / stranded write / stranded read).
+      RECORD_COUNT: 5
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Download ScalarDL HashStore CLI
+        run: |
+          set -euo pipefail
+          url="https://github.com/scalar-labs/scalardl/releases/download/v${SCALARDL_VERSION}/scalardl-hashstore-java-client-sdk-${SCALARDL_VERSION}.zip"
+          curl -sSfL -o "$RUNNER_TEMP/hashstore.zip" "$url"
+          unzip -q "$RUNNER_TEMP/hashstore.zip" -d "$RUNNER_TEMP/hashstore"
+          bin="$RUNNER_TEMP/hashstore/scalardl-hashstore-java-client-sdk-${SCALARDL_VERSION}/bin/scalardl-hashstore"
+          chmod +x "$bin"
+          echo "CLIENT=$bin" >> "$GITHUB_ENV"
 
       - name: Set up minikube
         uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
@@ -47,6 +66,71 @@ jobs:
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
           CR_PAT: ${{ secrets.CR_PAT }}
         run: ./ci/e2e/manage-cluster.sh deploy
+
+      - name: Populate committed data
+        run: |
+          set -euo pipefail
+          source ci/e2e/port-forward.sh
+          pf_reset
+          pf_start ledger-e2e  svc/ledger  50051:50051 50052:50052
+          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
+          pf_wait 50051 50052 40051 40052
+          props="ci/e2e/client.properties"
+          # Register the client identity + the generic object contracts on both servers.
+          "$CLIENT" bootstrap --properties "$props"
+          # Commit RECORD_COUNT objects. In auditor mode each put-object (object.Put = get+put)
+          # produces asset / request_proof / coordinator.state / released asset_lock records.
+          for i in $(seq 0 $((RECORD_COUNT - 1))); do
+            id="e2e-asset-$i"
+            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
+            "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"
+          done
+
+      - name: Generate stranded locks (Ledger down)
+        run: |
+          set -euo pipefail
+          source ci/e2e/port-forward.sh
+          pf_reset
+          ./ci/e2e/manage-cluster.sh stop-ledger
+          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
+          pf_wait 40051 40052
+          props="ci/e2e/client.properties"
+          # Every op MUST fail (Ledger down): the Auditor is left holding the lock. Fail the job if
+          # any unexpectedly succeeds. put-object leaves a WRITE lock on a fresh id; get-object leaves
+          # a READ lock on an already-committed id.
+          for i in $(seq 0 $((RECORD_COUNT - 1))); do
+            id="e2e-stranded-$i"
+            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
+            if "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
+              echo "::error::stranded put-object on $id unexpectedly succeeded (Ledger was supposed to be down)"; exit 1
+            fi
+          done
+          for i in $(seq 0 $((RECORD_COUNT - 1))); do
+            id="e2e-asset-$i"
+            if "$CLIENT" get-object --properties "$props" --object-id "$id"; then
+              echo "::error::stranded get-object on $id unexpectedly succeeded (Ledger was supposed to be down)"; exit 1
+            fi
+          done
+          echo "Waiting 16s for the held locks to pass the 15s valid period ..."
+          sleep 16
+
+      # Record what was populated, for the assertion part (added in a follow-up) and for inspection.
+      - name: Write populated-assets metadata
+        run: |
+          jq -n --argjson n "$RECORD_COUNT" '{
+            entityId: "e2e-client",
+            committedAssetIds: [range(0; $n) | "e2e-asset-\(.)"],
+            strandedAssetIds: [range(0; $n) | "e2e-stranded-\(.)"],
+            strandedReadAssetIds: [range(0; $n) | "e2e-asset-\(.)"]
+          }' > "$RUNNER_TEMP/populated-assets.json"
+
+      - name: Upload populated-assets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-populated-assets
+          path: ${{ runner.temp }}/populated-assets.json
+          if-no-files-found: warn
 
       - name: Collect diagnostics on failure
         if: failure()
@@ -62,6 +146,8 @@ jobs:
               kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=300
             done
           done
+          echo "===== port-forward logs ====="
+          cat /tmp/pf-*.log 2>/dev/null || true
 
       - name: Drop Cosmos schema
         if: always()
