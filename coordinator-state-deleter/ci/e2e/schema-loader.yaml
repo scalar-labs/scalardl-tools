@@ -1,0 +1,103 @@
+# Schema-loader Jobs — create the ScalarDB schema before deploying the servers,
+# and (with different args) delete it at teardown. Both modes share this one file;
+# manage-cluster.sh sets the envsubst variables per mode:
+#
+#   deploy      : SL_JOB_SUFFIX=""        SL_*_ARGS = create args
+#   drop-schema : SL_JOB_SUFFIX="-delete" SL_*_ARGS = create args + "-D"
+#
+# The suffix keeps the delete Jobs distinct from the create Jobs (a completed Job
+# is immutable and cannot be re-applied under the same name in the same namespace).
+#
+# envsubst variables (see manage-cluster.sh):
+#   ${LEDGER_NS}        Ledger namespace (must already exist)
+#   ${AUDITOR_NS}       Auditor namespace (must already exist)
+#   ${SL_IMAGE}         schema-loader image, e.g. ghcr.io/scalar-labs/scalardl-schema-loader:3.13.0
+#   ${COSMOS_URI}       Cosmos DB account URI
+#   ${COSMOS_KEY}       Cosmos DB primary key
+#   ${SL_JOB_SUFFIX}    "" (create) or "-delete"
+#   ${SL_LEDGER_ARGS}   ledger schema-loader CLI args (JSON array)
+#   ${SL_AUDITOR_ARGS}  auditor schema-loader CLI args (JSON array)
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: schema-loader-config
+  namespace: ${LEDGER_NS}
+stringData:
+  database.properties: |
+    scalar.db.storage=cosmos
+    scalar.db.contact_points=${COSMOS_URI}
+    scalar.db.password=${COSMOS_KEY}
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: schema-loader-config
+  namespace: ${AUDITOR_NS}
+stringData:
+  database.properties: |
+    scalar.db.storage=cosmos
+    scalar.db.contact_points=${COSMOS_URI}
+    scalar.db.password=${COSMOS_KEY}
+
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-loader-ledger${SL_JOB_SUFFIX}
+  namespace: ${LEDGER_NS}
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: schema-loader-ledger
+          image: ${SL_IMAGE}
+          args: ${SL_LEDGER_ARGS}
+          env:
+            - name: SCHEMA_TYPE
+              value: "ledger"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: schema-loader-config
+
+---
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-loader-auditor${SL_JOB_SUFFIX}
+  namespace: ${AUDITOR_NS}
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: schema-loader-auditor
+          image: ${SL_IMAGE}
+          args: ${SL_AUDITOR_ARGS}
+          env:
+            - name: SCHEMA_TYPE
+              value: "auditor"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: schema-loader-config

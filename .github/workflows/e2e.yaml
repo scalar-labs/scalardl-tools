@@ -1,0 +1,78 @@
+name: E2E
+
+# End-to-end test for coordinator-state-deleter. Currently brings ScalarDL Ledger +
+# Auditor up on minikube against a real Cosmos DB and runs the schema-loader; the CLI
+# test execution is added on top of this in follow-up changes. CI-only (needs secrets).
+#
+# Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
+
+on:
+  pull_request:
+    paths:
+      - 'coordinator-state-deleter/**'
+      - '.github/workflows/e2e.yaml'
+  workflow_dispatch:
+    inputs:
+      scalardl_version:
+        description: 'ScalarDL image tag (ledger / auditor / schema-loader)'
+        default: '3.13.0'
+
+defaults:
+  run:
+    working-directory: coordinator-state-deleter
+
+# Serialize every run that touches the shared Cosmos account.
+concurrency:
+  group: cosmos
+
+jobs:
+  e2e:
+    name: deploy
+    runs-on: ubuntu-latest
+    env:
+      SCALARDL_VERSION: ${{ github.event.inputs.scalardl_version || '3.13.0' }}
+      GHCR_USER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up minikube
+        uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
+        with:
+          cpus: '4'
+          memory: '8192'
+
+      - name: Deploy ScalarDL + load schema
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          CR_PAT: ${{ secrets.CR_PAT }}
+        run: ./ci/e2e/manage-cluster.sh deploy
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          for ns in ledger-e2e auditor-e2e; do
+            echo "===== namespace: $ns ====="
+            kubectl -n "$ns" get all -o wide
+            kubectl -n "$ns" get events --sort-by=.lastTimestamp
+            kubectl -n "$ns" describe pods
+            for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
+              echo "----- logs $p -----"
+              kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=300
+            done
+          done
+
+      - name: Drop Cosmos schema
+        if: always()
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          CR_PAT: ${{ secrets.CR_PAT }}
+        # Fatal on purpose: the shared Cosmos account must be left clean, so a failed
+        # drop fails the job to alert an operator (who then drops it manually).
+        run: ./ci/e2e/manage-cluster.sh drop-schema
+
+      - name: Tear down namespaces
+        if: always()
+        run: ./ci/e2e/manage-cluster.sh clean

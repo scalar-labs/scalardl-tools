@@ -22,6 +22,10 @@ on:
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
 
+# Serialize every run that touches the shared Cosmos account.
+concurrency:
+  group: cosmos
+
 defaults:
   run:
     working-directory: coordinator-state-deleter
