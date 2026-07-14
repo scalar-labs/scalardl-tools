@@ -275,7 +275,11 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin,
+            txManager,
+            realScannerFactory(),
+            checkpointDir,
+            CoordinatorStateAccessor.NAMESPACE);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -309,7 +313,11 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin,
+            txManager,
+            realScannerFactory(),
+            checkpointDir,
+            CoordinatorStateAccessor.NAMESPACE);
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -343,7 +351,11 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin,
+            txManager,
+            realScannerFactory(),
+            checkpointDir,
+            CoordinatorStateAccessor.NAMESPACE);
     String completionToken = orchestrator.execute();
 
     // Assert: a false from recoverRecord must not abort the table; the sweep completes normally.
@@ -380,7 +392,11 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Act
     LedgerFinalizeOrchestrator orchestrator =
         new LedgerFinalizeOrchestrator(
-            storageAdmin, txManager, realScannerFactory(), checkpointDir);
+            storageAdmin,
+            txManager,
+            realScannerFactory(),
+            checkpointDir,
+            CoordinatorStateAccessor.NAMESPACE);
     String completionToken = orchestrator.execute();
 
     // Assert

@@ -6,6 +6,7 @@ import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -43,17 +44,20 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   private final DistributedTransactionManager txManager;
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
+  private final String coordinatorNamespace;
 
   @VisibleForTesting
   LedgerFinalizeOrchestrator(
       DistributedStorageAdmin admin,
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
-      Path checkpointDir) {
+      Path checkpointDir,
+      String coordinatorNamespace) {
     this.admin = admin;
     this.txManager = txManager;
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
+    this.coordinatorNamespace = coordinatorNamespace;
   }
 
   /**
@@ -75,7 +79,12 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
       admin = storageFactory.getStorageAdmin();
       txManager = TransactionFactory.create(props).getTransactionManager();
       ResumableScannerFactory scannerFactory = new ResumableScannerFactory(databaseConfig);
-      return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, checkpointDir);
+      return new LedgerFinalizeOrchestrator(
+          admin,
+          txManager,
+          scannerFactory,
+          checkpointDir,
+          resolveCoordinatorNamespace(databaseConfig));
     } catch (Exception e) {
       if (txManager != null) {
         txManager.close();
@@ -144,10 +153,16 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     return state;
   }
 
+  /** Resolves the namespace of the coordinator table. */
+  private static String resolveCoordinatorNamespace(DatabaseConfig dbConfig) {
+    return new ConsensusCommitConfig(dbConfig)
+        .getCoordinatorNamespace()
+        .orElse(CoordinatorStateAccessor.NAMESPACE);
+  }
+
   private List<String> discoverTables() throws Exception {
     String coordinatorTable =
-        ScalarDbUtils.getFullTableName(
-            CoordinatorStateAccessor.NAMESPACE, CoordinatorStateAccessor.TABLE);
+        ScalarDbUtils.getFullTableName(coordinatorNamespace, CoordinatorStateAccessor.TABLE);
     List<String> tables = new ArrayList<>();
     for (String namespace : admin.getNamespaceNames()) {
       for (String table : admin.getNamespaceTableNames(namespace)) {
