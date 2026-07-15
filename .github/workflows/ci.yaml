@@ -4,21 +4,11 @@ on:
   push:
     branches: [master]
     paths:
-      - 'scalardl-cleanup/common/**'
-      - 'scalardl-cleanup/resumable-scan/**'
-      - 'scalardl-cleanup/coordinator-state-cleanup/**'
-      - 'scalardl-cleanup/ledger-finalize-records/**'
-      - 'scalardl-cleanup/auditor-finalize-records/**'
-      - 'scalardl-cleanup/request-proof-cleanup/**'
+      - 'scalardl-cleanup/**'
       - '.github/workflows/ci.yaml'
   pull_request:
     paths:
-      - 'scalardl-cleanup/common/**'
-      - 'scalardl-cleanup/resumable-scan/**'
-      - 'scalardl-cleanup/coordinator-state-cleanup/**'
-      - 'scalardl-cleanup/ledger-finalize-records/**'
-      - 'scalardl-cleanup/auditor-finalize-records/**'
-      - 'scalardl-cleanup/request-proof-cleanup/**'
+      - 'scalardl-cleanup/**'
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
 
@@ -55,7 +45,8 @@ jobs:
             :coordinator-state-cleanup:check \
             :ledger-finalize-records:check \
             :auditor-finalize-records:check \
-            :request-proof-cleanup:check
+            :request-proof-cleanup:check \
+            :cli:check
 
       - name: Upload test reports
         if: always()
@@ -69,6 +60,7 @@ jobs:
             scalardl-cleanup/ledger-finalize-records/build/reports/tests/test/
             scalardl-cleanup/auditor-finalize-records/build/reports/tests/test/
             scalardl-cleanup/request-proof-cleanup/build/reports/tests/test/
+            scalardl-cleanup/cli/build/reports/tests/test/
 
   integration-test:
     name: Cosmos DB integration test (resumable-scan)
