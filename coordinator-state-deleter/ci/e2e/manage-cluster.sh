@@ -7,8 +7,16 @@
 # Modes:
 #   deploy       load the ScalarDB schema, deploy Ledger + Auditor, wait until healthy
 #   stop-ledger  scale the Ledger to 0 and wait for its pod to be deleted
+#   upgrade      switch Ledger + Auditor to the SCALARDL_VERSION images, bring the Ledger
+#                back up (it was scaled to 0 to strand locks), and wait until both are healthy
 #   drop-schema  delete the ScalarDB schema (Cosmos cleanup)
 #   clean        delete the k8s namespaces
+#
+# The cleanup tool is meant to reclaim garbage left behind by an older ScalarDL server while
+# coordinating with the upgraded server. The E2E therefore deploys an old version, creates the
+# garbage, then runs `upgrade` to the new version before running the tool:
+#   SCALARDL_VERSION=<old> ... ./manage-cluster.sh deploy    # create the garbage
+#   SCALARDL_VERSION=<new>     ./manage-cluster.sh upgrade   # roll servers to the new version
 #
 # Required environment (deploy and drop-schema only):
 #   COSMOS_URI   Cosmos DB account URI
@@ -21,6 +29,7 @@
 #
 # Usage:
 #   COSMOS_URI=... COSMOS_KEY=... CR_PAT=... GHCR_USER=... ./manage-cluster.sh deploy
+#   SCALARDL_VERSION=<new> ./manage-cluster.sh upgrade
 #   ./manage-cluster.sh stop-ledger | drop-schema | clean
 
 set -euo pipefail
@@ -30,6 +39,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # K8s namespaces.
 export LEDGER_NS="ledger-e2e"
 export AUDITOR_NS="auditor-e2e"
+
+SCALARDL_VERSION_EXPLICIT="${SCALARDL_VERSION:+yes}"   # "yes" if set and non-empty, else ""
 
 # Container image names.
 : "${SCALARDL_VERSION:=3.13.0}"
@@ -56,8 +67,10 @@ SUBST_VARS+='${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS}'
 
 render() { envsubst "$SUBST_VARS" < "$HERE/$1"; }
 
+# require_vars VAR...
+# Abort unless every named environment variable is set and non-empty.
 require_vars() {
-  for v in COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER; do
+  for v in "$@"; do
     if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
   done
 }
@@ -80,6 +93,30 @@ stop_ledger() {
       exit 1
     fi
   fi
+}
+
+# Roll the Ledger and Auditor to the SCALARDL_VERSION images (via `set image`, reusing the existing
+# config and pull secret) and wait until healthy. Also brings the Ledger back up, since it was
+# scaled to 0 earlier to strand locks.
+upgrade() {
+  echo "==> upgrade Ledger and Auditor images to ${LEDGER_IMAGE} / ${AUDITOR_IMAGE}"
+  kubectl -n "$LEDGER_NS"  set image deployment/scalardl-ledger  scalardl-ledger="$LEDGER_IMAGE"
+  kubectl -n "$AUDITOR_NS" set image deployment/scalardl-auditor scalardl-auditor="$AUDITOR_IMAGE"
+  kubectl -n "$LEDGER_NS"  scale deployment/scalardl-ledger --replicas=1
+
+  echo "==> wait for rollouts to finish"
+  if ! kubectl -n "$LEDGER_NS" rollout status deployment/scalardl-ledger --timeout=300s; then
+    diag_and_die "$LEDGER_NS" "Ledger rollout to $LEDGER_IMAGE did not complete"
+  fi
+  if ! kubectl -n "$AUDITOR_NS" rollout status deployment/scalardl-auditor --timeout=300s; then
+    diag_and_die "$AUDITOR_NS" "Auditor rollout to $AUDITOR_IMAGE did not complete"
+  fi
+
+  echo "==> gRPC health checks"
+  kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
+    /usr/local/bin/grpc_health_probe -addr=:50051
+  kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
+    /usr/local/bin/grpc_health_probe -addr=:40051
 }
 
 # Dump everything useful about a namespace's workloads, then fail.
@@ -165,7 +202,7 @@ deploy_all() {
 
 case "${1:-}" in
   deploy)
-    require_vars
+    require_vars COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER
     deploy_all
     echo
     echo "DEPLOY OK: servers Ready in $LEDGER_NS / $AUDITOR_NS."
@@ -175,8 +212,16 @@ case "${1:-}" in
     echo
     echo "STOP-LEDGER OK: $LEDGER_NS/scalardl-ledger scaled to 0."
     ;;
+  upgrade)
+    if [[ -z "$SCALARDL_VERSION_EXPLICIT" ]]; then
+      echo "ERROR: SCALARDL_VERSION must be set explicitly for upgrade" >&2; exit 1
+    fi
+    upgrade
+    echo
+    echo "UPGRADE OK: $LEDGER_NS / $AUDITOR_NS rolled to ${SCALARDL_VERSION} and healthy."
+    ;;
   drop-schema)
-    require_vars
+    require_vars COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER
     # If neither namespace exists, there is nothing to drop.
     if ! kubectl get namespace "$LEDGER_NS" >/dev/null 2>&1 \
         && ! kubectl get namespace "$AUDITOR_NS" >/dev/null 2>&1; then
@@ -203,7 +248,7 @@ case "${1:-}" in
     clean
     ;;
   *)
-    echo "usage: manage-cluster.sh [deploy|stop-ledger|drop-schema|clean]" >&2
+    echo "usage: manage-cluster.sh [deploy|stop-ledger|upgrade|drop-schema|clean]" >&2
     exit 1
     ;;
 esac

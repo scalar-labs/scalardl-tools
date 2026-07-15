@@ -1,11 +1,21 @@
 name: E2E
 
-# End-to-end test for coordinator-state-deleter. Brings ScalarDL Ledger + Auditor up on
-# minikube against a real Cosmos DB, loads the schema, and populates committed + stranded
-# auditor-mode "old data" with the ScalarDL HashStore CLI; the coordinator-state-deleter
-# verification is added on top of this in a follow-up. CI-only (needs secrets).
+# End-to-end test for ScalarDL Cleanup. The tool reclaims garbage left behind by an older ScalarDL
+# server, while coordinating with the upgraded server. This test reproduces exactly that:
 #
-# Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
+#   1. Deploy ScalarDL Ledger + Auditor at the old version on minikube against a real Cosmos DB,
+#      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
+#   2. Upgrade both servers in place to the new version (which exposes the privileged
+#      RecoverAssetLock RPC that finalize-auditor needs).
+#   3. Run the three operator-facing cleanup subcommands against the upgraded cluster:
+#        finalize-ledger      -> emits the Ledger completion token
+#        finalize-auditor     -> recovers the stranded asset locks via RecoverAssetLock and
+#                                cleans up request_proof; emits the Auditor completion token
+#        cleanup-coordinator  -> deletes the settled coordinator.state records
+#   4. Assert, at the ScalarDL application layer, that every existing asset is writable, readable,
+#      and passes validate-ledger.
+#
+# CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
 on:
   pull_request:
@@ -14,9 +24,12 @@ on:
       - '.github/workflows/e2e.yaml'
   workflow_dispatch:
     inputs:
-      scalardl_version:
-        description: 'ScalarDL image tag (ledger / auditor / schema-loader) and HashStore CLI version'
+      old_version:
+        description: 'OLD ScalarDL version that populates data'
         default: '3.13.0'
+      new_version:
+        description: 'NEW ScalarDL server version the tool coordinates with'
+        default: '3.14.0-SNAPSHOT'
 
 defaults:
   run:
@@ -28,10 +41,11 @@ concurrency:
 
 jobs:
   e2e:
-    name: populate
+    name: cleanup
     runs-on: ubuntu-latest
     env:
-      SCALARDL_VERSION: ${{ github.event.inputs.scalardl_version || '3.13.0' }}
+      SCALARDL_OLD_VERSION: ${{ github.event.inputs.old_version || '3.13.0' }}
+      SCALARDL_NEW_VERSION: ${{ github.event.inputs.new_version || '3.14.0-SNAPSHOT' }}
       GHCR_USER: ${{ github.repository_owner }}
       # Records generated per category (committed / stranded write / stranded read).
       RECORD_COUNT: 5
@@ -44,13 +58,28 @@ jobs:
           java-version: '21'
           distribution: temurin
 
-      - name: Download ScalarDL HashStore CLI
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the cleanup CLI
+        # GPR_* let Gradle pull the ScalarDL artifacts from GitHub Packages.
+        env:
+          GPR_USERNAME: ${{ github.repository_owner }}
+          GPR_PASSWORD: ${{ secrets.CR_PAT }}
         run: |
           set -euo pipefail
-          url="https://github.com/scalar-labs/scalardl/releases/download/v${SCALARDL_VERSION}/scalardl-hashstore-java-client-sdk-${SCALARDL_VERSION}.zip"
+          ./gradlew :cli:installDist
+          echo "CLEANUP=$(pwd)/cli/build/install/scalardl-cleanup/bin/scalardl-cleanup" >> "$GITHUB_ENV"
+
+      - name: Download ScalarDL HashStore CLI
+        # The garbage is created by the old-version client, so the CLI tracks SCALARDL_OLD_VERSION.
+        run: |
+          set -euo pipefail
+          v="$SCALARDL_OLD_VERSION"
+          url="https://github.com/scalar-labs/scalardl/releases/download/v${v}/scalardl-hashstore-java-client-sdk-${v}.zip"
           curl -sSfL -o "$RUNNER_TEMP/hashstore.zip" "$url"
           unzip -q "$RUNNER_TEMP/hashstore.zip" -d "$RUNNER_TEMP/hashstore"
-          bin="$RUNNER_TEMP/hashstore/scalardl-hashstore-java-client-sdk-${SCALARDL_VERSION}/bin/scalardl-hashstore"
+          bin="$RUNNER_TEMP/hashstore/scalardl-hashstore-java-client-sdk-${v}/bin/scalardl-hashstore"
           chmod +x "$bin"
           echo "CLIENT=$bin" >> "$GITHUB_ENV"
 
@@ -60,11 +89,12 @@ jobs:
           cpus: '4'
           memory: '8192'
 
-      - name: Deploy ScalarDL + load schema
+      - name: Deploy ScalarDL (old version) + load schema
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
           CR_PAT: ${{ secrets.CR_PAT }}
+          SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         run: ./ci/e2e/manage-cluster.sh deploy
 
       - name: Populate committed data
@@ -114,7 +144,9 @@ jobs:
           echo "Waiting 16s for the held locks to pass the 15s valid period ..."
           sleep 16
 
-      # Record what was populated, for the assertion part (added in a follow-up) and for inspection.
+      # Record what was populated. The verify step reads this back (single source of truth for the
+      # asset ids), and it is uploaded as an artifact for inspection. strandedReadAssetIds are the
+      # committed ids that also received a stranded READ lock (== committedAssetIds here).
       - name: Write populated-assets metadata
         run: |
           jq -n --argjson n "$RECORD_COUNT" '{
@@ -123,6 +155,41 @@ jobs:
             strandedAssetIds: [range(0; $n) | "e2e-stranded-\(.)"],
             strandedReadAssetIds: [range(0; $n) | "e2e-asset-\(.)"]
           }' > "$RUNNER_TEMP/populated-assets.json"
+
+      - name: Upgrade ScalarDL to the new version
+        env:
+          SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
+        run: ./ci/e2e/manage-cluster.sh upgrade
+
+      - name: Run the cleanup commands
+        run: ./ci/e2e/run-cleanup.sh
+
+      - name: Verify post-cleanup consistency
+        run: |
+          set -euo pipefail
+          source ci/e2e/port-forward.sh
+          pf_reset
+          pf_start ledger-e2e  svc/ledger  50051:50051 50052:50052
+          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
+          pf_wait 50051 50052 40051 40052
+          props="ci/e2e/client.properties"
+          populated="$RUNNER_TEMP/populated-assets.json"
+
+          # After cleanup, every asset must be fully usable again: writable, readable, and passing
+          # ledger validation.
+          for id in $(jq -r '(.committedAssetIds + .strandedAssetIds)[]' "$populated"); do
+            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
+            if ! "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
+              echo "::error::put-object on $id failed after cleanup"; exit 1
+            fi
+            if ! "$CLIENT" get-object --properties "$props" --object-id "$id"; then
+              echo "::error::get-object on $id failed after cleanup"; exit 1
+            fi
+            if ! "$CLIENT" validate-ledger --properties "$props" --object-id "$id"; then
+              echo "::error::validate-ledger on $id failed after cleanup"; exit 1
+            fi
+          done
+          echo "Post-cleanup consistency verified."
 
       - name: Upload populated-assets
         if: always()
@@ -148,6 +215,10 @@ jobs:
           done
           echo "===== port-forward logs ====="
           cat /tmp/pf-*.log 2>/dev/null || true
+          echo "===== cleanup tool stderr logs ====="
+          for f in "$RUNNER_TEMP"/finalize-ledger.err "$RUNNER_TEMP"/finalize-auditor.err "$RUNNER_TEMP"/cleanup-coordinator.err; do
+            [ -f "$f" ] && { echo "----- $f -----"; cat "$f"; }
+          done
 
       - name: Drop Cosmos schema
         if: always()
@@ -155,6 +226,7 @@ jobs:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
           CR_PAT: ${{ secrets.CR_PAT }}
+          SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         # Fatal on purpose: the shared Cosmos account must be left clean, so a failed
         # drop fails the job to alert an operator (who then drops it manually).
         run: ./ci/e2e/manage-cluster.sh drop-schema
