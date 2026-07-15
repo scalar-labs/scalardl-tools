@@ -177,7 +177,7 @@ jobs:
 
           # After cleanup, every asset must be fully usable again: writable, readable, and passing
           # ledger validation.
-          for id in $(jq -r '(.committedAssetIds + .strandedAssetIds)[]' "$populated"); do
+          while IFS= read -r id; do
             hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
             if ! "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
               echo "::error::put-object on $id failed after cleanup"; exit 1
@@ -188,7 +188,7 @@ jobs:
             if ! "$CLIENT" validate-ledger --properties "$props" --object-id "$id"; then
               echo "::error::validate-ledger on $id failed after cleanup"; exit 1
             fi
-          done
+          done < <(jq -r '(.committedAssetIds + .strandedAssetIds)[]' "$populated")
           echo "Post-cleanup consistency verified."
 
       - name: Upload populated-assets

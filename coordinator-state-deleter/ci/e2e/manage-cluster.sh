@@ -113,10 +113,14 @@ upgrade() {
   fi
 
   echo "==> gRPC health checks"
-  kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
-    /usr/local/bin/grpc_health_probe -addr=:50051
-  kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
-    /usr/local/bin/grpc_health_probe -addr=:40051
+  if ! kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
+      /usr/local/bin/grpc_health_probe -addr=:50051; then
+    diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed after upgrade to $LEDGER_IMAGE"
+  fi
+  if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
+      /usr/local/bin/grpc_health_probe -addr=:40051; then
+    diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed after upgrade to $AUDITOR_IMAGE"
+  fi
 }
 
 # Dump everything useful about a namespace's workloads, then fail.
@@ -194,10 +198,14 @@ deploy_all() {
   wait_for_deploy "$AUDITOR_NS" scalardl-auditor 300
 
   echo "==> gRPC health checks"
-  kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
-    /usr/local/bin/grpc_health_probe -addr=:50051
-  kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
-    /usr/local/bin/grpc_health_probe -addr=:40051
+  if ! kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
+      /usr/local/bin/grpc_health_probe -addr=:50051; then
+    diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed"
+  fi
+  if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
+      /usr/local/bin/grpc_health_probe -addr=:40051; then
+    diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed"
+  fi
 }
 
 case "${1:-}" in

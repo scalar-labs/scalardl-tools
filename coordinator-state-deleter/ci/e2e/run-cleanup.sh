@@ -10,8 +10,15 @@
 
 set -euo pipefail
 
+for v in CLEANUP RUNNER_TEMP; do
+  if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
+done
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/port-forward.sh"
+# Tear down the background port-forwards on exit (success or failure) so a standalone or
+# interrupted run leaves no dangling kubectl processes.
+trap pf_reset EXIT
 
 ckpt="$RUNNER_TEMP/checkpoint"
 ledger_props="$RUNNER_TEMP/ledger.properties"
