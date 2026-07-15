@@ -4,21 +4,21 @@ on:
   push:
     branches: [master]
     paths:
-      - 'coordinator-state-deleter/common/**'
-      - 'coordinator-state-deleter/resumable-scan/**'
-      - 'coordinator-state-deleter/coordinator-state-cleanup/**'
-      - 'coordinator-state-deleter/ledger-finalize-records/**'
-      - 'coordinator-state-deleter/auditor-finalize-records/**'
-      - 'coordinator-state-deleter/request-proof-cleanup/**'
+      - 'scalardl-cleanup/common/**'
+      - 'scalardl-cleanup/resumable-scan/**'
+      - 'scalardl-cleanup/coordinator-state-cleanup/**'
+      - 'scalardl-cleanup/ledger-finalize-records/**'
+      - 'scalardl-cleanup/auditor-finalize-records/**'
+      - 'scalardl-cleanup/request-proof-cleanup/**'
       - '.github/workflows/ci.yaml'
   pull_request:
     paths:
-      - 'coordinator-state-deleter/common/**'
-      - 'coordinator-state-deleter/resumable-scan/**'
-      - 'coordinator-state-deleter/coordinator-state-cleanup/**'
-      - 'coordinator-state-deleter/ledger-finalize-records/**'
-      - 'coordinator-state-deleter/auditor-finalize-records/**'
-      - 'coordinator-state-deleter/request-proof-cleanup/**'
+      - 'scalardl-cleanup/common/**'
+      - 'scalardl-cleanup/resumable-scan/**'
+      - 'scalardl-cleanup/coordinator-state-cleanup/**'
+      - 'scalardl-cleanup/ledger-finalize-records/**'
+      - 'scalardl-cleanup/auditor-finalize-records/**'
+      - 'scalardl-cleanup/request-proof-cleanup/**'
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: coordinator-state-deleter
+    working-directory: scalardl-cleanup
 
 jobs:
   check:
@@ -63,12 +63,12 @@ jobs:
         with:
           name: check-reports
           path: |
-            coordinator-state-deleter/common/build/reports/tests/test/
-            coordinator-state-deleter/resumable-scan/build/reports/tests/test/
-            coordinator-state-deleter/coordinator-state-cleanup/build/reports/tests/test/
-            coordinator-state-deleter/ledger-finalize-records/build/reports/tests/test/
-            coordinator-state-deleter/auditor-finalize-records/build/reports/tests/test/
-            coordinator-state-deleter/request-proof-cleanup/build/reports/tests/test/
+            scalardl-cleanup/common/build/reports/tests/test/
+            scalardl-cleanup/resumable-scan/build/reports/tests/test/
+            scalardl-cleanup/coordinator-state-cleanup/build/reports/tests/test/
+            scalardl-cleanup/ledger-finalize-records/build/reports/tests/test/
+            scalardl-cleanup/auditor-finalize-records/build/reports/tests/test/
+            scalardl-cleanup/request-proof-cleanup/build/reports/tests/test/
 
   integration-test:
     name: Cosmos DB integration test (resumable-scan)
@@ -101,7 +101,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-test-reports
-          path: coordinator-state-deleter/resumable-scan/build/reports/tests/cosmosIntegrationTest/
+          path: scalardl-cleanup/resumable-scan/build/reports/tests/cosmosIntegrationTest/
 
   ledger-finalize-integration-test:
     name: Cosmos DB integration test (ledger-finalize-records)
@@ -134,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ledger-finalize-integration-test-reports
-          path: coordinator-state-deleter/ledger-finalize-records/build/reports/tests/cosmosIntegrationTest/
+          path: scalardl-cleanup/ledger-finalize-records/build/reports/tests/cosmosIntegrationTest/
 
   auditor-finalize-integration-test:
     name: Cosmos DB integration test (auditor-finalize-records)
@@ -167,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: auditor-finalize-integration-test-reports
-          path: coordinator-state-deleter/auditor-finalize-records/build/reports/tests/cosmosIntegrationTest/
+          path: scalardl-cleanup/auditor-finalize-records/build/reports/tests/cosmosIntegrationTest/
 
   coordinator-cleanup-integration-test:
     name: Cosmos DB integration test (coordinator-state-cleanup)
@@ -200,7 +200,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coordinator-cleanup-integration-test-reports
-          path: coordinator-state-deleter/coordinator-state-cleanup/build/reports/tests/cosmosIntegrationTest/
+          path: scalardl-cleanup/coordinator-state-cleanup/build/reports/tests/cosmosIntegrationTest/
 
   request-proof-cleanup-integration-test:
     name: Cosmos DB integration test (request-proof-cleanup)
@@ -233,4 +233,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: request-proof-cleanup-integration-test-reports
-          path: coordinator-state-deleter/request-proof-cleanup/build/reports/tests/cosmosIntegrationTest/
+          path: scalardl-cleanup/request-proof-cleanup/build/reports/tests/cosmosIntegrationTest/

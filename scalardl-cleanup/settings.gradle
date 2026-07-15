@@ -1,0 +1,9 @@
+rootProject.name = 'scalardl-cleanup'
+
+include 'resumable-scan'
+include 'common'
+include 'ledger-finalize-records'
+include 'auditor-finalize-records'
+include 'coordinator-state-cleanup'
+include 'request-proof-cleanup'
+include 'cli'
