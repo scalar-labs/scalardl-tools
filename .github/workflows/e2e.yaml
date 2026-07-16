@@ -71,6 +71,20 @@ jobs:
           ./gradlew :cli:installDist
           echo "CLEANUP=$(pwd)/cli/build/install/scalardl-cleanup/bin/scalardl-cleanup" >> "$GITHUB_ENV"
 
+      - name: Install Azure Cosmos DB Shell
+        # Used by run-cleanup.sh to count rows directly in Cosmos for the post-cleanup reclamation
+        # checks.
+        run: |
+          set -euo pipefail
+          v=1.1.4
+          url="https://github.com/Azure/CosmosDBShell/releases/download/v${v}/cosmosdbshell_linux-x64_${v}-preview.zip"
+          curl -sSfL -o "$RUNNER_TEMP/cosmosdbshell.zip" "$url"
+          unzip -q "$RUNNER_TEMP/cosmosdbshell.zip" -d "$RUNNER_TEMP/cosmosdbshell"
+          bin="$(find "$RUNNER_TEMP/cosmosdbshell" -type f -name cosmosdbshell | head -n1)"
+          [ -n "$bin" ] || { echo "::error::cosmosdbshell binary not found in the archive"; exit 1; }
+          chmod +x "$bin"
+          echo "COSMOSDB_SHELL=$bin" >> "$GITHUB_ENV"
+
       - name: Download ScalarDL HashStore CLI
         # The garbage is created by the old-version client, so the CLI tracks SCALARDL_OLD_VERSION.
         run: |
