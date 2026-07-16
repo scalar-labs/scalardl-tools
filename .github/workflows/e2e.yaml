@@ -1,8 +1,8 @@
 name: E2E
 
-# End-to-end test for coordinator-state-deleter. Brings ScalarDL Ledger + Auditor up on
+# End-to-end test for scalardl-cleanup. Brings ScalarDL Ledger + Auditor up on
 # minikube against a real Cosmos DB, loads the schema, and populates committed + stranded
-# auditor-mode "old data" with the ScalarDL HashStore CLI; the coordinator-state-deleter
+# auditor-mode "old data" with the ScalarDL HashStore CLI; the scalardl-cleanup
 # verification is added on top of this in a follow-up. CI-only (needs secrets).
 #
 # Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
@@ -10,7 +10,7 @@ name: E2E
 on:
   pull_request:
     paths:
-      - 'coordinator-state-deleter/**'
+      - 'scalardl-cleanup/**'
       - '.github/workflows/e2e.yaml'
   workflow_dispatch:
     inputs:
@@ -20,7 +20,7 @@ on:
 
 defaults:
   run:
-    working-directory: coordinator-state-deleter
+    working-directory: scalardl-cleanup
 
 # Serialize every run that touches the shared Cosmos account.
 concurrency:
