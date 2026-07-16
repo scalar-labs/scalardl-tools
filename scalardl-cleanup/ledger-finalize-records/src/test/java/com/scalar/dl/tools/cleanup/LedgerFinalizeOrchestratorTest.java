@@ -18,6 +18,7 @@ import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import com.scalar.dl.tools.scan.ResumableScanner;
@@ -54,7 +55,12 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   private LedgerFinalizeOrchestrator newOrchestrator() {
-    return new LedgerFinalizeOrchestrator(admin, txManager, scannerFactory, tempDir);
+    return newOrchestrator(CoordinatorStateAccessor.NAMESPACE);
+  }
+
+  private LedgerFinalizeOrchestrator newOrchestrator(String coordinatorNamespace) {
+    return new LedgerFinalizeOrchestrator(
+        admin, txManager, scannerFactory, tempDir, coordinatorNamespace);
   }
 
   @Test
@@ -142,6 +148,52 @@ class LedgerFinalizeOrchestratorTest {
     assertThat(state).isNotNull();
     assertThat(state.getCompletedTables()).containsExactlyInAnyOrder("ns1.tbl1", "ns2.tbl2");
     assertThat(state.getStartedAtMs()).isEqualTo(token.getStartedAtMs());
+  }
+
+  @Test
+  void execute_defaultCoordinatorNamespaceGiven_shouldExcludeCoordinatorTableFromScanning()
+      throws Exception {
+    // Arrange
+    when(admin.getNamespaceNames())
+        .thenReturn(new HashSet<>(Arrays.asList(CoordinatorStateAccessor.NAMESPACE, "ns1")));
+    when(admin.getNamespaceTableNames(CoordinatorStateAccessor.NAMESPACE))
+        .thenReturn(new HashSet<>(Collections.singletonList(CoordinatorStateAccessor.TABLE)));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    verify(scanner).scan(eq("ns1"), eq("tbl1"), any());
+    verify(scanner, never())
+        .scan(eq(CoordinatorStateAccessor.NAMESPACE), eq(CoordinatorStateAccessor.TABLE), any());
+  }
+
+  @Test
+  void execute_customCoordinatorNamespaceGiven_shouldExcludeCoordinatorTableFromScanning()
+      throws Exception {
+    // Arrange
+    String customNamespace = "my_coordinator";
+    when(admin.getNamespaceNames())
+        .thenReturn(new HashSet<>(Arrays.asList(customNamespace, "ns1")));
+    when(admin.getNamespaceTableNames(customNamespace))
+        .thenReturn(new HashSet<>(Collections.singletonList(CoordinatorStateAccessor.TABLE)));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator(customNamespace);
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    verify(scanner).scan(eq("ns1"), eq("tbl1"), any());
+    verify(scanner, never()).scan(eq(customNamespace), eq(CoordinatorStateAccessor.TABLE), any());
   }
 
   @Test
