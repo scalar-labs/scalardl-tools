@@ -80,7 +80,9 @@ jobs:
           url="https://github.com/Azure/CosmosDBShell/releases/download/v${v}/cosmosdbshell_linux-x64_${v}-preview.zip"
           curl -sSfL -o "$RUNNER_TEMP/cosmosdbshell.zip" "$url"
           unzip -q "$RUNNER_TEMP/cosmosdbshell.zip" -d "$RUNNER_TEMP/cosmosdbshell"
-          bin="$(find "$RUNNER_TEMP/cosmosdbshell" -type f -name cosmosdbshell | head -n1)"
+          # The archive extracts to CosmosDBShell/CosmosDBShell (a self-contained binary next to its
+          # runtime DLLs); -iname guards against the exact casing changing between releases.
+          bin="$(find "$RUNNER_TEMP/cosmosdbshell" -type f -iname cosmosdbshell | head -n1)"
           [ -n "$bin" ] || { echo "::error::cosmosdbshell binary not found in the archive"; exit 1; }
           chmod +x "$bin"
           echo "COSMOSDB_SHELL=$bin" >> "$GITHUB_ENV"
