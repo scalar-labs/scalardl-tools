@@ -22,17 +22,13 @@ import org.mockito.ArgumentCaptor;
 
 class LockFinalizerTest {
 
-  // A short retry interval keeps the retry tests fast; the number of attempts still matters.
-  private static final int MAX_ATTEMPTS = 3;
-  private static final long RETRY_INTERVAL_MS = 0L;
-
   private AuditorClient auditorClient;
   private LockFinalizer finalizer;
 
   @BeforeEach
   void setUp() {
     auditorClient = mock(AuditorClient.class);
-    finalizer = new LockFinalizer(auditorClient, MAX_ATTEMPTS, RETRY_INTERVAL_MS);
+    finalizer = new LockFinalizer(auditorClient);
   }
 
   private Result createScanResult() {
@@ -117,7 +113,8 @@ class LockFinalizerTest {
     assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
         .isInstanceOf(ScalarDlCleanupException.class)
         .hasMessageContaining(ScalarDlCleanupError.RECOVER_ASSET_LOCK_NOT_RECOVERABLE.buildCode());
-    verify(auditorClient, times(MAX_ATTEMPTS)).recover(any(AssetLockRecoveryRequest.class));
+    verify(auditorClient, times(LockFinalizer.MAX_ATTEMPTS))
+        .recover(any(AssetLockRecoveryRequest.class));
   }
 
   @Test
@@ -139,12 +136,11 @@ class LockFinalizerTest {
     // Arrange
     when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
         .thenReturn(LockRecoveryResult.NOT_RECOVERABLE);
-    LockFinalizer interruptibleFinalizer = new LockFinalizer(auditorClient, MAX_ATTEMPTS, 60_000L);
     Thread.currentThread().interrupt();
 
     // Act & Assert
     // The interrupted sleep aborts finalization after the first attempt.
-    assertThatThrownBy(() -> interruptibleFinalizer.execute("default", createScanResult()))
+    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
         .isInstanceOf(InterruptedException.class);
     verify(auditorClient, times(1)).recover(any(AssetLockRecoveryRequest.class));
   }

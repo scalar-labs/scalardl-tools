@@ -16,26 +16,18 @@ import org.slf4j.LoggerFactory;
 @ThreadSafe
 public final class LockFinalizer {
 
-  @VisibleForTesting static final int DEFAULT_MAX_ATTEMPTS = 3;
+  /** The total number of {@code RecoverAssetLock} attempts made for a single lock. */
+  @VisibleForTesting static final int MAX_ATTEMPTS = 3;
 
-  @VisibleForTesting
-  static final long DEFAULT_RETRY_INTERVAL_MS = AuditorInternalValues.LOCK_VALID_PERIOD_MS;
+  /** The wait between attempts; it matches the lock validity period so the lock can expire. */
+  private static final long RETRY_INTERVAL_MS = AuditorInternalValues.LOCK_VALID_PERIOD_MS;
 
   private static final Logger logger = LoggerFactory.getLogger(LockFinalizer.class);
 
   private final AuditorClient auditorClient;
-  private final int maxAttempts;
-  private final long retryIntervalMs;
 
   public LockFinalizer(AuditorClient auditorClient) {
-    this(auditorClient, DEFAULT_MAX_ATTEMPTS, DEFAULT_RETRY_INTERVAL_MS);
-  }
-
-  @VisibleForTesting
-  LockFinalizer(AuditorClient auditorClient, int maxAttempts, long retryIntervalMs) {
     this.auditorClient = auditorClient;
-    this.maxAttempts = maxAttempts;
-    this.retryIntervalMs = retryIntervalMs;
   }
 
   /**
@@ -45,7 +37,7 @@ public final class LockFinalizer {
    *
    * <p>A {@code NOT_RECOVERABLE} result means the lock is still active (e.g. refreshed by an
    * ongoing reader) and cannot be safely skipped. Rather than abort at once, this method retries up
-   * to {@link #maxAttempts} times, sleeping {@link #retryIntervalMs} between attempts to let the
+   * to {@link #MAX_ATTEMPTS} times, sleeping {@link #RETRY_INTERVAL_MS} between attempts to let the
    * lock expire, and aborts only if every attempt still returns {@code NOT_RECOVERABLE}.
    *
    * @throws InterruptedException if the thread is interrupted while sleeping between retries, so
@@ -65,7 +57,7 @@ public final class LockFinalizer {
     AssetLockRecoveryRequest rpcRequest =
         AssetLockRecoveryRequest.newBuilder().setNamespace(namespace).setAssetId(assetId).build();
 
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       LockRecoveryResult rpcResult = auditorClient.recover(rpcRequest);
 
       if (rpcResult == LockRecoveryResult.SUCCEEDED || rpcResult == LockRecoveryResult.NOT_NEEDED) {
@@ -82,18 +74,18 @@ public final class LockFinalizer {
       }
 
       // NOT_RECOVERABLE: the lock is not yet expired. Retry unless this was the last attempt.
-      if (attempt < maxAttempts) {
+      if (attempt < MAX_ATTEMPTS) {
         logger.info(
             "Asset {} in namespace {} is still in use. Retrying finalization (attempt {}/{})",
             assetId,
             namespace,
             attempt,
-            maxAttempts);
-        Thread.sleep(retryIntervalMs);
+            MAX_ATTEMPTS);
+        Thread.sleep(RETRY_INTERVAL_MS);
       }
     }
 
     throw new ScalarDlCleanupException(
-        ScalarDlCleanupError.RECOVER_ASSET_LOCK_NOT_RECOVERABLE, assetId, namespace, maxAttempts);
+        ScalarDlCleanupError.RECOVER_ASSET_LOCK_NOT_RECOVERABLE, assetId, namespace, MAX_ATTEMPTS);
   }
 }
