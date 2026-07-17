@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-for v in CLEANUP COSMOSDB_SHELL RUNNER_TEMP; do
+for v in CLEANUP COSMOSDB_SHELL RUNNER_TEMP RECORD_COUNT; do
   if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
 done
 
@@ -72,7 +72,7 @@ count_cosmos_items() {
 connect "AccountEndpoint=${endpoint};AccountKey=${account_key};"
 cd ${database}
 cd ${container}
-query "SELECT * FROM c" | jq 'length'
+query "SELECT * FROM c" | jq '.items | length'
 exit
 EOF
 )
@@ -88,36 +88,34 @@ EOF
   printf '%s\n' "$count"
 }
 
-rp_before=$(count_cosmos_items "$auditor_props" auditor request_proof)
-cs_before=$(count_cosmos_items "$ledger_props" coordinator state)
-
 echo "== Execute finalize-ledger =="
 ledger_out=$(run_tool finalize-ledger --properties "$ledger_props")
 echo "$ledger_out"
 token_l=$(completion_token finalize-ledger "$ledger_out")
 
 echo "== Execute finalize-auditor =="
+rp_before=$(count_cosmos_items "$auditor_props" auditor request_proof)
 auditor_out=$(run_tool finalize-auditor --properties "$auditor_props")
 echo "$auditor_out"
 token_a=$(completion_token finalize-auditor "$auditor_out")
+rp_after=$(count_cosmos_items "$auditor_props" auditor request_proof)
+echo "request_proof rows: before=$rp_before after=$rp_after"
+[ "$rp_after" -eq 0 ] || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0)"; exit 1; }
 
 echo "== Execute cleanup-coordinator =="
-coord_out=$(run_tool cleanup-coordinator --properties "$ledger_props" \
-              --ledger-token "$token_l" --auditor-token "$token_a")
+cs_before=$(count_cosmos_items "$ledger_props" coordinator state)
+coord_out=$(run_tool cleanup-coordinator --properties "$ledger_props" --ledger-token "$token_l" --auditor-token "$token_a")
 echo "$coord_out"
 [ "$(printf '%s' "$coord_out" | jq -r '.status_code')" = "OK" ] \
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
-
-echo "=== Verify reclaimed rows ==="
-
-rp_after=$(count_cosmos_items "$auditor_props" auditor request_proof)
-echo "request_proof rows: before=$rp_before after=$rp_after"
-[ "$rp_after" -eq 0 ] \
-  || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0 after cleanup)"; exit 1; }
-
 cs_after=$(count_cosmos_items "$ledger_props" coordinator state)
-echo "coordinator.state rows: before=$cs_before after=$cs_after"
-[ "$cs_after" -eq 0 ] \
-  || { echo "::error::cleanup-coordinator left $cs_after coordinator.state rows (expected 0 after cleanup)"; exit 1; }
+# Only the RECORD_COUNT committed put transactions are settled before the deletable-before boundary,
+# so exactly those are removed. finalize-auditor's recovery aborts each stranded lock's nonce,
+# writing coordinator.state rows after the boundary, which survive and are not counted here.
+echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$RECORD_COUNT)"
+[ "$((cs_before - cs_after))" -eq "$RECORD_COUNT" ] \
+  || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $RECORD_COUNT)"; exit 1; }
+[ "$cs_after" -eq "$((2 * RECORD_COUNT))" ] \
+  || { echo "::error::coordinator.state has $cs_after rows after cleanup (expected $((2 * RECORD_COUNT)))"; exit 1; }
 
 echo "All three cleanup commands succeeded."
