@@ -104,7 +104,14 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "003",
       "The asset lock recovery failed for asset %s in namespace %s.",
       "",
-      "Verify that the Auditor is healthy and reachable.");
+      "Verify that the Auditor is healthy and reachable."),
+  RECOVER_ASSET_LOCK_NOT_RECOVERABLE(
+      Category.INTERNAL_ERROR,
+      "004",
+      "The asset lock for asset %s in namespace %s is still not recoverable after %d attempts; "
+          + "the lock is being kept active.",
+      "",
+      "Re-run the command after the affected asset becomes quiescent.");
 
   private static final String COMPONENT_NAME = "DL-TOOLS";
 
