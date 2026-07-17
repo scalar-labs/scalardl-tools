@@ -132,6 +132,7 @@ class LockFinalizerTest {
   }
 
   @Test
+  @SuppressWarnings("ResultOfMethodCallIgnored")
   void execute_interruptedBeforeRetrySleepGiven_shouldThrowInterruptedExceptionPromptly() {
     // Arrange
     when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
@@ -140,8 +141,12 @@ class LockFinalizerTest {
 
     // Act & Assert
     // The interrupted sleep aborts finalization after the first attempt.
-    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
-        .isInstanceOf(InterruptedException.class);
+    try {
+      assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+          .isInstanceOf(InterruptedException.class);
+    } finally {
+      Thread.interrupted();
+    }
     verify(auditorClient, times(1)).recover(any(AssetLockRecoveryRequest.class));
   }
 
