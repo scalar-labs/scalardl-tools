@@ -26,9 +26,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 import picocli.CommandLine;
 
-// The Charset overloads errorprone's JdkObsolete recommends are Java 10+ and do not compile under
-// this module's --release 8 target, so the tests use the "UTF-8" String overloads deliberately.
-@SuppressWarnings("JdkObsolete")
 public class AuditorFinalizeRecordsCommandTest {
 
   private static final ObjectMapper mapper = new ObjectMapper();
@@ -39,7 +36,7 @@ public class AuditorFinalizeRecordsCommandTest {
   @BeforeEach
   void setUp() throws Exception {
     out = new ByteArrayOutputStream();
-    System.setOut(new PrintStream(out, true, "UTF-8"));
+    System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
   }
 
   @AfterEach
@@ -54,7 +51,7 @@ public class AuditorFinalizeRecordsCommandTest {
   }
 
   private JsonNode captured() throws Exception {
-    return mapper.readTree(out.toString("UTF-8"));
+    return mapper.readTree(out.toString(StandardCharsets.UTF_8));
   }
 
   @Test
@@ -131,7 +128,7 @@ public class AuditorFinalizeRecordsCommandTest {
     JsonNode json = captured();
     assertThat(json.get("status_code").asText()).isEqualTo("INTERNAL_ERROR");
     assertThat(json.get("error_message").asText()).isEqualTo("finalize failed");
-    assertThat(out.toString("UTF-8")).doesNotContain("completion_token");
+    assertThat(out.toString(StandardCharsets.UTF_8)).doesNotContain("completion_token");
   }
 
   @Test
@@ -170,6 +167,6 @@ public class AuditorFinalizeRecordsCommandTest {
     JsonNode json = captured();
     assertThat(json.get("status_code").asText()).isEqualTo("INTERNAL_ERROR");
     assertThat(json.get("error_message").asText()).isEqualTo("cleanup failed");
-    assertThat(out.toString("UTF-8")).doesNotContain("completion_token");
+    assertThat(out.toString(StandardCharsets.UTF_8)).doesNotContain("completion_token");
   }
 }

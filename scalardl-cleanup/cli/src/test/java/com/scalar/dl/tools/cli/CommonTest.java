@@ -8,13 +8,11 @@ import com.scalar.dl.tools.common.Category;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-// The Charset overloads errorprone's JdkObsolete recommends are Java 10+ and do not compile under
-// this module's --release 8 target, so the tests use the "UTF-8" String overloads deliberately.
-@SuppressWarnings("JdkObsolete")
 public class CommonTest {
 
   private static final ObjectMapper mapper = new ObjectMapper();
@@ -25,7 +23,7 @@ public class CommonTest {
   @BeforeEach
   void setUp() throws Exception {
     out = new ByteArrayOutputStream();
-    System.setOut(new PrintStream(out, true, "UTF-8"));
+    System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
   }
 
   @AfterEach
@@ -34,7 +32,7 @@ public class CommonTest {
   }
 
   private JsonNode captured() throws Exception {
-    return mapper.readTree(out.toString("UTF-8"));
+    return mapper.readTree(out.toString(StandardCharsets.UTF_8));
   }
 
   @Test
