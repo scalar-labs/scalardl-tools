@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.scalar.dl.tools.common.Category;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,9 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-// The Charset overloads errorprone's JdkObsolete recommends are Java 10+ and do not compile under
-// this module's --release 8 target, so the tests use the "UTF-8" String overloads deliberately.
-@SuppressWarnings("JdkObsolete")
 public class ScalarDlCleanupTest {
 
   private static final ObjectMapper mapper = new ObjectMapper();
@@ -39,7 +37,7 @@ public class ScalarDlCleanupTest {
   @BeforeEach
   void setUp() throws Exception {
     out = new ByteArrayOutputStream();
-    System.setOut(new PrintStream(out, true, "UTF-8"));
+    System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
 
     // Capture what CommonOptions logs so the --stacktrace behavior can be asserted. slf4j delegates
     // to the same underlying log4j2 logger, so an appender attached here sees CommonOptions'
@@ -58,7 +56,7 @@ public class ScalarDlCleanupTest {
   }
 
   private JsonNode captured() throws Exception {
-    return mapper.readTree(out.toString("UTF-8"));
+    return mapper.readTree(out.toString(StandardCharsets.UTF_8));
   }
 
   private void assertUserErrorJson() throws Exception {
@@ -169,7 +167,7 @@ public class ScalarDlCleanupTest {
     // Assert
     String expectedVersion = String.join(" ", new VersionProvider().getVersion());
     assertThat(exitCode).isZero();
-    assertThat(out.toString("UTF-8")).contains(expectedVersion);
+    assertThat(out.toString(StandardCharsets.UTF_8)).contains(expectedVersion);
   }
 
   /** A log4j2 appender that records the formatted message of every {@code ERROR} event. */

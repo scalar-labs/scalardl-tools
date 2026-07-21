@@ -20,9 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
-// The Charset overloads errorprone's JdkObsolete recommends are Java 10+ and do not compile under
-// this module's --release 8 target, so the tests use the "UTF-8" String overloads deliberately.
-@SuppressWarnings("JdkObsolete")
 public class LedgerFinalizeRecordsCommandTest {
 
   private static final ObjectMapper mapper = new ObjectMapper();
@@ -33,7 +30,7 @@ public class LedgerFinalizeRecordsCommandTest {
   @BeforeEach
   void setUp() throws Exception {
     out = new ByteArrayOutputStream();
-    System.setOut(new PrintStream(out, true, "UTF-8"));
+    System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
   }
 
   @AfterEach
@@ -48,7 +45,7 @@ public class LedgerFinalizeRecordsCommandTest {
   }
 
   private JsonNode captured() throws Exception {
-    return mapper.readTree(out.toString("UTF-8"));
+    return mapper.readTree(out.toString(StandardCharsets.UTF_8));
   }
 
   @Test
