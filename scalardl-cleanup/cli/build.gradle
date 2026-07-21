@@ -57,3 +57,38 @@ spotbugs {
 
 spotbugsMain { reports.create('html') { required = true } }
 spotbugsTest { reports.create('html') { required = true } }
+
+// Name the distribution archive predictably so the Dockerfile can reference it
+// without embedding the version.
+distTar {
+    archiveFileName = 'scalardl-cleanup.tar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+// Docker image build. The version can be overridden with -PdockerVersion=<v>.
+def dockerVersion = project.properties['dockerVersion'] ?: project.version
+def imageName = 'scalardl-cleanup'
+def imageVersion = dockerVersion
+def imageRelease = System.currentTimeMillis().toString()
+
+tasks.register('copyFilesToDockerBuildContextDir', Copy) {
+    description = 'Copy files to a temporary folder to build the Docker image'
+    dependsOn distTar
+    from('Dockerfile')
+    from('docker-entrypoint.sh')
+    from(tasks.distTar.archiveFile)
+    into('build/docker')
+}
+
+tasks.register('docker', Exec) {
+    description = 'Build the ScalarDL Cleanup tools Docker image'
+    group = 'docker'
+    dependsOn copyFilesToDockerBuildContextDir
+    workingDir 'build/docker'
+    commandLine 'docker', 'build',
+            '--build-arg', "IMAGE_NAME=${imageName}",
+            '--build-arg', "IMAGE_VERSION=${imageVersion}",
+            '--build-arg', "IMAGE_RELEASE=${imageRelease}",
+            '--tag', "ghcr.io/scalar-labs/${imageName}:${imageVersion}",
+            '.'
+}
