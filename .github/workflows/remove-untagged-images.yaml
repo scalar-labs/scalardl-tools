@@ -15,7 +15,10 @@ jobs:
 
     steps:
       - name: scalardl-cleanup
-        uses: camargo/delete-untagged-action@v1
+        uses: actions/delete-package-versions@v5
         with:
-          github-token: ${{ secrets.CR_PAT }}
           package-name: scalardl-cleanup
+          package-type: container
+          delete-only-untagged-versions: 'true'
+          min-versions-to-keep: 0
+          token: ${{ secrets.CR_PAT }}

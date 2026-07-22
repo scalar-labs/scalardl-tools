@@ -8,6 +8,12 @@ on:
       - '.github/workflows/release-snapshot.yaml'
   workflow_dispatch:
 
+# Serialize runs per ref and cancel superseded ones so the mutable SNAPSHOT tag
+# always ends up pointing at the newest commit.
+concurrency:
+  group: release-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: scalardl-cleanup

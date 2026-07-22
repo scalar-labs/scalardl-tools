@@ -9,7 +9,8 @@ subprojects {
     apply plugin: 'jacoco'
     apply plugin: 'com.diffplug.spotless'
 
-    project.version = '1.0.0-SNAPSHOT'
+    // Overridable at release time with -PprojectVersion=<version>.
+    project.version = project.findProperty('projectVersion') ?: '4.0.0-SNAPSHOT'
 
     ext {
         guavaVersion = '33.6.0-jre'
