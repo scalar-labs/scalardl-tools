@@ -62,7 +62,6 @@ spotbugsTest { reports.create('html') { required = true } }
 // without embedding the version.
 distTar {
     archiveFileName = 'scalardl-cleanup.tar'
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 // Docker image build. The version can be overridden with -PdockerVersion=<v>.
