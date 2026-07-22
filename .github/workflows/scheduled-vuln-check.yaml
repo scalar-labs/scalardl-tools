@@ -1,0 +1,14 @@
+name: Scheduled Vulnerability Check
+
+on:
+  schedule:
+    # UTC
+    - cron: '0 20 * * WED,SAT'
+
+jobs:
+  call-vuln-check-for-master:
+    uses: ./.github/workflows/vuln-check.yaml
+    with:
+      target-ref: master
+    secrets:
+      SLACK_SECURITY_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
