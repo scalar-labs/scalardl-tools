@@ -19,15 +19,20 @@ public final class LockFinalizer {
   /** The total number of {@code RecoverAssetLock} attempts made for a single lock. */
   @VisibleForTesting static final int MAX_ATTEMPTS = 3;
 
-  /** The wait between attempts; it matches the lock validity period so the lock can expire. */
-  private static final long RETRY_INTERVAL_MS = AuditorInternalValues.LOCK_VALID_PERIOD_MS;
-
   private static final Logger logger = LoggerFactory.getLogger(LockFinalizer.class);
 
   private final AuditorClient auditorClient;
 
+  private final long retryIntervalMs;
+
   public LockFinalizer(AuditorClient auditorClient) {
+    this(auditorClient, AuditorInternalValues.LOCK_VALID_PERIOD_MS);
+  }
+
+  @VisibleForTesting
+  LockFinalizer(AuditorClient auditorClient, long retryIntervalMs) {
     this.auditorClient = auditorClient;
+    this.retryIntervalMs = retryIntervalMs;
   }
 
   /**
@@ -37,8 +42,8 @@ public final class LockFinalizer {
    *
    * <p>A {@code NOT_RECOVERABLE} result means the lock is still active (e.g. refreshed by an
    * ongoing reader) and cannot be safely skipped. Rather than abort at once, this method retries up
-   * to {@link #MAX_ATTEMPTS} times, sleeping {@link #RETRY_INTERVAL_MS} between attempts to let the
-   * lock expire, and aborts only if every attempt still returns {@code NOT_RECOVERABLE}.
+   * to {@link #MAX_ATTEMPTS} times, sleeping between attempts to let the lock expire, and aborts
+   * only if every attempt still returns {@code NOT_RECOVERABLE}.
    *
    * @throws InterruptedException if the thread is interrupted while sleeping between retries, so
    *     the scan can be canceled promptly.
@@ -81,7 +86,7 @@ public final class LockFinalizer {
             namespace,
             attempt,
             MAX_ATTEMPTS);
-        Thread.sleep(RETRY_INTERVAL_MS);
+        Thread.sleep(retryIntervalMs);
       }
     }
 

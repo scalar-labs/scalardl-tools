@@ -22,13 +22,16 @@ import org.mockito.ArgumentCaptor;
 
 class LockFinalizerTest {
 
+  // Retry interval used in tests so the retry path does not sleep for the real (15s) interval.
+  private static final long NO_RETRY_INTERVAL_MS = 0L;
+
   private AuditorClient auditorClient;
   private LockFinalizer finalizer;
 
   @BeforeEach
   void setUp() {
     auditorClient = mock(AuditorClient.class);
-    finalizer = new LockFinalizer(auditorClient);
+    finalizer = new LockFinalizer(auditorClient, NO_RETRY_INTERVAL_MS);
   }
 
   private Result createScanResult() {
