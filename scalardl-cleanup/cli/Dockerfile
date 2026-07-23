@@ -30,7 +30,7 @@ LABEL name="${IMAGE_NAME}" \
       version="${IMAGE_VERSION}" \
       release="${IMAGE_RELEASE}" \
       summary="ScalarDL Cleanup Tools Container Image" \
-      description="Command-line tools that let ScalarDL operators safely reclaim space by removing stale records left behind by completed transactions from ScalarDB's coordinator.state table (Ledger) and the Auditor's asset_lock/request_proof tables."
+      description="Command-line tools that let ScalarDL operators safely reclaim space by removing stale records left behind by completed transactions from Ledger's coordinator table and the Auditor's request proof table."
 
 WORKDIR /scalar/scalardl-cleanup
 
