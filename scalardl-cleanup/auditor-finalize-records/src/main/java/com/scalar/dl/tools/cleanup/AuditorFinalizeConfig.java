@@ -52,6 +52,8 @@ public final class AuditorFinalizeConfig {
         .tlsCaRootCert(caRootCert)
         .tlsOverrideAuthority(
             ConfigUtils.getString(props, ClientConfig.AUDITOR_TLS_OVERRIDE_AUTHORITY, null))
+        .authorizationCredential(
+            ConfigUtils.getString(props, ClientConfig.AUDITOR_AUTHORIZATION_CREDENTIAL, null))
         .grpcClientConfig(
             GrpcClientConfig.newBuilder().deadlineDurationMillis(DEFAULT_GRPC_DEADLINE_MS).build())
         .build();

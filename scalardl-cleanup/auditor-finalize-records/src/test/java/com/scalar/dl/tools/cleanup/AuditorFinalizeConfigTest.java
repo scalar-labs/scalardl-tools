@@ -6,7 +6,6 @@ import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.ledger.config.TargetConfig;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
@@ -34,6 +33,7 @@ class AuditorFinalizeConfigTest {
         .isEqualTo(AuditorFinalizeConfig.DEFAULT_AUDITOR_TLS_ENABLED);
     assertThat(config.getTargetTlsCaRootCert()).isNull();
     assertThat(config.getTargetTlsOverrideAuthority()).isNull();
+    assertThat(config.getTargetAuthorizationCredential()).isNull();
     assertThat(config.getGrpcClientConfig().getDeadlineDurationMillis())
         .isEqualTo(AuditorFinalizeConfig.DEFAULT_GRPC_DEADLINE_MS);
   }
@@ -96,7 +96,7 @@ class AuditorFinalizeConfigTest {
   void buildAuditorTargetConfig_tlsCaRootCertPathGiven_shouldReadCertFromFile() throws IOException {
     // Arrange
     Path certFile = tempDir.resolve("ca.pem");
-    Files.write(certFile, "cert-from-file".getBytes(StandardCharsets.UTF_8));
+    Files.writeString(certFile, "cert-from-file");
     Properties props = new Properties();
     props.setProperty(ClientConfig.AUDITOR_TLS_CA_ROOT_CERT_PATH, certFile.toString());
 
@@ -111,7 +111,7 @@ class AuditorFinalizeConfigTest {
   void buildAuditorTargetConfig_tlsCaRootCertPemAndPathGiven_shouldPreferPem() throws IOException {
     // Arrange
     Path certFile = tempDir.resolve("ca.pem");
-    Files.write(certFile, "cert-from-file".getBytes(StandardCharsets.UTF_8));
+    Files.writeString(certFile, "cert-from-file");
     Properties props = new Properties();
     props.setProperty(ClientConfig.AUDITOR_TLS_CA_ROOT_CERT_PEM, "cert-from-pem");
     props.setProperty(ClientConfig.AUDITOR_TLS_CA_ROOT_CERT_PATH, certFile.toString());
@@ -134,6 +134,19 @@ class AuditorFinalizeConfigTest {
 
     // Assert
     assertThat(config.getTargetTlsOverrideAuthority()).isEqualTo("auditor.test");
+  }
+
+  @Test
+  void buildAuditorTargetConfig_authorizationCredentialGiven_shouldUseIt() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(ClientConfig.AUDITOR_AUTHORIZATION_CREDENTIAL, "Bearer token");
+
+    // Act
+    TargetConfig config = AuditorFinalizeConfig.buildAuditorTargetConfig(props);
+
+    // Assert
+    assertThat(config.getTargetAuthorizationCredential()).isEqualTo("Bearer token");
   }
 
   @Test
