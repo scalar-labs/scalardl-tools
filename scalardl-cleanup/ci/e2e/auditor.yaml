@@ -35,6 +35,11 @@ stringData:
     scalar.dl.auditor.server.prometheus_exporter_port=-1
     scalar.dl.auditor.server.decommissioning_duration_secs=0
 
+    # TLS between clients and the Auditor server.
+    scalar.dl.auditor.server.tls.enabled=true
+    scalar.dl.auditor.server.tls.cert_chain_path=/etc/scalardl-tls/tls.crt
+    scalar.dl.auditor.server.tls.private_key_path=/etc/scalardl-tls/tls.key
+
     # Reach the Ledger via its cross-namespace ClusterIP DNS name.
     scalar.dl.auditor.ledger.host=ledger.${LEDGER_NS}.svc.cluster.local
     scalar.dl.auditor.ledger.port=50051
@@ -103,10 +108,16 @@ spec:
             - name: config
               mountPath: /etc/scalardl
               readOnly: true
+            - name: tls
+              mountPath: /etc/scalardl-tls
+              readOnly: true
       volumes:
         - name: config
           secret:
             secretName: auditor-config
+        - name: tls
+          secret:
+            secretName: auditor-tls
 
 ---
 

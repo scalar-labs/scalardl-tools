@@ -58,6 +58,9 @@ export SL_JOB_SUFFIX=""
 export SL_LEDGER_ARGS='["--config", "/config/database.properties", "--coordinator"]'
 export SL_AUDITOR_ARGS='["--config", "/config/database.properties"]'
 
+export AUDITOR_TLS_SAN="auditor.e2e.scalar-labs.com"
+CERTS_DIR="$HERE/certs"
+
 # Give envsubst an explicit variable list so it substitutes ONLY these placeholders.
 # Without a list, envsubst expands EVERY $VAR in the manifests, which would wrongly
 # rewrite unrelated shell-style tokens (e.g. a literal $@ in a container command).
@@ -73,6 +76,16 @@ require_vars() {
   for v in "$@"; do
     if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
   done
+}
+
+# Generate a disposable self-signed cert/key for the Auditor server TLS.
+gen_certs() {
+  mkdir -p "$CERTS_DIR"
+  echo "==> generate self-signed Auditor TLS cert (CN/SAN=${AUDITOR_TLS_SAN})"
+  openssl req -x509 -newkey rsa:2048 -nodes \
+    -keyout "$CERTS_DIR/auditor-key.pem" -out "$CERTS_DIR/auditor.crt" \
+    -days 3650 -subj "/CN=${AUDITOR_TLS_SAN}" \
+    -addext "subjectAltName=DNS:${AUDITOR_TLS_SAN}"
 }
 
 clean() {
@@ -117,8 +130,10 @@ upgrade() {
       /usr/local/bin/grpc_health_probe -addr=:50051; then
     diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed after upgrade to $LEDGER_IMAGE"
   fi
+  # TLS is enabled on the Auditor server, so the probe must speak TLS and verify against the SAN.
   if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
-      /usr/local/bin/grpc_health_probe -addr=:40051; then
+      /usr/local/bin/grpc_health_probe -addr=:40051 \
+      -tls -tls-ca-cert=/etc/scalardl-tls/tls.crt -tls-server-name="$AUDITOR_TLS_SAN"; then
     diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed after upgrade to $AUDITOR_IMAGE"
   fi
 }
@@ -189,6 +204,13 @@ deploy_all() {
   wait_for_job "$LEDGER_NS"  schema-loader-ledger  300
   wait_for_job "$AUDITOR_NS" schema-loader-auditor 300
 
+  echo "==> create Auditor TLS cert + secret"
+  gen_certs
+  kubectl -n "$AUDITOR_NS" create secret generic auditor-tls \
+    --from-file=tls.crt="$CERTS_DIR/auditor.crt" \
+    --from-file=tls.key="$CERTS_DIR/auditor-key.pem" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
   echo "==> deploy ledger + auditor"
   render ledger.yaml  | kubectl apply -f -
   render auditor.yaml | kubectl apply -f -
@@ -202,8 +224,10 @@ deploy_all() {
       /usr/local/bin/grpc_health_probe -addr=:50051; then
     diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed"
   fi
+  # TLS is enabled on the Auditor server, so the probe must speak TLS and verify against the SAN.
   if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
-      /usr/local/bin/grpc_health_probe -addr=:40051; then
+      /usr/local/bin/grpc_health_probe -addr=:40051 \
+      -tls -tls-ca-cert=/etc/scalardl-tls/tls.crt -tls-server-name="$AUDITOR_TLS_SAN"; then
     diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed"
   fi
 }
