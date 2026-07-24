@@ -34,9 +34,9 @@ pf_wait 40051 40052
 # config secrets so the tool sees exactly the ScalarDB configuration each server uses.
 kubectl -n ledger-e2e  get secret ledger-config  -o jsonpath='{.data.ledger\.properties}'  | base64 -d > "$ledger_props"
 kubectl -n auditor-e2e get secret auditor-config -o jsonpath='{.data.auditor\.properties}' | base64 -d > "$auditor_props"
-# finalize-auditor additionally needs ScalarDL client properties to reach the Auditor server's
+# finalize-auditor additionally needs some ScalarDL client properties to reach the Auditor server's
 # privileged port. The leading newline guards against the Secret value lacking a trailing newline.
-{ echo; cat "$HERE/client.properties"; } >> "$auditor_props"
+{ echo; echo "scalar.dl.client.auditor.host=127.0.0.1"; } >> "$auditor_props"
 
 # Run one cleanup subcommand and echo its stdout JSON. On failure, surface the captured stderr and
 # return non-zero so the caller's `set -e` aborts. Usage: run_tool <subcommand> [args...]

@@ -3,7 +3,6 @@ package com.scalar.dl.tools.cli;
 import com.google.common.annotations.VisibleForTesting;
 import com.scalar.dl.tools.cleanup.AuditorFinalizeOrchestrator;
 import com.scalar.dl.tools.cleanup.RequestProofCleanupOrchestrator;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Properties;
 import picocli.CommandLine.Command;
@@ -32,10 +31,10 @@ public class AuditorFinalizeRecordsCommand extends AbstractToolCommand {
   @Override
   protected Integer execute(Properties props, Path checkpointDir) throws Exception {
     // The single --properties file serves as both the Auditor's database configuration and the
-    // ScalarDL client configuration used to reach the Auditor server.
+    // source of the Auditor server connection used to reach the privileged RecoverAssetLock RPC.
     String auditorToken;
     try (AuditorFinalizeOrchestrator orchestrator =
-        createFinalizeOrchestrator(props, props, checkpointDir)) {
+        createFinalizeOrchestrator(props, checkpointDir)) {
       auditorToken = orchestrator.execute();
     }
 
@@ -54,9 +53,8 @@ public class AuditorFinalizeRecordsCommand extends AbstractToolCommand {
   }
 
   @VisibleForTesting
-  AuditorFinalizeOrchestrator createFinalizeOrchestrator(
-      Properties auditorProps, Properties clientProps, Path checkpointDir) throws IOException {
-    return AuditorFinalizeOrchestrator.create(auditorProps, clientProps, checkpointDir);
+  AuditorFinalizeOrchestrator createFinalizeOrchestrator(Properties props, Path checkpointDir) {
+    return AuditorFinalizeOrchestrator.create(props, checkpointDir);
   }
 
   @VisibleForTesting
