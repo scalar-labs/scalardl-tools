@@ -1,3 +1,11 @@
+FROM eclipse-temurin:21-jre-jammy AS builder
+
+COPY scalardl-cleanup.tar docker-entrypoint.sh /tmp/build/
+RUN mkdir -p /out \
+ && tar -xf /tmp/build/scalardl-cleanup.tar -C /out --strip-components=1 \
+ && cp /tmp/build/docker-entrypoint.sh /out/ \
+ && chmod +x /out/docker-entrypoint.sh
+
 FROM eclipse-temurin:21-jre-jammy
 
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
@@ -8,13 +16,7 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 
 WORKDIR /scalar
 
-COPY scalardl-cleanup.tar docker-entrypoint.sh /tmp/build/
-RUN mkdir -p /scalar/scalardl-cleanup \
- && tar -xf /tmp/build/scalardl-cleanup.tar -C /scalar/scalardl-cleanup --strip-components=1 \
- && cp /tmp/build/docker-entrypoint.sh /scalar/scalardl-cleanup/ \
- && chmod +x /scalar/scalardl-cleanup/docker-entrypoint.sh \
- && rm -rf /tmp/build \
- && chown -R 201:201 /scalar
+COPY --from=builder /out /scalar/scalardl-cleanup
 
 USER 201
 
