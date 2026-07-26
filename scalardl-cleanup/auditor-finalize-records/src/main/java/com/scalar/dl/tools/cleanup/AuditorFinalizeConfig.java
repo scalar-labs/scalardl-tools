@@ -54,6 +54,8 @@ public final class AuditorFinalizeConfig {
             ConfigUtils.getString(props, ClientConfig.AUDITOR_TLS_OVERRIDE_AUTHORITY, null))
         .authorizationCredential(
             ConfigUtils.getString(props, ClientConfig.AUDITOR_AUTHORIZATION_CREDENTIAL, null))
+        // Fixed deadline, not configurable: this tool runs in the same cluster as the Auditor, so
+        // 60s is always ample for the synchronous RecoverAssetLock RPC.
         .grpcClientConfig(
             GrpcClientConfig.newBuilder().deadlineDurationMillis(DEFAULT_GRPC_DEADLINE_MS).build())
         .build();
