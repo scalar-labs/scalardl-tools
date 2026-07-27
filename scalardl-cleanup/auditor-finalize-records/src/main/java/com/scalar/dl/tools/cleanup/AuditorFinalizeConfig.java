@@ -54,8 +54,12 @@ public final class AuditorFinalizeConfig {
             ConfigUtils.getString(props, ClientConfig.AUDITOR_TLS_OVERRIDE_AUTHORITY, null))
         .authorizationCredential(
             ConfigUtils.getString(props, ClientConfig.AUDITOR_AUTHORIZATION_CREDENTIAL, null))
-        // Fixed deadline, not configurable: this tool runs in the same cluster as the Auditor, so
-        // 60s is always ample for the synchronous RecoverAssetLock RPC.
+        // The gRPC client settings are fixed, not configurable. The deadline is 60s, which is
+        // always ample for the synchronous RecoverAssetLock RPC since this tool runs in the same
+        // cluster as the Auditor. The max sizes of the inbound message and metadata (i.e., the
+        // response and its headers/trailers from the Auditor) are left at the gRPC defaults (4 MiB
+        // and 8 KiB), which are more than enough since the response carries only a single result
+        // code.
         .grpcClientConfig(
             GrpcClientConfig.newBuilder().deadlineDurationMillis(DEFAULT_GRPC_DEADLINE_MS).build())
         .build();
