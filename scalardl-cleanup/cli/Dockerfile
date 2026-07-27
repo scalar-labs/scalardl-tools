@@ -16,6 +16,9 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 
 WORKDIR /scalar
 
+# Deliberately left owned by root:root (COPY's default — no --chown): uid 201 gets
+# read/execute but cannot write, so a compromised JVM process cannot rewrite the
+# entrypoint or the jars it is about to load.
 COPY --from=builder /out /scalar/scalardl-cleanup
 
 USER 201
