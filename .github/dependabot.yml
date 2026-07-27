@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # For GitHub Actions, update all actions on the default branch. This also
+  # refreshes the actions that are pinned to a full commit SHA, since Dependabot
+  # rewrites both the SHA and its trailing version comment.
+  - package-ecosystem: "github-actions"
+    groups:
+      actions on branch master:
+        patterns:
+          - "*"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "01:00"
+      timezone: "Asia/Tokyo"

@@ -15,10 +15,13 @@ jobs:
 
     steps:
       - name: scalardl-cleanup
-        uses: actions/delete-package-versions@v5
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
         with:
           package-name: scalardl-cleanup
           package-type: container
           delete-only-untagged-versions: 'true'
+          # Safe only while the image is single-arch: a multi-arch build leaves
+          # its per-arch child images untagged in GHCR, so this cron would delete
+          # them and break the tagged manifest list.
           min-versions-to-keep: 0
           token: ${{ secrets.CR_PAT }}
