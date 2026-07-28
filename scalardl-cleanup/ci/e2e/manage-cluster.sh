@@ -58,6 +58,9 @@ export SL_JOB_SUFFIX=""
 export SL_LEDGER_ARGS='["--config", "/config/database.properties", "--coordinator"]'
 export SL_AUDITOR_ARGS='["--config", "/config/database.properties"]'
 
+export AUDITOR_TLS_SAN="auditor.e2e.scalar-labs.com"
+CERTS_DIR="$HERE/certs"
+
 # Give envsubst an explicit variable list so it substitutes ONLY these placeholders.
 # Without a list, envsubst expands EVERY $VAR in the manifests, which would wrongly
 # rewrite unrelated shell-style tokens (e.g. a literal $@ in a container command).
@@ -75,9 +78,28 @@ require_vars() {
   done
 }
 
+# Generate a disposable self-signed cert/key for the Auditor server TLS. Reused if it already exists,
+# so re-running deploy does not rotate the cert out from under a running Auditor pod (`clean` drops it
+# to force a fresh one). umask 077 keeps the private key private on a dev box.
+gen_certs() {
+  mkdir -p "$CERTS_DIR"
+  if [[ -s "$CERTS_DIR/auditor.crt" && -s "$CERTS_DIR/auditor-key.pem" ]]; then
+    echo "==> reusing existing Auditor TLS cert (CN/SAN=${AUDITOR_TLS_SAN})"
+    return
+  fi
+  echo "==> generate self-signed Auditor TLS cert (CN/SAN=${AUDITOR_TLS_SAN})"
+  ( umask 077
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout "$CERTS_DIR/auditor-key.pem" -out "$CERTS_DIR/auditor.crt" \
+      -days 3650 -subj "/CN=${AUDITOR_TLS_SAN}" \
+      -addext "subjectAltName=DNS:${AUDITOR_TLS_SAN}" )
+}
+
 clean() {
   echo "Deleting namespaces ${LEDGER_NS} and ${AUDITOR_NS} ..."
   kubectl delete namespace "$LEDGER_NS" "$AUDITOR_NS" --ignore-not-found
+  # Drop the disposable TLS cert so the next deploy generates a fresh one (see gen_certs).
+  rm -rf "$CERTS_DIR"
 }
 
 # Scale the Ledger to 0 and wait for its pod to disappear.
@@ -112,15 +134,7 @@ upgrade() {
     diag_and_die "$AUDITOR_NS" "Auditor rollout to $AUDITOR_IMAGE did not complete"
   fi
 
-  echo "==> gRPC health checks"
-  if ! kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
-      /usr/local/bin/grpc_health_probe -addr=:50051; then
-    diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed after upgrade to $LEDGER_IMAGE"
-  fi
-  if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
-      /usr/local/bin/grpc_health_probe -addr=:40051; then
-    diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed after upgrade to $AUDITOR_IMAGE"
-  fi
+  grpc_health_checks " after upgrade to $SCALARDL_VERSION"
 }
 
 # Dump everything useful about a namespace's workloads, then fail.
@@ -136,6 +150,22 @@ diag_and_die() {
     kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=200 || true
   done
   exit 1
+}
+
+# Health-check the Ledger (plaintext) and Auditor (TLS, verified against the SAN), aborting with
+# diagnostics on failure. $1 is an optional message suffix (e.g. " after upgrade to <version>").
+grpc_health_checks() {
+  local suffix="${1:-}"
+  echo "==> gRPC health checks"
+  if ! kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
+      /usr/local/bin/grpc_health_probe -addr=:50051; then
+    diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed${suffix}"
+  fi
+  if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
+      /usr/local/bin/grpc_health_probe -addr=:40051 \
+      -tls -tls-ca-cert=/etc/scalardl-tls/tls.crt -tls-server-name="$AUDITOR_TLS_SAN"; then
+    diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed${suffix}"
+  fi
 }
 
 # Poll a Job for complete/failed (kubectl wait --for=complete hangs on failure),
@@ -189,6 +219,13 @@ deploy_all() {
   wait_for_job "$LEDGER_NS"  schema-loader-ledger  300
   wait_for_job "$AUDITOR_NS" schema-loader-auditor 300
 
+  echo "==> create Auditor TLS cert + secret"
+  gen_certs
+  kubectl -n "$AUDITOR_NS" create secret generic auditor-tls \
+    --from-file=tls.crt="$CERTS_DIR/auditor.crt" \
+    --from-file=tls.key="$CERTS_DIR/auditor-key.pem" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
   echo "==> deploy ledger + auditor"
   render ledger.yaml  | kubectl apply -f -
   render auditor.yaml | kubectl apply -f -
@@ -197,15 +234,7 @@ deploy_all() {
   wait_for_deploy "$LEDGER_NS"  scalardl-ledger  300
   wait_for_deploy "$AUDITOR_NS" scalardl-auditor 300
 
-  echo "==> gRPC health checks"
-  if ! kubectl -n "$LEDGER_NS" exec deploy/scalardl-ledger -- \
-      /usr/local/bin/grpc_health_probe -addr=:50051; then
-    diag_and_die "$LEDGER_NS" "Ledger gRPC health check failed"
-  fi
-  if ! kubectl -n "$AUDITOR_NS" exec deploy/scalardl-auditor -- \
-      /usr/local/bin/grpc_health_probe -addr=:40051; then
-    diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed"
-  fi
+  grpc_health_checks
 }
 
 case "${1:-}" in
