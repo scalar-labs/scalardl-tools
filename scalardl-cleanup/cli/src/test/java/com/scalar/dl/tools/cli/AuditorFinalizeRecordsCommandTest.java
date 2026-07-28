@@ -65,7 +65,7 @@ public class AuditorFinalizeRecordsCommandTest {
         new AuditorFinalizeRecordsCommand() {
           @Override
           AuditorFinalizeOrchestrator createFinalizeOrchestrator(
-              Properties auditorProps, Properties clientProps, Path checkpointDir) {
+              Properties props, Path checkpointDir) {
             return finalizer;
           }
 
@@ -104,7 +104,7 @@ public class AuditorFinalizeRecordsCommandTest {
         new AuditorFinalizeRecordsCommand() {
           @Override
           AuditorFinalizeOrchestrator createFinalizeOrchestrator(
-              Properties auditorProps, Properties clientProps, Path checkpointDir) {
+              Properties props, Path checkpointDir) {
             return finalizer;
           }
 
@@ -142,7 +142,7 @@ public class AuditorFinalizeRecordsCommandTest {
         new AuditorFinalizeRecordsCommand() {
           @Override
           AuditorFinalizeOrchestrator createFinalizeOrchestrator(
-              Properties auditorProps, Properties clientProps, Path checkpointDir) {
+              Properties props, Path checkpointDir) {
             return finalizer;
           }
 

@@ -9,7 +9,6 @@ import com.scalar.db.api.Scanner;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.io.Key;
 import com.scalar.db.service.StorageFactory;
-import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -18,7 +17,6 @@ import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -70,42 +68,29 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
   /**
    * Creates an orchestrator.
    *
-   * @param auditorProps the properties used by the ScalarDL Auditor
-   * @param clientProps the properties used by the ScalarDL Client
+   * @param props the settings for connecting to the Auditor server, in addition to the properties
+   *     used by the ScalarDL Auditor
    * @param checkpointDir root directory for checkpoint state
    * @return a new orchestrator instance
-   * @throws IOException if the client configuration cannot be loaded
    * @throws ScalarDlCleanupException if the configuration is not supported
    */
-  // TODO: unify auditorProps and clientProps into a single Properties so callers only supply one
-  //  configuration. We plan to make AuditorClient buildable without requiring additional client
-  //  configuration as much as possible.
-  public static AuditorFinalizeOrchestrator create(
-      Properties auditorProps, Properties clientProps, Path checkpointDir) throws IOException {
+  public static AuditorFinalizeOrchestrator create(Properties props, Path checkpointDir) {
     DistributedStorageAdmin admin = null;
     DistributedStorage storage = null;
     AuditorClient auditorClient = null;
     try {
-      DatabaseConfig databaseConfig = new DatabaseConfig(auditorProps);
+      DatabaseConfig databaseConfig = new DatabaseConfig(props);
       StorageValidator.validate(databaseConfig);
-      StorageFactory storageFactory = StorageFactory.create(auditorProps);
+      StorageFactory storageFactory = StorageFactory.create(props);
       admin = storageFactory.getStorageAdmin();
       storage = storageFactory.getStorage();
 
-      ClientConfig clientConfig = new ClientConfig(clientProps);
-      if (clientConfig.getAuditorTargetConfig() == null) {
-        throw new IllegalArgumentException("Auditor target configuration is missing.");
-      }
-      auditorClient = new AuditorClient(clientConfig.getAuditorTargetConfig());
-
-      String baseNamespace =
-          auditorProps.getProperty(
-              AuditorInternalValues.AUDITOR_NAMESPACE_PROPERTY,
-              AuditorInternalValues.DEFAULT_BASE_NAMESPACE);
+      AuditorFinalizeConfig config = new AuditorFinalizeConfig(props);
+      auditorClient = new AuditorClient(config.getAuditorTargetConfig());
 
       ResumableScannerFactory scannerFactory = new ResumableScannerFactory(databaseConfig);
       return new AuditorFinalizeOrchestrator(
-          admin, storage, auditorClient, scannerFactory, checkpointDir, baseNamespace);
+          admin, storage, auditorClient, scannerFactory, checkpointDir, config.getBaseNamespace());
     } catch (Exception e) {
       if (auditorClient != null) {
         auditorClient.shutdown();

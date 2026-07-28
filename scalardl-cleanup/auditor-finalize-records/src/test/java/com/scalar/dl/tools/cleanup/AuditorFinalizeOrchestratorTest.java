@@ -21,6 +21,7 @@ import com.scalar.db.api.Scan;
 import com.scalar.db.api.Scanner;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.service.StorageFactory;
+import com.scalar.dl.client.config.ClientConfig;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -85,12 +86,11 @@ class AuditorFinalizeOrchestratorTest {
   @Test
   void create_nonCosmosStorageGiven_shouldThrowScalarDlCleanupException() {
     // Arrange
-    Properties auditorProps = new Properties();
-    auditorProps.setProperty(DatabaseConfig.STORAGE, "cassandra");
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cassandra");
 
     // Act & Assert
-    assertThatThrownBy(
-            () -> AuditorFinalizeOrchestrator.create(auditorProps, new Properties(), tempDir))
+    assertThatThrownBy(() -> AuditorFinalizeOrchestrator.create(props, tempDir))
         .isInstanceOf(ScalarDlCleanupException.class)
         .hasMessageContaining("not supported");
   }
@@ -98,14 +98,9 @@ class AuditorFinalizeOrchestratorTest {
   @Test
   void create_cosmosStorageGiven_shouldNotThrow() {
     // Arrange
-    Properties auditorProps = new Properties();
-    auditorProps.setProperty(DatabaseConfig.STORAGE, "cosmos");
-    Properties clientProps = new Properties();
-    clientProps.setProperty("scalar.dl.client.mode", "client");
-    clientProps.setProperty("scalar.dl.client.entity.id", "test-entity");
-    clientProps.setProperty("scalar.dl.client.authentication.method", "hmac");
-    clientProps.setProperty("scalar.dl.client.entity.identity.hmac.secret_key", "test-secret");
-    clientProps.setProperty("scalar.dl.client.auditor.enabled", "true");
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cosmos");
+    props.setProperty(ClientConfig.AUDITOR_HOST, "auditor.example.com");
 
     StorageFactory storageFactory = mock(StorageFactory.class);
     when(storageFactory.getStorageAdmin()).thenReturn(mock(DistributedStorageAdmin.class));
@@ -118,7 +113,7 @@ class AuditorFinalizeOrchestratorTest {
           .thenReturn(storageFactory);
 
       // Act & Assert
-      assertThatCode(() -> AuditorFinalizeOrchestrator.create(auditorProps, clientProps, tempDir))
+      assertThatCode(() -> AuditorFinalizeOrchestrator.create(props, tempDir))
           .doesNotThrowAnyException();
     }
   }
