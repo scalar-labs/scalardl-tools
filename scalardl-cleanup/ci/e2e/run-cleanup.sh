@@ -34,9 +34,19 @@ pf_wait 40051 40052
 # config secrets so the tool sees exactly the ScalarDB configuration each server uses.
 kubectl -n ledger-e2e  get secret ledger-config  -o jsonpath='{.data.ledger\.properties}'  | base64 -d > "$ledger_props"
 kubectl -n auditor-e2e get secret auditor-config -o jsonpath='{.data.auditor\.properties}' | base64 -d > "$auditor_props"
+
 # finalize-auditor additionally needs some ScalarDL client properties to reach the Auditor server's
 # privileged port. The leading newline guards against the Secret value lacking a trailing newline.
-{ echo; echo "scalar.dl.client.auditor.host=127.0.0.1"; } >> "$auditor_props"
+# TLS is enabled on the Auditor, so the tool connects with TLS (tls.enabled), trusts the self-signed
+# cert (ca_root_cert_path) and pins its SAN (override_authority) since it connects through a 127.0.0.1
+# port-forward. The SAN must match AUDITOR_TLS_SAN in manage-cluster.sh.
+{
+  echo
+  echo "scalar.dl.client.auditor.host=127.0.0.1"
+  echo "scalar.dl.client.auditor.tls.enabled=true"
+  echo "scalar.dl.client.auditor.tls.ca_root_cert_path=$HERE/certs/auditor.crt"
+  echo "scalar.dl.client.auditor.tls.override_authority=auditor.e2e.scalar-labs.com"
+} >> "$auditor_props"
 
 # Run one cleanup subcommand and echo its stdout JSON. On failure, surface the captured stderr and
 # return non-zero so the caller's `set -e` aborts. Usage: run_tool <subcommand> [args...]
