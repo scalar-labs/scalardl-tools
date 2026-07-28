@@ -1,3 +1,11 @@
+FROM eclipse-temurin:21-jre-jammy AS builder
+
+COPY scalardl-cleanup.tar docker-entrypoint.sh /tmp/build/
+RUN mkdir -p /out \
+ && tar -xf /tmp/build/scalardl-cleanup.tar -C /out --strip-components=1 \
+ && cp /tmp/build/docker-entrypoint.sh /out/ \
+ && chmod +x /out/docker-entrypoint.sh
+
 FROM eclipse-temurin:21-jre-jammy
 
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
@@ -8,13 +16,10 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 
 WORKDIR /scalar
 
-COPY scalardl-cleanup.tar docker-entrypoint.sh /tmp/build/
-RUN mkdir -p /scalar/scalardl-cleanup \
- && tar -xf /tmp/build/scalardl-cleanup.tar -C /scalar/scalardl-cleanup --strip-components=1 \
- && cp /tmp/build/docker-entrypoint.sh /scalar/scalardl-cleanup/ \
- && chmod +x /scalar/scalardl-cleanup/docker-entrypoint.sh \
- && rm -rf /tmp/build \
- && chown -R 201:201 /scalar
+# Deliberately left owned by root:root (COPY's default — no --chown): uid 201 gets
+# read/execute but cannot write, so a compromised JVM process cannot rewrite the
+# entrypoint or the jars it is about to load.
+COPY --from=builder /out /scalar/scalardl-cleanup
 
 USER 201
 
@@ -30,7 +35,7 @@ LABEL name="${IMAGE_NAME}" \
       version="${IMAGE_VERSION}" \
       release="${IMAGE_RELEASE}" \
       summary="ScalarDL Cleanup Tools Container Image" \
-      description="Command-line tools that let ScalarDL operators safely reclaim space by removing stale records left behind by completed transactions from ScalarDB's coordinator.state table (Ledger) and the Auditor's asset_lock/request_proof tables."
+      description="Command-line tools that let ScalarDL operators safely reclaim space by removing stale records left behind by completed transactions from Ledger's coordinator table and the Auditor's request proof table."
 
 WORKDIR /scalar/scalardl-cleanup
 
