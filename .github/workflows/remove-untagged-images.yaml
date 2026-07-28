@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Safe only while the image is single-arch: a multi-arch build leaves its
+      # per-arch child images untagged in GHCR, so this cron would delete them
+      # and break the tagged manifest list.
       - name: scalardl-cleanup
-        uses: actions/delete-package-versions@v5
+        uses: camargo/delete-untagged-action@v1
         with:
+          github-token: ${{ secrets.CR_PAT }}
           package-name: scalardl-cleanup
-          package-type: container
-          delete-only-untagged-versions: 'true'
-          min-versions-to-keep: 0
-          token: ${{ secrets.CR_PAT }}

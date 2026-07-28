@@ -81,7 +81,7 @@ class FinalizeAssetLockHandlerTest {
   }
 
   @Test
-  void handle_finalizeFailureGiven_shouldPropagateExceptionAndNotCount() {
+  void handle_finalizeFailureGiven_shouldPropagateExceptionAndNotCount() throws Exception {
     // Arrange
     Result record = mock(Result.class);
     when(stateChecker.needsFinalization(record)).thenReturn(true);
