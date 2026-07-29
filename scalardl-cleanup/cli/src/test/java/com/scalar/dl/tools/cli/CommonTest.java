@@ -61,6 +61,23 @@ public class CommonTest {
   }
 
   @Test
+  void printOutput_shouldEmitSingleLineCompactJson() throws Exception {
+    // Arrange
+    JsonNode tokenOutput = Common.completionTokenOutput("token-123");
+
+    // Act
+    Common.printOutput(tokenOutput);
+
+    // Assert
+    String raw = out.toString(StandardCharsets.UTF_8);
+    assertThat(raw).endsWith(System.lineSeparator());
+    String body = raw.substring(0, raw.length() - System.lineSeparator().length());
+    assertThat(body).doesNotContain("\n");
+    assertThat(body)
+        .isEqualTo("{\"status_code\":\"OK\",\"output\":{\"completion_token\":\"token-123\"}}");
+  }
+
+  @Test
   void printError_givenUntypedException_shouldUseInternalErrorAndKeepMessage() throws Exception {
     // Arrange
     IllegalArgumentException exception = new IllegalArgumentException("bad token");
