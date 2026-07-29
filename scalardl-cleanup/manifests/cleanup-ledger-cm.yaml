@@ -16,5 +16,5 @@ metadata:
 data:
   cleanup-ledger.properties: |
     scalar.db.storage=cosmos
-    scalar.db.contact_points=${env:SCALAR_DB_CONTACT_POINTS}
+    scalar.db.contact_points=<cosmos-account-uri>
     scalar.db.password=${env:SCALAR_DB_PASSWORD}
