@@ -1,0 +1,32 @@
+# ScalarDL Cleanup — config for the Auditor administrative domain.
+#
+# envsubst variables:
+#   ${AUDITOR_NS}  k8s namespace where the Auditor runs
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scalardl-cleanup-auditor-config
+  namespace: ${AUDITOR_NS}
+  labels:
+    app.kubernetes.io/name: scalardl-cleanup
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: scalardl
+    app.kubernetes.io/managed-by: kubectl
+data:
+  cleanup-auditor.properties: |
+    # ScalarDB backend storage — the Cosmos DB account the Auditor uses.
+    scalar.db.storage=cosmos
+    scalar.db.contact_points=${env:SCALAR_DB_CONTACT_POINTS}
+    scalar.db.password=${env:SCALAR_DB_PASSWORD}
+
+    # Auditor namespace name (default "auditor").
+    scalar.dl.auditor.namespace=auditor
+
+    # Settings required to communicate with Auditor.
+    scalar.dl.client.auditor.host=${env:SCALAR_DL_CLIENT_AUDITOR_HOST}
+    scalar.dl.client.auditor.port=40051
+    scalar.dl.client.auditor.privileged_port=40052
+    #scalar.dl.client.auditor.tls.enabled=true
+    #scalar.dl.client.auditor.tls.ca_root_cert_path=/cert/scalardl-cleanup/tls.crt
+    #scalar.dl.client.auditor.tls.override_authority=

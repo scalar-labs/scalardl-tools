@@ -1,0 +1,21 @@
+# ScalarDL Cleanup — checkpoint volume for the Ledger administrative domain.
+#
+# envsubst variables:
+#   ${LEDGER_NS}  k8s namespace where the Ledger runs
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scalardl-cleanup-checkpoint
+  namespace: ${LEDGER_NS}
+  labels:
+    app.kubernetes.io/name: scalardl-cleanup
+    app.kubernetes.io/component: checkpoint
+    app.kubernetes.io/part-of: scalardl
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

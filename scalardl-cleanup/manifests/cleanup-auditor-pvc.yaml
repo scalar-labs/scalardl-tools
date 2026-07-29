@@ -1,0 +1,21 @@
+# ScalarDL Cleanup — checkpoint volume for the Auditor administrative domain.
+#
+# envsubst variables:
+#   ${AUDITOR_NS}  k8s namespace where the Auditor runs
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scalardl-cleanup-checkpoint
+  namespace: ${AUDITOR_NS}
+  labels:
+    app.kubernetes.io/name: scalardl-cleanup
+    app.kubernetes.io/component: checkpoint
+    app.kubernetes.io/part-of: scalardl
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
