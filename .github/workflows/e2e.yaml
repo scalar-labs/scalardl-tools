@@ -7,7 +7,9 @@ name: E2E
 #      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
 #   2. Upgrade both servers in place to the new version (which exposes the privileged
 #      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the three operator-facing cleanup subcommands against the upgraded cluster:
+#   3. Run the three operator-facing cleanup subcommands against the upgraded cluster, deployed the
+#      way an operator deploys them: as Kubernetes Jobs from scalardl-cleanup/manifests, in the
+#      documented apply order (so the deployment procedure is under test too).
 #        finalize-ledger      -> emits the Ledger completion token
 #        finalize-auditor     -> recovers the stranded asset locks via RecoverAssetLock and
 #                                cleans up request_proof; emits the Auditor completion token
@@ -49,6 +51,11 @@ jobs:
       GHCR_USER: ${{ github.repository_owner }}
       # Records generated per category (committed / stranded write / stranded read).
       RECORD_COUNT: 5
+      # Tag of the cleanup image built from this checkout and loaded into minikube. The manifests
+      # resolve the image as ghcr.io/scalar-labs/scalardl-cleanup:${CLEANUP_VERSION}; any tag other
+      # than "latest" keeps the default imagePullPolicy at IfNotPresent, so the locally loaded image
+      # is used and nothing is pulled from ghcr.
+      CLEANUP_VERSION: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -61,15 +68,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build the cleanup CLI
+      - name: Build the cleanup container image
+        # The cleanup commands run from the manifests, which deploy the container image, so build it
+        # here with the same :cli:docker task the release workflows use.
         # GPR_* let Gradle pull the ScalarDL artifacts from GitHub Packages.
         env:
           GPR_USERNAME: ${{ github.repository_owner }}
           GPR_PASSWORD: ${{ secrets.CR_PAT }}
-        run: |
-          set -euo pipefail
-          ./gradlew :cli:installDist
-          echo "CLEANUP=$(pwd)/cli/build/install/scalardl-cleanup/bin/scalardl-cleanup" >> "$GITHUB_ENV"
+        run: ./gradlew :cli:docker -PdockerVersion="$CLEANUP_VERSION"
 
       - name: Install Azure Cosmos DB Shell
         # Used by run-cleanup.sh to count rows directly in Cosmos for the post-cleanup reclamation
@@ -104,6 +110,10 @@ jobs:
         with:
           cpus: '4'
           memory: '8192'
+
+      - name: Load the cleanup image into minikube
+        # The image was built into the runner's Docker daemon, which the minikube node cannot see.
+        run: minikube image load "ghcr.io/scalar-labs/scalardl-cleanup:$CLEANUP_VERSION"
 
       - name: Deploy ScalarDL (old version) + load schema
         env:
@@ -177,7 +187,7 @@ jobs:
           SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
         run: ./ci/e2e/manage-cluster.sh upgrade
 
-      - name: Run the cleanup commands
+      - name: Run the cleanup commands as Kubernetes Jobs
         run: ./ci/e2e/run-cleanup.sh
 
       - name: Verify post-cleanup consistency
@@ -222,6 +232,8 @@ jobs:
           for ns in ledger-e2e auditor-e2e; do
             echo "===== namespace: $ns ====="
             kubectl -n "$ns" get all -o wide
+            # `get all` omits PVCs; the cleanup Jobs cannot start without their checkpoint volume.
+            kubectl -n "$ns" get pvc -o wide
             kubectl -n "$ns" get events --sort-by=.lastTimestamp
             kubectl -n "$ns" describe pods
             for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
@@ -231,10 +243,6 @@ jobs:
           done
           echo "===== port-forward logs ====="
           cat /tmp/pf-*.log 2>/dev/null || true
-          echo "===== cleanup tool stderr logs ====="
-          for f in "$RUNNER_TEMP"/finalize-ledger.err "$RUNNER_TEMP"/finalize-auditor.err "$RUNNER_TEMP"/cleanup-coordinator.err; do
-            [ -f "$f" ] && { echo "----- $f -----"; cat "$f"; }
-          done
 
       - name: Drop Cosmos schema
         if: always()
