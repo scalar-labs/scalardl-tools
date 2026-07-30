@@ -96,34 +96,34 @@ export LEDGER_NS=<ledger-namespace> CLEANUP_VERSION=<image-tag>
 **a. Credentials.** Create the Secret holding the Cosmos DB key:
 
 ```bash
-kubectl -n "$LEDGER_NS" create secret generic scalardl-cleanup-credentials \
+kubectl -n "${LEDGER_NS:?}" create secret generic scalardl-cleanup-credentials \
   --from-literal=SCALAR_DB_PASSWORD='<cosmos-primary-key>'
 ```
 
 **b. Checkpoint volume.**
 
 ```bash
-envsubst < cleanup-ledger-pvc.yaml | kubectl apply -f -
+: "${LEDGER_NS:?}" && envsubst < cleanup-ledger-pvc.yaml | kubectl apply -f -
 ```
 
 **c. Config.** Set `scalar.db.contact_points` in `cleanup-ledger-cm.yaml`, then apply it:
 
 ```bash
-envsubst < cleanup-ledger-cm.yaml | kubectl apply -f -
+: "${LEDGER_NS:?}" && envsubst < cleanup-ledger-cm.yaml | kubectl apply -f -
 ```
 
 **d. Run.** Apply the Job:
 
 ```bash
-envsubst < finalize-ledger.yaml | kubectl apply -f -
+: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < finalize-ledger.yaml | kubectl apply -f -
 ```
 
 Wait for the Job to complete, then read the completion token from the log of its succeeded Pod:
 
 ```bash
-pod=$(kubectl -n "$LEDGER_NS" get pod -l job-name=scalardl-finalize-ledger \
+pod=$(kubectl -n "${LEDGER_NS:?}" get pod -l job-name=scalardl-finalize-ledger \
   --field-selector=status.phase=Succeeded -o jsonpath='{.items[0].metadata.name}')
-kubectl -n "$LEDGER_NS" logs "$pod" | jq -rR 'fromjson? | .output.completion_token // empty'
+kubectl -n "${LEDGER_NS:?}" logs "$pod" | jq -rR 'fromjson? | .output.completion_token // empty'
 ```
 
 Keep the printed token — it is the **Ledger token**.
@@ -139,21 +139,21 @@ export AUDITOR_NS=<auditor-namespace> CLEANUP_VERSION=<image-tag>
 **a. Credentials.** Create the Secret holding the Cosmos DB key:
 
 ```bash
-kubectl -n "$AUDITOR_NS" create secret generic scalardl-cleanup-credentials \
+kubectl -n "${AUDITOR_NS:?}" create secret generic scalardl-cleanup-credentials \
   --from-literal=SCALAR_DB_PASSWORD='<cosmos-primary-key>'
 ```
 
 **b. Checkpoint volume.**
 
 ```bash
-envsubst < cleanup-auditor-pvc.yaml | kubectl apply -f -
+: "${AUDITOR_NS:?}" && envsubst < cleanup-auditor-pvc.yaml | kubectl apply -f -
 ```
 
 **c. Config.** Set `scalar.db.contact_points` and `scalar.dl.client.auditor.host` in `cleanup-auditor-cm.yaml` (for TLS,
 also uncomment the TLS properties listed in the optional note below), then apply it:
 
 ```bash
-envsubst < cleanup-auditor-cm.yaml | kubectl apply -f -
+: "${AUDITOR_NS:?}" && envsubst < cleanup-auditor-cm.yaml | kubectl apply -f -
 ```
 
 **Optional — TLS to the Auditor.** If TLS is enabled on the Auditor, do this *before* step (d).
@@ -167,7 +167,7 @@ In `cleanup-auditor-cm.yaml` (step c), uncomment:
 Then create the cert Secret holding the CA root cert that signed the Auditor's server cert.
 
 ```bash
-kubectl -n "$AUDITOR_NS" create secret generic scalardl-cleanup-cert --from-file=tls.crt=<ca.pem>
+kubectl -n "${AUDITOR_NS:?}" create secret generic scalardl-cleanup-cert --from-file=tls.crt=<ca.pem>
 ```
 
 **Optional — Auditor authorization credential.** If the Auditor requires an authorization credential, do this *before* step (d).
@@ -179,22 +179,22 @@ In `cleanup-auditor-cm.yaml` (step c), uncomment:
 Then add the credential to the Secret created in step (a):
 
 ```bash
-kubectl -n "$AUDITOR_NS" patch secret scalardl-cleanup-credentials --type merge \
+kubectl -n "${AUDITOR_NS:?}" patch secret scalardl-cleanup-credentials --type merge \
   -p '{"stringData":{"SCALAR_DL_CLIENT_AUDITOR_AUTHORIZATION_CREDENTIAL":"<credential>"}}'
 ```
 
 **d. Run.** Apply the Job:
 
 ```bash
-envsubst < finalize-auditor.yaml | kubectl apply -f -
+: "${AUDITOR_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < finalize-auditor.yaml | kubectl apply -f -
 ```
 
 Wait for the Job to complete, then read the completion token from the log of its succeeded Pod:
 
 ```bash
-pod=$(kubectl -n "$AUDITOR_NS" get pod -l job-name=scalardl-finalize-auditor \
+pod=$(kubectl -n "${AUDITOR_NS:?}" get pod -l job-name=scalardl-finalize-auditor \
   --field-selector=status.phase=Succeeded -o jsonpath='{.items[0].metadata.name}')
-kubectl -n "$AUDITOR_NS" logs "$pod" | jq -rR 'fromjson? | .output.completion_token // empty'
+kubectl -n "${AUDITOR_NS:?}" logs "$pod" | jq -rR 'fromjson? | .output.completion_token // empty'
 ```
 
 Hand the printed token — the **Auditor token** — to the Ledger operator.
@@ -212,7 +212,7 @@ export LEDGER_TOKEN=<ledger-token> AUDITOR_TOKEN=<auditor-token>
 Apply the Job, then wait for it to complete:
 
 ```bash
-envsubst < cleanup-coordinator.yaml | kubectl apply -f -
+: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < cleanup-coordinator.yaml | kubectl apply -f -
 ```
 
 ## Re-running after a failure
