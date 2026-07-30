@@ -217,10 +217,54 @@ Apply the Job, then wait for it to complete:
 
 ## Re-running after a failure
 
-Delete and re-apply the failed command's Job file (or `kubectl delete job/<name>` then re-apply).
-The checkpoint volume is a separate object and is kept, so the run **resumes where it stopped**. On
-a resumed `cleanup-coordinator`, the token values are ignored — the deletion boundary saved in the
+Each Job records progress on its checkpoint volume, which is a separate object and is kept when the
+Job is deleted. Deleting and re-applying a failed Job therefore **resumes where it stopped**.
+Re-export the same variables the original step used, then delete and re-apply the failed command's
+Job:
+
+**`finalize-ledger` (Ledger AD)**
+
+```bash
+kubectl -n "${LEDGER_NS:?}" delete job/scalardl-finalize-ledger
+: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < finalize-ledger.yaml | kubectl apply -f -
+```
+
+**`finalize-auditor` (Auditor AD)**
+
+```bash
+kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-finalize-auditor
+: "${AUDITOR_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < finalize-auditor.yaml | kubectl apply -f -
+```
+
+**`cleanup-coordinator` (Ledger AD)**
+
+```bash
+kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
+: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < cleanup-coordinator.yaml | kubectl apply -f -
+```
+
+On a resumed `cleanup-coordinator`, the token values are ignored — the deletion boundary saved in the
 checkpoint is authoritative.
 
-To start over from scratch, delete and re-create that AD's `cleanup-*-pvc.yaml` (this discards the
-checkpoints) before re-running.
+### Starting over from scratch
+
+To discard the saved progress and start fresh, delete the Job **and** its checkpoint volume,
+re-create the volume, then re-apply the Job (the matching block above). The Ledger checkpoint volume
+is shared by both Ledger commands, so resetting it affects `finalize-ledger` and `cleanup-coordinator`
+together.
+
+**Ledger AD**
+
+```bash
+kubectl -n "${LEDGER_NS:?}" delete job/scalardl-finalize-ledger   # and/or job/scalardl-cleanup-coordinator
+kubectl -n "${LEDGER_NS:?}" delete pvc/scalardl-cleanup-checkpoint
+: "${LEDGER_NS:?}" && envsubst < cleanup-ledger-pvc.yaml | kubectl apply -f -
+```
+
+**Auditor AD**
+
+```bash
+kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-finalize-auditor
+kubectl -n "${AUDITOR_NS:?}" delete pvc/scalardl-cleanup-checkpoint
+: "${AUDITOR_NS:?}" && envsubst < cleanup-auditor-pvc.yaml | kubectl apply -f -
+```
