@@ -3,10 +3,13 @@ package com.scalar.dl.tools.cleanup;
 import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
+import com.scalar.db.api.TableMetadata;
 import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.exception.storage.ExecutionException;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
+import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.CompletionToken;
@@ -167,12 +170,31 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     for (String namespace : admin.getNamespaceNames()) {
       for (String table : admin.getNamespaceTableNames(namespace)) {
         String qualifiedTable = ScalarDbUtils.getFullTableName(namespace, table);
-        if (!qualifiedTable.equals(coordinatorTable)) {
-          tables.add(qualifiedTable);
+        if (qualifiedTable.equals(coordinatorTable)) {
+          continue;
         }
+        if (!isTransactionTable(namespace, table)) {
+          logger.info("Skipping the table because it is not transactional: {}", qualifiedTable);
+          continue;
+        }
+        tables.add(qualifiedTable);
       }
     }
     return tables;
+  }
+
+  /**
+   * Returns whether the table is managed by the Consensus Commit transaction manager.
+   *
+   * @throws IllegalStateException if the table has no metadata even though it was just listed.
+   */
+  private boolean isTransactionTable(String namespace, String table) throws ExecutionException {
+    TableMetadata metadata = admin.getTableMetadata(namespace, table);
+    if (metadata == null) {
+      throw new IllegalStateException(
+          "Table metadata not found for " + ScalarDbUtils.getFullTableName(namespace, table));
+    }
+    return ConsensusCommitUtils.isTransactionTableMetadata(metadata);
   }
 
   /**

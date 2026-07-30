@@ -15,9 +15,12 @@ import static org.mockito.Mockito.when;
 
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
+import com.scalar.db.api.TableMetadata;
 import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.io.DataType;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
@@ -38,6 +41,15 @@ import org.mockito.MockedStatic;
 @SuppressWarnings("resource")
 class LedgerFinalizeOrchestratorTest {
 
+  private static final TableMetadata USER_TABLE_METADATA =
+      TableMetadata.newBuilder()
+          .addColumn("pk", DataType.TEXT)
+          .addColumn("col", DataType.INT)
+          .addPartitionKey("pk")
+          .build();
+  private static final TableMetadata TRANSACTION_TABLE_METADATA =
+      ConsensusCommitUtils.buildTransactionTableMetadata(USER_TABLE_METADATA);
+
   @TempDir Path tempDir;
 
   private DistributedStorageAdmin admin;
@@ -46,12 +58,13 @@ class LedgerFinalizeOrchestratorTest {
   private ResumableScannerFactory scannerFactory;
 
   @BeforeEach
-  void setUp() {
+  void setUp() throws Exception {
     admin = mock(DistributedStorageAdmin.class);
     txManager = mock(DistributedTransactionManager.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
     when(scannerFactory.create(any())).thenReturn(scanner);
+    when(admin.getTableMetadata(anyString(), anyString())).thenReturn(TRANSACTION_TABLE_METADATA);
   }
 
   private LedgerFinalizeOrchestrator newOrchestrator() {
@@ -194,6 +207,48 @@ class LedgerFinalizeOrchestratorTest {
     // Assert
     verify(scanner).scan(eq("ns1"), eq("tbl1"), any());
     verify(scanner, never()).scan(eq(customNamespace), eq(CoordinatorStateAccessor.TABLE), any());
+  }
+
+  @Test
+  void execute_nonTransactionTableGiven_shouldExcludeItFromScanning() throws Exception {
+    // Arrange
+    when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new LinkedHashSet<>(Arrays.asList("tbl1", "contract")));
+    when(admin.getTableMetadata("ns1", "contract")).thenReturn(USER_TABLE_METADATA);
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    verify(scanner).scan(eq("ns1"), eq("tbl1"), any());
+    verify(scanner, never()).scan(eq("ns1"), eq("contract"), any());
+
+    LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getTableList()).containsExactly("ns1.tbl1");
+  }
+
+  @Test
+  void execute_listedTableWithoutMetadataGiven_shouldThrowIllegalStateException() throws Exception {
+    // Arrange
+    when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+    when(admin.getTableMetadata("ns1", "tbl1")).thenReturn(null);
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("ns1.tbl1");
+
+    verify(scanner, never()).scan(anyString(), anyString(), any());
+    assertThat(new LedgerFinalizeStateManager(tempDir).load()).isNull();
   }
 
   @Test
