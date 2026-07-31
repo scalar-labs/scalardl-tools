@@ -172,7 +172,7 @@ class LedgerFinalizeOrchestratorTest {
     when(admin.getNamespaceTableNames(CoordinatorStateAccessor.NAMESPACE))
         .thenReturn(new HashSet<>(Collections.singletonList(CoordinatorStateAccessor.TABLE)));
     when(admin.getNamespaceTableNames("ns1"))
-        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+        .thenReturn(new HashSet<>(Arrays.asList("tbl1", "tbl2")));
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
@@ -196,7 +196,7 @@ class LedgerFinalizeOrchestratorTest {
     when(admin.getNamespaceTableNames(customNamespace))
         .thenReturn(new HashSet<>(Collections.singletonList(CoordinatorStateAccessor.TABLE)));
     when(admin.getNamespaceTableNames("ns1"))
-        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+        .thenReturn(new HashSet<>(Arrays.asList("tbl1", "tbl2")));
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator(customNamespace);
@@ -214,7 +214,7 @@ class LedgerFinalizeOrchestratorTest {
     // Arrange
     when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
     when(admin.getNamespaceTableNames("ns1"))
-        .thenReturn(new LinkedHashSet<>(Arrays.asList("tbl1", "contract")));
+        .thenReturn(new LinkedHashSet<>(Arrays.asList("tbl1", "tbl2", "contract")));
     when(admin.getTableMetadata("ns1", "contract")).thenReturn(USER_TABLE_METADATA);
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
 
@@ -229,7 +229,7 @@ class LedgerFinalizeOrchestratorTest {
 
     LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
     assertThat(state).isNotNull();
-    assertThat(state.getTableList()).containsExactly("ns1.tbl1");
+    assertThat(state.getTableList()).containsExactly("ns1.tbl1", "ns1.tbl2");
   }
 
   @Test
@@ -252,26 +252,45 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
-  void execute_noTablesGiven_shouldReturnTokenWithoutScanning() throws Exception {
+  void execute_noTableFoundGiven_shouldThrowScalarDlCleanupException() throws Exception {
     // Arrange
     when(admin.getNamespaceNames()).thenReturn(Collections.emptySet());
 
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
 
-    // Act
-    String completionToken = orchestrator.execute();
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining("asset_metadata");
 
-    // Assert
-    assertThat(completionToken).isNotEmpty();
     verify(scanner, never()).scan(anyString(), anyString(), any());
+    assertThat(new LedgerFinalizeStateManager(tempDir).load()).isNull();
+  }
+
+  @Test
+  void execute_singleTableFoundGiven_shouldThrowScalarDlCleanupException() throws Exception {
+    // Arrange
+    when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute).isInstanceOf(ScalarDlCleanupException.class);
+
+    verify(scanner, never()).scan(anyString(), anyString(), any());
+    assertThat(new LedgerFinalizeStateManager(tempDir).load()).isNull();
   }
 
   @Test
   void execute_scanFailureGiven_shouldPropagateException() throws Exception {
     // Arrange
     when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    // The failing table is processed first, so the exception surfaces before the other one.
     when(admin.getNamespaceTableNames("ns1"))
-        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+        .thenReturn(new LinkedHashSet<>(Arrays.asList("tbl1", "tbl2")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
     when(scanner.scan(eq("ns1"), eq("tbl1"), any()))
         .thenThrow(new RuntimeException("Cosmos DB unavailable"));
 
