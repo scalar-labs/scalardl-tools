@@ -63,14 +63,13 @@ their own domain's directory:
 
 ## What you can configure
 
-Configuration falls into two groups: **deploy-time variables** substituted into the manifests, and
+Configuration falls into two groups: **deploy-time variables** you set in your shell, and
 the **settings each command reads** from its `.properties` (supplied via the ConfigMap or the Secret).
 
-### 1. Deploy-time variables — filled into the manifests by `envsubst`
+### 1. Deploy-time variables
 
 | Variable                         | Used in                                  | Meaning                                                              |
 |----------------------------------|------------------------------------------|----------------------------------------------------------------------|
-| `LEDGER_NS` / `AUDITOR_NS`       | every manifest of that AD                | target namespace                                                     |
 | `CLEANUP_VERSION`                | the Job manifests                        | image tag — `ghcr.io/scalar-labs/scalardl-cleanup:<CLEANUP_VERSION>` |
 | `LEDGER_TOKEN` / `AUDITOR_TOKEN` | `ledger-domain/cleanup-coordinator.yaml` | the two completion tokens                                            |
 
@@ -117,19 +116,19 @@ kubectl -n "${LEDGER_NS:?}" create secret generic scalardl-cleanup-credentials \
 **b. Checkpoint volume.**
 
 ```bash
-: "${LEDGER_NS:?}" && envsubst < ledger-domain/pvc.yaml | kubectl apply -f -
+kubectl -n "${LEDGER_NS:?}" apply -f ledger-domain/pvc.yaml
 ```
 
 **c. Config.** Set `scalar.db.contact_points` in `ledger-domain/configmap.yaml`, then apply it:
 
 ```bash
-: "${LEDGER_NS:?}" && envsubst < ledger-domain/configmap.yaml | kubectl apply -f -
+kubectl -n "${LEDGER_NS:?}" apply -f ledger-domain/configmap.yaml
 ```
 
 **d. Run.** Apply the Job:
 
 ```bash
-: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < ledger-domain/finalize-ledger.yaml | kubectl apply -f -
+: "${CLEANUP_VERSION:?}" && envsubst < ledger-domain/finalize-ledger.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
 ```
 
 Wait for the Job to complete, then read the completion token from the log of its succeeded Pod:
@@ -160,7 +159,7 @@ kubectl -n "${AUDITOR_NS:?}" create secret generic scalardl-cleanup-credentials 
 **b. Checkpoint volume.**
 
 ```bash
-: "${AUDITOR_NS:?}" && envsubst < auditor-domain/pvc.yaml | kubectl apply -f -
+kubectl -n "${AUDITOR_NS:?}" apply -f auditor-domain/pvc.yaml
 ```
 
 **c. Config.** Set `scalar.db.contact_points` and `scalar.dl.client.auditor.host` in `auditor-domain/configmap.yaml` (
@@ -168,7 +167,7 @@ for TLS,
 also uncomment the TLS properties listed in the optional note below), then apply it:
 
 ```bash
-: "${AUDITOR_NS:?}" && envsubst < auditor-domain/configmap.yaml | kubectl apply -f -
+kubectl -n "${AUDITOR_NS:?}" apply -f auditor-domain/configmap.yaml
 ```
 
 **Optional — TLS to the Auditor.** If TLS is enabled on the Auditor, do this *before* step (d).
@@ -201,7 +200,7 @@ kubectl -n "${AUDITOR_NS:?}" patch secret scalardl-cleanup-credentials --type me
 **d. Run.** Apply the Job:
 
 ```bash
-: "${AUDITOR_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < auditor-domain/finalize-auditor.yaml | kubectl apply -f -
+: "${CLEANUP_VERSION:?}" && envsubst < auditor-domain/finalize-auditor.yaml | kubectl -n "${AUDITOR_NS:?}" apply -f -
 ```
 
 Wait for the Job to complete, then read the completion token from the log of its succeeded Pod:
@@ -227,7 +226,7 @@ export LEDGER_TOKEN=<ledger-token> AUDITOR_TOKEN=<auditor-token>
 Apply the Job, then wait for it to complete:
 
 ```bash
-: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < ledger-domain/cleanup-coordinator.yaml | kubectl apply -f -
+: "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < ledger-domain/cleanup-coordinator.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
 ```
 
 ## Re-running after a failure
@@ -241,21 +240,21 @@ Job:
 
 ```bash
 kubectl -n "${LEDGER_NS:?}" delete job/scalardl-finalize-ledger
-: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < ledger-domain/finalize-ledger.yaml | kubectl apply -f -
+: "${CLEANUP_VERSION:?}" && envsubst < ledger-domain/finalize-ledger.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
 ```
 
 **`finalize-auditor` (Auditor AD)**
 
 ```bash
 kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-finalize-auditor
-: "${AUDITOR_NS:?}" "${CLEANUP_VERSION:?}" && envsubst < auditor-domain/finalize-auditor.yaml | kubectl apply -f -
+: "${CLEANUP_VERSION:?}" && envsubst < auditor-domain/finalize-auditor.yaml | kubectl -n "${AUDITOR_NS:?}" apply -f -
 ```
 
 **`cleanup-coordinator` (Ledger AD)**
 
 ```bash
 kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
-: "${LEDGER_NS:?}" "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < ledger-domain/cleanup-coordinator.yaml | kubectl apply -f -
+: "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < ledger-domain/cleanup-coordinator.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
 ```
 
 On a resumed `cleanup-coordinator`, the token values are ignored — the deletion boundary saved in the
@@ -273,7 +272,7 @@ together.
 ```bash
 kubectl -n "${LEDGER_NS:?}" delete job/scalardl-finalize-ledger   # and/or job/scalardl-cleanup-coordinator
 kubectl -n "${LEDGER_NS:?}" delete pvc/scalardl-cleanup-checkpoint
-: "${LEDGER_NS:?}" && envsubst < ledger-domain/pvc.yaml | kubectl apply -f -
+kubectl -n "${LEDGER_NS:?}" apply -f ledger-domain/pvc.yaml
 ```
 
 **Auditor AD**
@@ -281,5 +280,5 @@ kubectl -n "${LEDGER_NS:?}" delete pvc/scalardl-cleanup-checkpoint
 ```bash
 kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-finalize-auditor
 kubectl -n "${AUDITOR_NS:?}" delete pvc/scalardl-cleanup-checkpoint
-: "${AUDITOR_NS:?}" && envsubst < auditor-domain/pvc.yaml | kubectl apply -f -
+kubectl -n "${AUDITOR_NS:?}" apply -f auditor-domain/pvc.yaml
 ```

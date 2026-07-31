@@ -1,14 +1,12 @@
 # ScalarDL Cleanup — finalize-ledger (Ledger administrative domain).
 #
 # envsubst variables:
-#   ${LEDGER_NS}        k8s namespace where the Ledger runs
 #   ${CLEANUP_VERSION}  scalardl-cleanup image tag
 
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: scalardl-finalize-ledger
-  namespace: ${LEDGER_NS}
   labels:
     app.kubernetes.io/name: scalardl-cleanup
     app.kubernetes.io/component: command

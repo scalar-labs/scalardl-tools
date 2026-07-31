@@ -1,13 +1,9 @@
 # ScalarDL Cleanup — config for the Ledger administrative domain.
-#
-# envsubst variables:
-#   ${LEDGER_NS}  k8s namespace where the Ledger runs
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: scalardl-cleanup-ledger-config
-  namespace: ${LEDGER_NS}
   labels:
     app.kubernetes.io/name: scalardl-cleanup
     app.kubernetes.io/component: config

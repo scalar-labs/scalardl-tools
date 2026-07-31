@@ -1,14 +1,12 @@
 # ScalarDL Cleanup — finalize-auditor (Auditor administrative domain).
 #
 # envsubst variables:
-#   ${AUDITOR_NS}       k8s namespace where the Auditor runs
 #   ${CLEANUP_VERSION}  scalardl-cleanup image tag
 
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: scalardl-finalize-auditor
-  namespace: ${AUDITOR_NS}
   labels:
     app.kubernetes.io/name: scalardl-cleanup
     app.kubernetes.io/component: command

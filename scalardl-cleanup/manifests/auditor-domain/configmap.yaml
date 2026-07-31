@@ -1,13 +1,9 @@
 # ScalarDL Cleanup — config for the Auditor administrative domain.
-#
-# envsubst variables:
-#   ${AUDITOR_NS}  k8s namespace where the Auditor runs
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: scalardl-cleanup-auditor-config
-  namespace: ${AUDITOR_NS}
   labels:
     app.kubernetes.io/name: scalardl-cleanup
     app.kubernetes.io/component: config
