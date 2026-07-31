@@ -44,6 +44,13 @@ spec:
           envFrom:
             - secretRef:
                 name: scalardl-cleanup-credentials
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
           securityContext:
             allowPrivilegeEscalation: false
             # The tool writes only to the mounted volumes (checkpoint PVC + /tmp emptyDir below), so

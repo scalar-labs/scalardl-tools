@@ -57,6 +57,8 @@ their own domain's directory:
   not support it and rejects it at runtime.
 - The cluster's default `StorageClass` provides **`ReadWriteOnce`** volumes and honours `fsGroup`, so the non-root
   container can write the checkpoint.
+- Each Job requests **2 vCPU and 4 GiB of memory** (`requests` equal `limits`), so the target
+  namespace must have that much schedulable capacity — and quota headroom if a `ResourceQuota` applies.
 - `kubectl`, plus `envsubst` (from `gettext`) and `jq` on your machine.
 
 ## What you can configure
