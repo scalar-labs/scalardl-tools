@@ -13,7 +13,6 @@ metadata:
     app.kubernetes.io/name: scalardl-cleanup
     app.kubernetes.io/component: command
     app.kubernetes.io/part-of: scalardl
-    app.kubernetes.io/managed-by: kubectl
 spec:
   # restartPolicy: Never (below) + backoffLimit: 3 → retry up to 3 times, a new pod on each failure.
   backoffLimit: 3
@@ -23,7 +22,6 @@ spec:
         app.kubernetes.io/name: scalardl-cleanup
         app.kubernetes.io/component: command
         app.kubernetes.io/part-of: scalardl
-        app.kubernetes.io/managed-by: kubectl
     spec:
       restartPolicy: Never
       # The tool never calls the Kubernetes API, so don't mount the default ServiceAccount token.
@@ -40,7 +38,7 @@ spec:
           args:
             - cleanup-coordinator
             - --properties=/etc/scalardl-cleanup/cleanup-ledger.properties
-            - --checkpoint-dir=/scalar/checkpoint
+            - --checkpoint-dir=/scalardl/checkpoint
             - --ledger-token=${LEDGER_TOKEN}
             - --auditor-token=${AUDITOR_TOKEN}
           envFrom:
@@ -67,7 +65,7 @@ spec:
               mountPath: /etc/scalardl-cleanup
               readOnly: true
             - name: checkpoint
-              mountPath: /scalar/checkpoint
+              mountPath: /scalardl/checkpoint
             - name: tmp
               mountPath: /tmp
       volumes:

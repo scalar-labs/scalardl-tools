@@ -6,9 +6,8 @@ metadata:
   name: scalardl-cleanup-checkpoint
   labels:
     app.kubernetes.io/name: scalardl-cleanup
-    app.kubernetes.io/component: checkpoint
+    app.kubernetes.io/component: storage-for-checkpoint
     app.kubernetes.io/part-of: scalardl
-    app.kubernetes.io/managed-by: kubectl
 spec:
   accessModes:
     - ReadWriteOnce

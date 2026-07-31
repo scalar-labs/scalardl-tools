@@ -8,7 +8,6 @@ metadata:
     app.kubernetes.io/name: scalardl-cleanup
     app.kubernetes.io/component: config
     app.kubernetes.io/part-of: scalardl
-    app.kubernetes.io/managed-by: kubectl
 data:
   cleanup-ledger.properties: |
     scalar.db.storage=cosmos
