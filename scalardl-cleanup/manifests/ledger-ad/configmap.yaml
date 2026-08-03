@@ -1,0 +1,15 @@
+# ScalarDL Cleanup — config for the Ledger administrative domain.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scalardl-cleanup-ledger-config
+  labels:
+    app.kubernetes.io/name: scalardl-cleanup
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: scalardl
+data:
+  cleanup-ledger.properties: |
+    scalar.db.storage=cosmos
+    scalar.db.contact_points=<cosmos-account-uri>
+    scalar.db.password=${env:SCALAR_DB_PASSWORD}

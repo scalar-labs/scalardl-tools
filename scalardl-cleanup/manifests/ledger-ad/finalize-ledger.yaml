@@ -1,0 +1,77 @@
+# ScalarDL Cleanup — finalize-ledger (Ledger administrative domain).
+#
+# envsubst variables:
+#   ${CLEANUP_VERSION}  scalardl-cleanup image tag
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: scalardl-finalize-ledger
+  labels:
+    app.kubernetes.io/name: scalardl-cleanup
+    app.kubernetes.io/component: command
+    app.kubernetes.io/part-of: scalardl
+spec:
+  # restartPolicy: Never (below) + backoffLimit: 3 → retry up to 3 times, a new pod on each failure.
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scalardl-cleanup
+        app.kubernetes.io/component: command
+        app.kubernetes.io/part-of: scalardl
+    spec:
+      restartPolicy: Never
+      # The tool never calls the Kubernetes API, so don't mount the default ServiceAccount token.
+      automountServiceAccountToken: false
+      securityContext:
+        # The image runs as uid/gid 201 ("scalar"); fsGroup makes the checkpoint PVC writable by it.
+        runAsUser: 201
+        runAsGroup: 201
+        runAsNonRoot: true
+        fsGroup: 201
+      containers:
+        - name: finalize-ledger
+          image: ghcr.io/scalar-labs/scalardl-cleanup:${CLEANUP_VERSION}
+          args:
+            - finalize-ledger
+            - --properties=/etc/scalardl-cleanup/cleanup-ledger.properties
+            - --checkpoint-dir=/scalardl/checkpoint
+          envFrom:
+            - secretRef:
+                name: scalardl-cleanup-credentials
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            # The tool writes only to the mounted volumes (checkpoint PVC + /tmp emptyDir below), so
+            # the root filesystem can stay read-only; the app tree is root-owned, unwritable by uid 201.
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config
+              mountPath: /etc/scalardl-cleanup
+              readOnly: true
+            - name: checkpoint
+              mountPath: /scalardl/checkpoint
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: scalardl-cleanup-ledger-config
+        - name: checkpoint
+          persistentVolumeClaim:
+            claimName: scalardl-cleanup-checkpoint
+        # Startup scratch for the JVM/Netty (java.io.tmpdir). Needed because readOnlyRootFilesystem
+        # blocks writes to the container's own /tmp. Throwaway — deleted with the pod.
+        - name: tmp
+          emptyDir: {}

@@ -3,7 +3,6 @@ package com.scalar.dl.tools.cli;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.scalar.dl.tools.common.Category;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
@@ -22,8 +21,7 @@ public final class Common {
   static final String COMPLETION_TOKEN_KEY = "completion_token";
   static final String OK_STATUS = "OK";
 
-  private static final ObjectMapper mapper =
-      new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+  private static final ObjectMapper mapper = new ObjectMapper();
 
   private Common() {}
 
