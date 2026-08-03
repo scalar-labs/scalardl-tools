@@ -83,6 +83,14 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "The Coordinator group commit is not supported.",
       "",
       "This tool supports only configurations with the Coordinator group commit disabled."),
+  TOO_FEW_TARGET_TABLES(
+      Category.USER_ERROR,
+      "013",
+      "Only %d transactional table(s) were found, but the Ledger schema always has at least the"
+          + " asset and asset_metadata tables.",
+      "",
+      "Verify that the configuration points to the database the Ledger uses and that the ScalarDL"
+          + " schema has been loaded."),
 
   //
   // Errors for the internal error category

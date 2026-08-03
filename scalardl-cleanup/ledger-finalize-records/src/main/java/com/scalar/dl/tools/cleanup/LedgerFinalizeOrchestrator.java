@@ -3,14 +3,18 @@ package com.scalar.dl.tools.cleanup;
 import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
+import com.scalar.db.api.TableMetadata;
 import com.scalar.db.config.DatabaseConfig;
+import com.scalar.db.exception.storage.ExecutionException;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
+import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.LedgerConfigValidator;
+import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import com.scalar.dl.tools.common.StorageValidator;
 import com.scalar.dl.tools.scan.ResumableScanner;
@@ -37,6 +41,9 @@ import org.slf4j.LoggerFactory;
  * are captured once on the first invocation and reused across resumptions.
  */
 public final class LedgerFinalizeOrchestrator implements AutoCloseable {
+
+  /** The asset and asset_metadata tables the Ledger schema always has. */
+  private static final int MINIMUM_TARGET_TABLE_COUNT = 2;
 
   private static final Logger logger = LoggerFactory.getLogger(LedgerFinalizeOrchestrator.class);
 
@@ -143,6 +150,11 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
     long startedAtMs = System.currentTimeMillis();
     List<String> tableNames = discoverTables();
+    // A loaded Ledger schema always has the asset and asset_metadata tables, both transactional.
+    if (tableNames.size() < MINIMUM_TARGET_TABLE_COUNT) {
+      throw new ScalarDlCleanupException(
+          ScalarDlCleanupError.TOO_FEW_TARGET_TABLES, tableNames.size());
+    }
     state = new LedgerFinalizeState(startedAtMs, tableNames);
     stateManager.persist(state);
     logger.info(
@@ -167,12 +179,31 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     for (String namespace : admin.getNamespaceNames()) {
       for (String table : admin.getNamespaceTableNames(namespace)) {
         String qualifiedTable = ScalarDbUtils.getFullTableName(namespace, table);
-        if (!qualifiedTable.equals(coordinatorTable)) {
-          tables.add(qualifiedTable);
+        if (qualifiedTable.equals(coordinatorTable)) {
+          continue;
         }
+        if (!isTransactionTable(namespace, table)) {
+          logger.info("Skipping the table because it is not transactional: {}", qualifiedTable);
+          continue;
+        }
+        tables.add(qualifiedTable);
       }
     }
     return tables;
+  }
+
+  /**
+   * Returns whether the table is managed by the Consensus Commit transaction manager.
+   *
+   * @throws IllegalStateException if the table has no metadata even though it was just listed.
+   */
+  private boolean isTransactionTable(String namespace, String table) throws ExecutionException {
+    TableMetadata metadata = admin.getTableMetadata(namespace, table);
+    if (metadata == null) {
+      throw new IllegalStateException(
+          "Table metadata not found for " + ScalarDbUtils.getFullTableName(namespace, table));
+    }
+    return ConsensusCommitUtils.isTransactionTableMetadata(metadata);
   }
 
   /**
