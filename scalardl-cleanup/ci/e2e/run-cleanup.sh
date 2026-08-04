@@ -60,11 +60,14 @@ upsert_credentials_secret() {
 }
 
 # Apply a Job manifest, dropping any leftover of the same name first: Jobs are immutable, so a
-# re-run of this script would otherwise fail on apply.
+# re-run of this script would otherwise fail on apply. As in manage-cluster.sh, give envsubst an
+# explicit variable list so it substitutes ONLY these placeholders and never rewrites a literal
+# $VAR that later lands in a manifest. The tokens are unset until Step 3 and expand to empty, but
+# the finalize manifests never reference them.
 # Usage: apply_job <namespace> <job> <manifest>
 apply_job() {
   kubectl -n "$1" delete "job/$2" --ignore-not-found
-  envsubst < "$3" | kubectl -n "$1" apply -f -
+  envsubst '${CLEANUP_VERSION} ${LEDGER_TOKEN} ${AUDITOR_TOKEN}' < "$3" | kubectl -n "$1" apply -f -
 }
 
 # Echo the tool's JSON output from the succeeded Pod of a completed Job. The tool prints its JSON on
