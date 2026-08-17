@@ -23,7 +23,7 @@ dependencies {
     implementation project(':common')
     implementation project(':resumable-scan')
     implementation "com.scalar-labs:scalardb:${scalarDbVersion}"
-    implementation "com.scalar-labs:scalardl-java-client-sdk:${scalardlVersion}"
+    implementation "com.scalar-labs:scalardl-java-client-sdk:${scalarDlVersion}"
     implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
 
     errorprone "com.google.errorprone:error_prone_core:${errorproneVersion}"
