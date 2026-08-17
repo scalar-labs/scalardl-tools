@@ -35,10 +35,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# K8s namespaces.
-export LEDGER_NS="ledger-e2e"
-export AUDITOR_NS="auditor-e2e"
+# Namespaces, the Auditor TLS SAN, CERTS_DIR, and the kubectl helpers (require_vars,
+# wait_for_job, diag_and_die) live here so run-cleanup.sh sees exactly the same values.
+source "$HERE/common.sh"
 
 SCALARDL_VERSION_EXPLICIT="${SCALARDL_VERSION:+yes}"   # "yes" if set and non-empty, else ""
 
@@ -58,9 +57,6 @@ export SL_JOB_SUFFIX=""
 export SL_LEDGER_ARGS='["--config", "/config/database.properties", "--coordinator"]'
 export SL_AUDITOR_ARGS='["--config", "/config/database.properties"]'
 
-export AUDITOR_TLS_SAN="auditor.e2e.scalar-labs.com"
-CERTS_DIR="$HERE/certs"
-
 # Give envsubst an explicit variable list so it substitutes ONLY these placeholders.
 # Without a list, envsubst expands EVERY $VAR in the manifests, which would wrongly
 # rewrite unrelated shell-style tokens (e.g. a literal $@ in a container command).
@@ -69,14 +65,6 @@ SUBST_VARS+='${COSMOS_URI} ${COSMOS_KEY} ${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KE
 SUBST_VARS+='${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS}'
 
 render() { envsubst "$SUBST_VARS" < "$HERE/$1"; }
-
-# require_vars VAR...
-# Abort unless every named environment variable is set and non-empty.
-require_vars() {
-  for v in "$@"; do
-    if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
-  done
-}
 
 # Generate a disposable self-signed cert/key for the Auditor server TLS. Reused if it already exists,
 # so re-running deploy does not rotate the cert out from under a running Auditor pod (`clean` drops it
@@ -137,21 +125,6 @@ upgrade() {
   grpc_health_checks " after upgrade to $SCALARDL_VERSION"
 }
 
-# Dump everything useful about a namespace's workloads, then fail.
-diag_and_die() {
-  local ns="$1" msg="$2"
-  echo "::error::${msg}"
-  echo "----- pods (${ns}) -----";            kubectl -n "$ns" get pods -o wide || true
-  echo "----- events (${ns}) -----";          kubectl -n "$ns" get events --sort-by=.lastTimestamp || true
-  echo "----- describe pods (${ns}) -----";   kubectl -n "$ns" describe pods || true
-  echo "----- logs (${ns}) -----"
-  for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null || true); do
-    echo "### $p"
-    kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=200 || true
-  done
-  exit 1
-}
-
 # Health-check the Ledger (plaintext) and Auditor (TLS, verified against the SAN), aborting with
 # diagnostics on failure. $1 is an optional message suffix (e.g. " after upgrade to <version>").
 grpc_health_checks() {
@@ -166,24 +139,6 @@ grpc_health_checks() {
       -tls -tls-ca-cert=/etc/scalardl-tls/tls.crt -tls-server-name="$AUDITOR_TLS_SAN"; then
     diag_and_die "$AUDITOR_NS" "Auditor gRPC health check failed${suffix}"
   fi
-}
-
-# Poll a Job for complete/failed (kubectl wait --for=complete hangs on failure),
-# printing diagnostics inline the moment it fails or times out.
-wait_for_job() {
-  local ns="$1" job="$2" timeout="${3:-300}" waited=0
-  while true; do
-    if kubectl -n "$ns" get "job/$job" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then
-      echo "job/$job complete"; return 0
-    fi
-    if kubectl -n "$ns" get "job/$job" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then
-      diag_and_die "$ns" "job/$job failed"
-    fi
-    if (( waited >= timeout )); then
-      diag_and_die "$ns" "job/$job did not complete within ${timeout}s"
-    fi
-    sleep 5; waited=$((waited + 5))
-  done
 }
 
 # Wait for a Deployment to become available, with inline diagnostics on timeout.
