@@ -12,9 +12,6 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [ "version-update:semver-major" ]
-      - dependency-name: "com.diffplug.spotless"
-      - dependency-name: "com.google.errorprone:*"
-      - dependency-name: "com.github.spotbugs:*"
 
   # For GitHub Actions, update all actions on the default branch
   - package-ecosystem: "github-actions"
