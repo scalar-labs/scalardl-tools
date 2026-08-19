@@ -9,7 +9,7 @@ import java.util.Objects;
  * structured error code (e.g. {@code DL-TOOLS-1001}) and the originating {@link Category} is
  * preserved.
  */
-public class ScalarDlCleanupException extends RuntimeException {
+public final class ScalarDlCleanupException extends RuntimeException {
 
   private final Category category;
 
