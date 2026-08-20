@@ -1,5 +1,5 @@
 plugins {
-    id("com.diffplug.spotless") version "8.4.0"
+    id("com.diffplug.spotless") version "8.9.0"
 }
 
 subprojects {
@@ -14,20 +14,20 @@ subprojects {
 
     ext {
         guavaVersion = '33.6.0-jre'
-        slf4jVersion = '2.0.17'
-        log4jVersion = '2.25.4'
-        jacksonVersion = '2.21.3'
-        scalarDbVersion = '3.19.0-SNAPSHOT'
-        scalardlVersion = '3.14.0-SNAPSHOT'
+        slf4jVersion = '2.0.18'
+        log4jVersion = '2.26.1'
+        jacksonVersion = '2.22.1'
+        scalarDbVersion = '3.19.0'
+        scalardlVersion = '3.14.0'
         picoCliVersion = '4.7.7'
         assertjVersion = '3.27.7'
         junitVersion = '5.14.4'
         junitPlatformVersion = '1.14.4'
         mockitoVersion = '5.23.0'
-        errorproneVersion = '2.49.0'
+        errorproneVersion = '2.50.0'
         errorpronePluginVersion = '5.1.0'
-        spotbugsVersion = '4.9.8'
-        spotbugsPluginVersion = '6.5.1'
+        spotbugsVersion = '4.10.3'
+        spotbugsPluginVersion = '6.5.10'
         googleJavaFormatVersion = '1.35.0'
         // azureCosmosVersion is resolved dynamically from ScalarDB's transitive dependencies
     }
