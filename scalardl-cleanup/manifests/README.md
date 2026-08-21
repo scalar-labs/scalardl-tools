@@ -55,6 +55,9 @@ their own domain's directory:
 - On the **Ledger** side, Coordinator group commit is disabled
   (`scalar.db.consensus_commit.coordinator.group_commit.enabled=false`, the default) — the tool does
   not support it and rejects it at runtime.
+- On the **Auditor** side, the server provides the privileged asset lock recovery API (the
+  `RecoverAssetLock` RPC) that `finalize-auditor` calls. Upgrade the Auditor first if it does not —
+  the command rejects an older server at runtime and tells you so.
 - The cluster's default `StorageClass` provides **`ReadWriteOnce`** volumes and honours `fsGroup`, so the non-root
   container can write the checkpoint.
 - Each Job requests **2 vCPU and 4 GiB of memory** (`requests` equal `limits`), so the target

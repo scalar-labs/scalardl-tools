@@ -5,16 +5,26 @@ name: E2E
 #
 #   1. Deploy ScalarDL Ledger + Auditor at the old version on minikube against a real Cosmos DB,
 #      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
-#   2. Upgrade both servers in place to the new version (which exposes the privileged
-#      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the three operator-facing cleanup subcommands against the upgraded cluster, deployed the
+#   2. Assert that finalize-auditor refuses to run against that old version: the privileged
+#      RecoverAssetLock RPC does not exist there, and the operator must be told to upgrade.
+#   3. Upgrade both servers in place to the new version (which exposes that RPC).
+#   4. Run the three operator-facing cleanup subcommands against the upgraded cluster, deployed the
 #      way an operator deploys them: as Kubernetes Jobs from scalardl-cleanup/manifests, in the
 #      documented apply order (so the deployment procedure is under test too).
 #        finalize-ledger      -> emits the Ledger completion token
 #        finalize-auditor     -> recovers the stranded asset locks via RecoverAssetLock and
 #                                cleans up request_proof; emits the Auditor completion token
 #        cleanup-coordinator  -> deletes the settled coordinator.state records
-#   4. Assert, at the ScalarDL application layer, that every existing asset is writable, readable,
+#      Every command is interrupted midway (its Pod is force-deleted) and then re-applied with the
+#      same checkpoint volume, so the resumed run has to reach the same result -- the same completion
+#      token, the same rows deleted -- as an uninterrupted one. Re-running a finished command must
+#      change nothing at all.
+#   5. Commit new traffic in between, once both guarantee timestamps are captured but before the
+#      deletions run, and assert that none of the coordinator.state / request_proof records it
+#      creates are deleted (the Auditor's own transaction state purge is disabled, so the tool is
+#      the only thing that could delete them).
+#   6. Assert that cleanup-coordinator rejects the two completion tokens if they are swapped.
+#   7. Assert, at the ScalarDL application layer, that every existing asset is writable, readable,
 #      and passes validate-ledger.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
@@ -173,22 +183,62 @@ jobs:
       # Record what was populated. The verify step reads this back (single source of truth for the
       # asset ids), and it is uploaded as an artifact for inspection. strandedReadAssetIds are the
       # committed ids that also received a stranded READ lock (== committedAssetIds here).
+      # newTrafficAssetIds are committed later, after the cleanup commands captured their guarantee
+      # timestamps.
       - name: Write populated-assets metadata
         run: |
           jq -n --argjson n "$RECORD_COUNT" '{
             entityId: "e2e-client",
             committedAssetIds: [range(0; $n) | "e2e-asset-\(.)"],
             strandedAssetIds: [range(0; $n) | "e2e-stranded-\(.)"],
-            strandedReadAssetIds: [range(0; $n) | "e2e-asset-\(.)"]
+            strandedReadAssetIds: [range(0; $n) | "e2e-asset-\(.)"],
+            newTrafficAssetIds: [range(0; $n) | "e2e-new-\(.)"]
           }' > "$RUNNER_TEMP/populated-assets.json"
+
+      - name: Reject finalize-auditor against the old-version Auditor
+        # Runs while the servers are still on the old version, which has no RecoverAssetLock RPC. The
+        # command must fail telling the operator to upgrade, not with a raw gRPC UNIMPLEMENTED error.
+        # It uses a checkpoint volume of its own, so it leaves nothing behind for the real run.
+        run: ./ci/e2e/run-cleanup.sh reject-old-auditor
 
       - name: Upgrade ScalarDL to the new version
         env:
           SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
         run: ./ci/e2e/manage-cluster.sh upgrade
 
-      - name: Run the cleanup commands as Kubernetes Jobs
-        run: ./ci/e2e/run-cleanup.sh
+      - name: Run finalize-ledger, interrupted and resumed
+        run: ./ci/e2e/run-cleanup.sh finalize-ledger
+
+      - name: Interrupt finalize-auditor midway
+        # Kills the command after it has persisted its guarantee timestamp, with the Job's retries
+        # disabled so it stays down until the new traffic below has been committed.
+        run: ./ci/e2e/run-cleanup.sh interrupt-finalize-auditor
+
+      - name: Commit new traffic after the guarantee timestamps
+        # Both guarantee timestamps are already fixed at this point (finalize-ledger emitted its
+        # token, and the interrupted finalize-auditor persisted its own), so every record committed
+        # here falls outside the deletion window of every cleanup command and must survive.
+        run: |
+          set -euo pipefail
+          source ci/e2e/port-forward.sh
+          pf_reset
+          pf_start ledger-e2e  svc/ledger  50051:50051 50052:50052
+          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
+          pf_wait 50051 50052 40051 40052
+          props="ci/e2e/client.properties"
+          for i in $(seq 0 $((RECORD_COUNT - 1))); do
+            id="e2e-new-$i"
+            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
+            if ! "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
+              echo "::error::put-object on $id failed while committing the new traffic"; exit 1
+            fi
+          done
+
+      - name: Resume finalize-auditor
+        run: ./ci/e2e/run-cleanup.sh finalize-auditor
+
+      - name: Run cleanup-coordinator, interrupted and resumed
+        run: ./ci/e2e/run-cleanup.sh cleanup-coordinator
 
       - name: Verify post-cleanup consistency
         run: |
@@ -214,7 +264,7 @@ jobs:
             if ! "$CLIENT" validate-ledger --properties "$props" --object-id "$id"; then
               echo "::error::validate-ledger on $id failed after cleanup"; exit 1
             fi
-          done < <(jq -r '(.committedAssetIds + .strandedAssetIds)[]' "$populated")
+          done < <(jq -r '(.committedAssetIds + .strandedAssetIds + .newTrafficAssetIds)[]' "$populated")
           echo "Post-cleanup consistency verified."
 
       - name: Upload populated-assets
