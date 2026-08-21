@@ -8,6 +8,7 @@ import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
+import io.grpc.Status;
 import javax.annotation.concurrent.ThreadSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +64,7 @@ public final class LockFinalizer {
         AssetLockRecoveryRequest.newBuilder().setNamespace(namespace).setAssetId(assetId).build();
 
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      LockRecoveryResult rpcResult = auditorClient.recover(rpcRequest);
+      LockRecoveryResult rpcResult = recover(rpcRequest);
 
       if (rpcResult == LockRecoveryResult.SUCCEEDED || rpcResult == LockRecoveryResult.NOT_NEEDED) {
         return;
@@ -92,5 +93,25 @@ public final class LockFinalizer {
 
     throw new ScalarDlCleanupException(
         ScalarDlCleanupError.RECOVER_ASSET_LOCK_NOT_RECOVERABLE, assetId, namespace, MAX_ATTEMPTS);
+  }
+
+  /**
+   * Issues the {@code RecoverAssetLock} RPC, translating an {@code UNIMPLEMENTED} status into an
+   * actionable error. An Auditor older than the release that introduced the RPC answers with that
+   * status, and the client SDK surfaces it as an opaque "UNIMPLEMENTED: Method not found" message
+   * with an unrelated status code, which gives the operator no hint that the fix is to upgrade the
+   * Auditor. Every other failure is left untouched.
+   */
+  private LockRecoveryResult recover(AssetLockRecoveryRequest rpcRequest) {
+    try {
+      return auditorClient.recover(rpcRequest);
+    } catch (RuntimeException e) {
+      // Status.fromThrowable walks the cause chain, so it finds the gRPC status the SDK wrapped.
+      // io.grpc comes from the ScalarDL client SDK, which speaks gRPC to the Auditor.
+      if (Status.fromThrowable(e).getCode() == Status.Code.UNIMPLEMENTED) {
+        throw new ScalarDlCleanupException(ScalarDlCleanupError.RECOVER_ASSET_LOCK_UNSUPPORTED, e);
+      }
+      throw e;
+    }
   }
 }
