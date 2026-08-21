@@ -91,6 +91,18 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "",
       "Verify that the configuration points to the database the Ledger uses and that the ScalarDL"
           + " schema has been loaded."),
+  // The solution below never reaches the operator: buildMessage() emits only the code and the
+  // message. The message therefore carries the "upgrade the Auditor" instruction itself, since the
+  // raw gRPC UNIMPLEMENTED failure it replaces gives no hint about what to do.
+  RECOVER_ASSET_LOCK_UNSUPPORTED(
+      Category.USER_ERROR,
+      "014",
+      "The Auditor does not provide the asset lock recovery API (the RecoverAssetLock RPC) that"
+          + " this command requires; upgrade the Auditor to a version that provides it and re-run"
+          + " this command.",
+      "",
+      "Upgrade the ScalarDL Auditor to a version that provides the asset lock recovery API"
+          + " (the RecoverAssetLock RPC) before running this command."),
 
   //
   // Errors for the internal error category

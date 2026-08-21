@@ -11,11 +11,15 @@ import static org.mockito.Mockito.when;
 
 import com.scalar.db.api.Result;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
+import com.scalar.dl.client.exception.ClientException;
 import com.scalar.dl.client.service.AuditorClient;
+import com.scalar.dl.ledger.service.StatusCode;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -92,6 +96,41 @@ class LockFinalizerTest {
     assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("RPC unavailable");
+  }
+
+  @Test
+  void execute_recoverThrowsUnimplementedGiven_shouldThrowUpgradeError() {
+    // Arrange — an Auditor without the RecoverAssetLock RPC answers UNIMPLEMENTED, which the client
+    // SDK rethrows as a ClientException wrapping the gRPC exception.
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenThrow(
+            new ClientException(
+                "UNIMPLEMENTED: Method not found: rpc.AuditorPrivileged/RecoverAssetLock",
+                new StatusRuntimeException(Status.UNIMPLEMENTED),
+                StatusCode.UNKNOWN_TRANSACTION_STATUS));
+
+    // Act & Assert — the operator is told to upgrade instead of seeing the raw gRPC message.
+    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.RECOVER_ASSET_LOCK_UNSUPPORTED.buildCode())
+        .hasMessageContaining("upgrade the Auditor");
+    verify(auditorClient, times(1)).recover(any(AssetLockRecoveryRequest.class));
+  }
+
+  @Test
+  void execute_recoverThrowsOtherGrpcStatusGiven_shouldPropagateException() {
+    // Arrange — any status other than UNIMPLEMENTED is not an old-version symptom.
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenThrow(
+            new ClientException(
+                "UNAVAILABLE",
+                new StatusRuntimeException(Status.UNAVAILABLE),
+                StatusCode.UNKNOWN_TRANSACTION_STATUS));
+
+    // Act & Assert
+    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+        .isInstanceOf(ClientException.class)
+        .hasMessageContaining("UNAVAILABLE");
   }
 
   @Test
