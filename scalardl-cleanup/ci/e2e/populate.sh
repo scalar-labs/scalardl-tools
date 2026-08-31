@@ -29,6 +29,7 @@ cd "$HERE/../.."
 
 props="$HERE/client.properties"
 
+# Mirrors LockOrderRecoveryHandler.LOCK_VALID_PERIOD_MILLIS in scalardl-enterprise.
 LOCK_VALID_PERIOD_SECS=15
 
 commit_objects() {
