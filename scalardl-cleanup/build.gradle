@@ -1,5 +1,5 @@
 plugins {
-    id("com.diffplug.spotless") version "8.10.0"
+    id("com.diffplug.spotless") version "8.10.1"
 }
 
 subprojects {
@@ -25,7 +25,7 @@ subprojects {
         junitPlatformVersion = '1.14.4'
         mockitoVersion = '5.23.0'
         errorproneVersion = '2.50.0'
-        errorpronePluginVersion = '5.1.0'
+        errorpronePluginVersion = '5.1.1'
         spotbugsVersion = '4.10.4'
         spotbugsPluginVersion = '6.5.11'
         googleJavaFormatVersion = '1.35.0'
