@@ -91,6 +91,13 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "",
       "Verify that the configuration points to the database the Ledger uses and that the ScalarDL"
           + " schema has been loaded."),
+  RECOVER_ASSET_LOCK_RPC_UNSUPPORTED(
+      Category.USER_ERROR,
+      "014",
+      "The Auditor does not implement the RecoverAssetLock RPC that this command requires.",
+      "",
+      "Upgrade the Auditor to a version that implements RecoverAssetLock, then re-run the"
+          + " command."),
 
   //
   // Errors for the internal error category

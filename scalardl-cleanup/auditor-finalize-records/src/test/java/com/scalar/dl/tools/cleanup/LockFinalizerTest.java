@@ -11,11 +11,15 @@ import static org.mockito.Mockito.when;
 
 import com.scalar.db.api.Result;
 import com.scalar.dl.auditor.ordering.LockRecoveryResult;
+import com.scalar.dl.client.exception.ClientException;
 import com.scalar.dl.client.service.AuditorClient;
+import com.scalar.dl.ledger.service.StatusCode;
 import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -80,6 +84,40 @@ class LockFinalizerTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining(AuditorInternalValues.ASSET_LOCK_TABLE_ID_COLUMN_NAME);
     verify(auditorClient, never()).recover(any(AssetLockRecoveryRequest.class));
+  }
+
+  @Test
+  void execute_rpcUnimplementedGiven_shouldThrowPromptingAnUpgrade() {
+    // Arrange
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenThrow(
+            new ClientException(
+                "UNIMPLEMENTED: Method not found: rpc.AuditorPrivileged/RecoverAssetLock",
+                new StatusRuntimeException(Status.UNIMPLEMENTED),
+                StatusCode.UNKNOWN_TRANSACTION_STATUS));
+
+    // Act & Assert
+    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.RECOVER_ASSET_LOCK_RPC_UNSUPPORTED.buildCode());
+  }
+
+  @Test
+  void execute_rpcFailsWithAnotherGrpcStatusGiven_shouldNotPromptAnUpgrade() {
+    // Arrange
+    when(auditorClient.recover(any(AssetLockRecoveryRequest.class)))
+        .thenThrow(
+            new ClientException(
+                "UNAVAILABLE: io exception",
+                new StatusRuntimeException(Status.UNAVAILABLE),
+                StatusCode.UNKNOWN_TRANSACTION_STATUS));
+
+    // Act & Assert
+    assertThatThrownBy(() -> finalizer.execute("default", createScanResult()))
+        .isInstanceOf(ClientException.class)
+        .hasMessageContaining("UNAVAILABLE")
+        .hasMessageNotContaining(
+            ScalarDlCleanupError.RECOVER_ASSET_LOCK_RPC_UNSUPPORTED.buildCode());
   }
 
   @Test

@@ -8,6 +8,7 @@ import com.scalar.dl.rpc.AssetLockRecoveryRequest;
 import com.scalar.dl.tools.common.AuditorInternalValues;
 import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
+import io.grpc.Status;
 import javax.annotation.concurrent.ThreadSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +64,7 @@ public final class LockFinalizer {
         AssetLockRecoveryRequest.newBuilder().setNamespace(namespace).setAssetId(assetId).build();
 
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      LockRecoveryResult rpcResult = auditorClient.recover(rpcRequest);
+      LockRecoveryResult rpcResult = recover(rpcRequest);
 
       if (rpcResult == LockRecoveryResult.SUCCEEDED || rpcResult == LockRecoveryResult.NOT_NEEDED) {
         return;
@@ -92,5 +93,21 @@ public final class LockFinalizer {
 
     throw new ScalarDlCleanupException(
         ScalarDlCleanupError.RECOVER_ASSET_LOCK_NOT_RECOVERABLE, assetId, namespace, MAX_ATTEMPTS);
+  }
+
+  /**
+   * Issues the RPC, translating the {@code UNIMPLEMENTED} status that an Auditor without {@code
+   * RecoverAssetLock} answers with.
+   */
+  private LockRecoveryResult recover(AssetLockRecoveryRequest rpcRequest) {
+    try {
+      return auditorClient.recover(rpcRequest);
+    } catch (RuntimeException e) {
+      if (Status.fromThrowable(e).getCode() == Status.Code.UNIMPLEMENTED) {
+        throw new ScalarDlCleanupException(
+            ScalarDlCleanupError.RECOVER_ASSET_LOCK_RPC_UNSUPPORTED, e);
+      }
+      throw e;
+    }
   }
 }
