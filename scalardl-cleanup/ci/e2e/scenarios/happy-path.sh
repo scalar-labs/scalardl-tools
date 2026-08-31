@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
 #
-# Scenario: the operator's cleanup procedure against a cluster holding both committed data and
-# stranded Auditor locks.
+# Scenario: every command in run-cleanup.sh, in the documented apply order, against a cluster
+# holding both committed data and stranded Auditor locks.
 #
-# It runs the three subcommands the way an operator deploys them -- as Kubernetes Jobs from
-# scalardl-cleanup/manifests, in the documented apply order, so the deployment procedure is under
-# test too:
-#   finalize-ledger      -> emits the Ledger completion token
-#   finalize-auditor     -> recovers the stranded asset locks via RecoverAssetLock and cleans up
-#                           request_proof; emits the Auditor completion token
-#   cleanup-coordinator  -> deletes the settled coordinator.state records
-# and then asserts, at the ScalarDL application layer, that every populated asset is writable,
-# readable, and passes validate-ledger.
-#
-# A scenario is a self-contained script that the workflow runs as a single step: it drives what it
-# needs, asserts, and exits non-zero on the first failed assertion. Section markers are echoed so a
-# failure is locatable within the step's log.
-#
-# Required environment: what run-cleanup.sh needs (CLEANUP_VERSION, COSMOSDB_SHELL, RUNNER_TEMP,
-# RECORD_COUNT), plus CLIENT.
+# Required environment:
+#   CLEANUP_VERSION  tag of the scalardl-cleanup image
+#   CLIENT           path to the ScalarDL HashStore CLI
+#   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary, used to count rows in Cosmos
+#   RECORD_COUNT     records generated per category
+#   RUNNER_TEMP      scratch directory holding the populated-assets metadata
+# and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed.
 
 set -euo pipefail
 
@@ -26,6 +17,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 E2E="$HERE/.."
 source "$E2E/common.sh"
 source "$E2E/port-forward.sh"
+source "$E2E/run-cleanup.sh"
 
 # client.properties resolves the Auditor CA cert relative to scalardl-cleanup/.
 cd "$E2E/../.."
@@ -34,7 +26,33 @@ props="$E2E/client.properties"
 
 require_vars CLIENT RUNNER_TEMP RECORD_COUNT
 
-"$E2E/run-cleanup.sh"
+echo "== Run the cleanup commands =="
+
+init_cleanup_commands
+
+token_l=$(run_finalize_ledger)
+
+rp_before=$(count_cosmos_items "$auditor_uri" "$auditor_key" auditor request_proof)
+token_a=$(run_finalize_auditor)
+rp_after=$(count_cosmos_items "$auditor_uri" "$auditor_key" auditor request_proof)
+echo "request_proof rows: before=$rp_before after=$rp_after"
+[ "$rp_after" -eq 0 ] || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0)"; exit 1; }
+
+cs_before=$(count_cosmos_items "$ledger_uri" "$ledger_key" coordinator state)
+coord_out=$(run_cleanup_coordinator "$token_l" "$token_a")
+echo "cleanup-coordinator output: $coord_out"
+[ "$(printf '%s' "$coord_out" | jq -r '.status_code')" = "OK" ] \
+  || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
+
+cs_after=$(count_cosmos_items "$ledger_uri" "$ledger_key" coordinator state)
+# Only the RECORD_COUNT committed put transactions are settled before the deletable-before boundary,
+# so exactly those are removed. finalize-auditor's recovery aborts each stranded lock's nonce,
+# writing coordinator.state rows after the boundary, which survive and are not counted here.
+echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$RECORD_COUNT)"
+[ "$((cs_before - cs_after))" -eq "$RECORD_COUNT" ] \
+  || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $RECORD_COUNT)"; exit 1; }
+[ "$cs_after" -eq "$((2 * RECORD_COUNT))" ] \
+  || { echo "::error::coordinator.state has $cs_after rows after cleanup (expected $((2 * RECORD_COUNT)))"; exit 1; }
 
 echo "== Verify post-cleanup consistency =="
 pf_reset
@@ -68,4 +86,5 @@ while IFS= read -r id; do
     echo "::error::validate-ledger on $id failed after cleanup"; exit 1
   fi
 done <<< "$ids"
+
 echo "Post-cleanup consistency verified."
