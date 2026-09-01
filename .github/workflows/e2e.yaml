@@ -7,8 +7,7 @@ name: E2E
 #      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
 #   2. Upgrade both servers in place to the new version (which exposes the privileged
 #      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the scenario script in ci/e2e/scenarios as a single workflow step. It drives the cleanup
-#      commands and asserts on the outcome; its own header documents what it covers.
+#   3. Run the scenario script in ci/e2e/scenarios.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -71,8 +70,7 @@ jobs:
         run: ./gradlew :cli:docker -PdockerVersion="$CLEANUP_VERSION"
 
       - name: Install Azure Cosmos DB Shell
-        # Used by run-cleanup.sh to count rows directly in Cosmos for the post-cleanup reclamation
-        # checks.
+        # Used by the scenarios to count rows directly in Cosmos for their reclamation checks.
         run: |
           set -euo pipefail
           v=1.1.4

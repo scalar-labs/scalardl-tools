@@ -8,7 +8,8 @@
 #   CLIENT           path to the ScalarDL HashStore CLI
 #   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary, used to count rows in Cosmos
 #   RECORD_COUNT     records generated per category
-#   RUNNER_TEMP      scratch directory holding the populated-assets metadata
+#   RUNNER_TEMP      scratch directory for the rendered manifests and the populated-assets
+#                    metadata
 # and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed.
 
 set -euo pipefail
@@ -30,18 +31,18 @@ echo "== Run the cleanup commands =="
 
 init_cleanup_commands
 
-token_l=$(run_finalize_ledger)
+run_finalize_ledger
 
 rp_before=$(count_cosmos_items "$auditor_uri" "$auditor_key" auditor request_proof)
-token_a=$(run_finalize_auditor)
+run_finalize_auditor
 rp_after=$(count_cosmos_items "$auditor_uri" "$auditor_key" auditor request_proof)
 echo "request_proof rows: before=$rp_before after=$rp_after"
 [ "$rp_after" -eq 0 ] || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0)"; exit 1; }
 
 cs_before=$(count_cosmos_items "$ledger_uri" "$ledger_key" coordinator state)
-coord_out=$(run_cleanup_coordinator "$token_l" "$token_a")
-echo "cleanup-coordinator output: $coord_out"
-[ "$(printf '%s' "$coord_out" | jq -r '.status_code')" = "OK" ] \
+run_cleanup_coordinator "$ledger_token" "$auditor_token"
+echo "cleanup-coordinator output: $cleanup_coordinator_output"
+[ "$(printf '%s' "$cleanup_coordinator_output" | jq -r '.status_code')" = "OK" ] \
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
 
 cs_after=$(count_cosmos_items "$ledger_uri" "$ledger_key" coordinator state)
