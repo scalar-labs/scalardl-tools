@@ -11,7 +11,8 @@
 #   RUNNER_TEMP      scratch directory for the rendered manifests
 # and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed.
 #
-# Nothing here asserts; each function reports its outcome through a global for the caller to judge.
+# A function fails if its command cannot be carried out, but never judges the result: whether what
+# a command reclaimed is what the test expects is the scenario's call.
 
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$E2E_DIR/cleanup-jobs.sh"
@@ -59,4 +60,5 @@ run_cleanup_coordinator() {
   apply_job "$LEDGER_NS" scalardl-cleanup-coordinator "$work/ledger-ad/cleanup-coordinator.yaml"
   wait_for_job "$LEDGER_NS" scalardl-cleanup-coordinator 600
   cleanup_coordinator_output=$(read_job_output_json "$LEDGER_NS" scalardl-cleanup-coordinator)
+  echo "cleanup-coordinator output: $cleanup_coordinator_output"
 }

@@ -41,7 +41,6 @@ echo "request_proof rows: before=$rp_before after=$rp_after"
 
 cs_before=$(count_cosmos_items "$ledger_uri" "$ledger_key" coordinator state)
 run_cleanup_coordinator "$ledger_token" "$auditor_token"
-echo "cleanup-coordinator output: $cleanup_coordinator_output"
 [ "$(printf '%s' "$cleanup_coordinator_output" | jq -r '.status_code')" = "OK" ] \
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
 
