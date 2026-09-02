@@ -111,18 +111,66 @@ apply_job() {
   envsubst '${CLEANUP_VERSION} ${LEDGER_TOKEN} ${AUDITOR_TOKEN}' < "$3" | kubectl -n "$1" apply -f -
 }
 
-# Echo the tool's JSON output from the succeeded Pod of a completed Job. The tool prints its JSON on
+# Echo the tool's JSON output from the Job's Pod in the given phase. The tool prints its JSON on
 # stdout and its logs on stderr, which `kubectl logs` merges, so `jq -R 'fromjson?'` is what picks the
 # JSON line out of the log4j lines around it.
-# Usage: read_job_output_json <namespace> <job>
-read_job_output_json() {
-  local ns="$1" job="$2" pod json
+# Usage: read_job_json <namespace> <job> <pod-phase>
+read_job_json() {
+  local ns="$1" job="$2" phase="$3" pod json
   pod=$(kubectl -n "$ns" get pod -l "job-name=$job" \
-    --field-selector=status.phase=Succeeded -o jsonpath='{.items[0].metadata.name}')
-  [ -n "$pod" ] || { echo "::error::no succeeded Pod found for job/$job in $ns" >&2; return 1; }
+    --field-selector=status.phase="$phase" -o jsonpath='{.items[0].metadata.name}')
+  [ -n "$pod" ] || { echo "::error::no $phase Pod found for job/$job in $ns" >&2; return 1; }
   json=$(kubectl -n "$ns" logs "$pod" | jq -Rc 'fromjson? | select(type == "object")' | tail -n1)
   [ -n "$json" ] || { echo "::error::job/$job printed no JSON output" >&2; return 1; }
   printf '%s\n' "$json"
+}
+
+# Echo the JSON output of a completed Job.
+# Usage: read_job_output_json <namespace> <job>
+read_job_output_json() { read_job_json "$1" "$2" Succeeded; }
+
+# Poll a Job for failed/complete, the mirror image of wait_for_job in common.sh: here completing is
+# the unexpected outcome, so that is what triggers the diagnostics.
+# Usage: wait_for_job_failure <namespace> <job> [timeout]
+wait_for_job_failure() {
+  local ns="$1" job="$2" timeout="${3:-300}" waited=0
+  while true; do
+    if kubectl -n "$ns" get "job/$job" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then
+      echo "job/$job failed, as expected"; return 0
+    fi
+    if kubectl -n "$ns" get "job/$job" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then
+      diag_and_die "$ns" "job/$job completed but was expected to fail"
+    fi
+    if (( waited >= timeout )); then
+      diag_and_die "$ns" "job/$job neither failed nor completed within ${timeout}s"
+    fi
+    sleep 5; waited=$((waited + 5))
+  done
+}
+
+# Run a Job that is expected to fail and echo the error JSON it printed, so the caller can assert on
+# the status code and the error message. The manifest's backoffLimit applies as usual, so allow for
+# the Job retrying a deterministic failure to exhaustion when choosing the timeout. The progress
+# output of the two steps before the read goes to stderr, to keep it out of the caller's command
+# substitution.
+# Usage: run_job_expect_failure <namespace> <job> <manifest> [timeout]
+run_job_expect_failure() {
+  local ns="$1" job="$2" manifest="$3" timeout="${4:-600}"
+  apply_job "$ns" "$job" "$manifest" >&2
+  wait_for_job_failure "$ns" "$job" "$timeout" >&2
+  read_job_json "$ns" "$job" Failed
+}
+
+# Empty an AD's checkpoint volume, so the next command starts a fresh run rather than resuming. The
+# Jobs' Pods hold the PVC through the pvc-protection finalizer, so they go first;
+# --cascade=foreground waits for the Pods rather than reaping them in the background. Nothing
+# recreates the PVC here: setup_ledger_ad / setup_auditor_ad apply pvc.yaml before a Job runs.
+# Usage: reset_checkpoint <namespace>
+reset_checkpoint() {
+  local ns="$1"
+  kubectl -n "$ns" delete job -l app.kubernetes.io/name=scalardl-cleanup \
+    --ignore-not-found --cascade=foreground --timeout=120s
+  kubectl -n "$ns" delete pvc scalardl-cleanup-checkpoint --ignore-not-found --timeout=120s
 }
 
 # Extract a non-empty completion token from a finalize command's JSON output, or fail.
