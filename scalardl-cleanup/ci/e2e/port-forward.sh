@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Shared kubectl port-forward helpers for the E2E test cluster. Usage:
+# Shared kubectl port-forward helpers for the E2E test cluster. Source it:
 #
 #   source ci/e2e/port-forward.sh
 #   pf_reset       # kill leftovers from prior steps
@@ -15,16 +15,19 @@
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # TCP connect check via a bash builtin.
+# Usage: pf_check_tcp <local-port>
 pf_check_tcp() { timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" 2>/dev/null; }
 
 # Kill any leftover kubectl port-forwards.
+# Usage: pf_reset
 pf_reset() {
   pkill -f 'kubectl.*port-forward.*(ledger|auditor)' 2>/dev/null || true
   sleep 2
 }
 
-# Start a background port-forward: pf_start <ns> <target> <local:remote>...
-# Logs to /tmp/pf-<first-local-port>.log so failure diagnostics can collect it.
+# Start a background port-forward. Logs to /tmp/pf-<first-local-port>.log so failure diagnostics
+# can collect it.
+# Usage: pf_start <namespace> <target> <local:remote>...
 pf_start() {
   local ns="$1" target="$2"
   shift 2
@@ -34,6 +37,7 @@ pf_start() {
 
 # Block until each given local port accepts a TCP connection (~30s each), else fail.
 # Returns non-zero on timeout so `set -e` callers abort.
+# Usage: pf_wait <local-port>...
 pf_wait() {
   local p i ok
   for p in "$@"; do

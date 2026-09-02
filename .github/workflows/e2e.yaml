@@ -1,13 +1,6 @@
 name: E2E
 
-# End-to-end test for ScalarDL Cleanup. The tool reclaims garbage left behind by an older ScalarDL
-# server, while coordinating with the upgraded server. This test reproduces exactly that:
-#
-#   1. Deploy ScalarDL Ledger + Auditor at the old version on minikube against a real Cosmos DB,
-#      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
-#   2. Upgrade both servers in place to the new version (which exposes the privileged
-#      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the scenario script in ci/e2e/scenarios.
+# End-to-end test for ScalarDL Cleanup against a real Cosmos DB. Runs scenarios in ci/e2e/scenarios.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -107,6 +100,7 @@ jobs:
         run: minikube image load "ghcr.io/scalar-labs/scalardl-cleanup:$CLEANUP_VERSION"
 
       - name: Deploy ScalarDL (old version) + load schema
+        id: deploy
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
@@ -114,30 +108,27 @@ jobs:
           SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         run: ./ci/e2e/manage-cluster.sh deploy
 
-      - name: Populate committed data
-        run: ./ci/e2e/populate.sh commit-objects
-
-      - name: Generate stranded locks (Ledger down)
-        run: ./ci/e2e/populate.sh strand-locks
-
-      - name: Write populated-assets metadata
-        run: ./ci/e2e/populate.sh write-metadata
-
-      - name: Upgrade ScalarDL to the new version
+      - name: Run scenario - Auditor without RecoverAssetLock
         env:
-          SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
-        run: ./ci/e2e/manage-cluster.sh upgrade
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          RECORD_COUNT: 1
+        run: ./ci/e2e/scenarios/old-auditor.sh
 
       - name: Run scenario - happy path
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
         run: ./ci/e2e/scenarios/happy-path.sh
 
-      - name: Upload populated-assets
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-populated-assets
-          path: ${{ runner.temp }}/populated-assets.json
-          if-no-files-found: warn
+      - name: Run scenario - interrupt and resume
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          RECORD_COUNT: 20 # Enough rows that the scan is still running when the Pod is deleted.
+        run: ./ci/e2e/scenarios/interrupt-resume.sh
 
       - name: Collect diagnostics on failure
         if: failure()
@@ -163,7 +154,6 @@ jobs:
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
-          CR_PAT: ${{ secrets.CR_PAT }}
           SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         # Fatal on purpose: the shared Cosmos account must be left clean, so a failed
         # drop fails the job to alert an operator (who then drops it manually).

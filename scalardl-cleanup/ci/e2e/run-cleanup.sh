@@ -5,9 +5,8 @@
 #
 #   source ci/e2e/run-cleanup.sh
 #
-# Expects in the environment:
+# Required environment:
 #   CLEANUP_VERSION  tag of the scalardl-cleanup image
-#   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary, used to count rows in Cosmos
 #   RUNNER_TEMP      scratch directory for the rendered manifests
 # and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed.
 #
@@ -18,8 +17,9 @@ E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$E2E_DIR/cleanup-jobs.sh"
 
 # Prepare what every step needs. Call once, before the first step.
+# Usage: init_cleanup_commands
 init_cleanup_commands() {
-  require_vars CLEANUP_VERSION COSMOSDB_SHELL RUNNER_TEMP
+  require_vars CLEANUP_VERSION RUNNER_TEMP
 
   # The Job manifests take the image tag as ${CLEANUP_VERSION}; the namespace is not in them and is
   # passed to kubectl instead. LEDGER_NS / AUDITOR_NS come from common.sh, via cleanup-jobs.sh.
@@ -30,6 +30,7 @@ init_cleanup_commands() {
 }
 
 # Run finalize-ledger (Ledger AD). Sets ledger_token.
+# Usage: run_finalize_ledger
 run_finalize_ledger() {
   local out
   setup_ledger_ad
@@ -42,6 +43,7 @@ run_finalize_ledger() {
 
 # Run finalize-auditor (Auditor AD). Sets auditor_token. Recovering a stranded lock can wait out the
 # lock's valid period, hence the longer timeout.
+# Usage: run_finalize_auditor
 run_finalize_auditor() {
   local out
   setup_auditor_ad
