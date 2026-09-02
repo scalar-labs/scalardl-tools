@@ -166,7 +166,6 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
     return cause;
   }
 
-  @SuppressWarnings("unused")
   @Override
   public String getSolution() {
     return solution;
