@@ -7,15 +7,7 @@ name: E2E
 #      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
 #   2. Upgrade both servers in place to the new version (which exposes the privileged
 #      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the three operator-facing cleanup subcommands against the upgraded cluster, deployed the
-#      way an operator deploys them: as Kubernetes Jobs from scalardl-cleanup/manifests, in the
-#      documented apply order (so the deployment procedure is under test too).
-#        finalize-ledger      -> emits the Ledger completion token
-#        finalize-auditor     -> recovers the stranded asset locks via RecoverAssetLock and
-#                                cleans up request_proof; emits the Auditor completion token
-#        cleanup-coordinator  -> deletes the settled coordinator.state records
-#   4. Assert, at the ScalarDL application layer, that every existing asset is writable, readable,
-#      and passes validate-ledger.
+#   3. Run the scenario script in ci/e2e/scenarios.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -78,8 +70,7 @@ jobs:
         run: ./gradlew :cli:docker -PdockerVersion="$CLEANUP_VERSION"
 
       - name: Install Azure Cosmos DB Shell
-        # Used by run-cleanup.sh to count rows directly in Cosmos for the post-cleanup reclamation
-        # checks.
+        # Used by the scenarios to count rows directly in Cosmos for their reclamation checks.
         run: |
           set -euo pipefail
           v=1.1.4
@@ -124,98 +115,21 @@ jobs:
         run: ./ci/e2e/manage-cluster.sh deploy
 
       - name: Populate committed data
-        run: |
-          set -euo pipefail
-          source ci/e2e/port-forward.sh
-          pf_reset
-          pf_start ledger-e2e  svc/ledger  50051:50051 50052:50052
-          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
-          pf_wait 50051 50052 40051 40052
-          props="ci/e2e/client.properties"
-          # Register the client identity + the generic object contracts on both servers.
-          "$CLIENT" bootstrap --properties "$props"
-          # Commit RECORD_COUNT objects. In auditor mode each put-object (object.Put = get+put)
-          # produces asset / request_proof / coordinator.state / released asset_lock records.
-          for i in $(seq 0 $((RECORD_COUNT - 1))); do
-            id="e2e-asset-$i"
-            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
-            "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"
-          done
+        run: ./ci/e2e/populate.sh commit-objects
 
       - name: Generate stranded locks (Ledger down)
-        run: |
-          set -euo pipefail
-          source ci/e2e/port-forward.sh
-          pf_reset
-          ./ci/e2e/manage-cluster.sh stop-ledger
-          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
-          pf_wait 40051 40052
-          props="ci/e2e/client.properties"
-          # Every op MUST fail (Ledger down): the Auditor is left holding the lock. Fail the job if
-          # any unexpectedly succeeds. put-object leaves a WRITE lock on a fresh id; get-object leaves
-          # a READ lock on an already-committed id.
-          for i in $(seq 0 $((RECORD_COUNT - 1))); do
-            id="e2e-stranded-$i"
-            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
-            if "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
-              echo "::error::stranded put-object on $id unexpectedly succeeded (Ledger was supposed to be down)"; exit 1
-            fi
-          done
-          for i in $(seq 0 $((RECORD_COUNT - 1))); do
-            id="e2e-asset-$i"
-            if "$CLIENT" get-object --properties "$props" --object-id "$id"; then
-              echo "::error::stranded get-object on $id unexpectedly succeeded (Ledger was supposed to be down)"; exit 1
-            fi
-          done
-          echo "Waiting 16s for the held locks to pass the 15s valid period ..."
-          sleep 16
+        run: ./ci/e2e/populate.sh strand-locks
 
-      # Record what was populated. The verify step reads this back (single source of truth for the
-      # asset ids), and it is uploaded as an artifact for inspection. strandedReadAssetIds are the
-      # committed ids that also received a stranded READ lock (== committedAssetIds here).
       - name: Write populated-assets metadata
-        run: |
-          jq -n --argjson n "$RECORD_COUNT" '{
-            entityId: "e2e-client",
-            committedAssetIds: [range(0; $n) | "e2e-asset-\(.)"],
-            strandedAssetIds: [range(0; $n) | "e2e-stranded-\(.)"],
-            strandedReadAssetIds: [range(0; $n) | "e2e-asset-\(.)"]
-          }' > "$RUNNER_TEMP/populated-assets.json"
+        run: ./ci/e2e/populate.sh write-metadata
 
       - name: Upgrade ScalarDL to the new version
         env:
           SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
         run: ./ci/e2e/manage-cluster.sh upgrade
 
-      - name: Run the cleanup commands as Kubernetes Jobs
-        run: ./ci/e2e/run-cleanup.sh
-
-      - name: Verify post-cleanup consistency
-        run: |
-          set -euo pipefail
-          source ci/e2e/port-forward.sh
-          pf_reset
-          pf_start ledger-e2e  svc/ledger  50051:50051 50052:50052
-          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
-          pf_wait 50051 50052 40051 40052
-          props="ci/e2e/client.properties"
-          populated="$RUNNER_TEMP/populated-assets.json"
-
-          # After cleanup, every asset must be fully usable again: writable, readable, and passing
-          # ledger validation.
-          while IFS= read -r id; do
-            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
-            if ! "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
-              echo "::error::put-object on $id failed after cleanup"; exit 1
-            fi
-            if ! "$CLIENT" get-object --properties "$props" --object-id "$id"; then
-              echo "::error::get-object on $id failed after cleanup"; exit 1
-            fi
-            if ! "$CLIENT" validate-ledger --properties "$props" --object-id "$id"; then
-              echo "::error::validate-ledger on $id failed after cleanup"; exit 1
-            fi
-          done < <(jq -r '(.committedAssetIds + .strandedAssetIds)[]' "$populated")
-          echo "Post-cleanup consistency verified."
+      - name: Run scenario - happy path
+        run: ./ci/e2e/scenarios/happy-path.sh
 
       - name: Upload populated-assets
         if: always()

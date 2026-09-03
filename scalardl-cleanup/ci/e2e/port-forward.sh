@@ -3,10 +3,16 @@
 # Shared kubectl port-forward helpers for the E2E test cluster. Usage:
 #
 #   source ci/e2e/port-forward.sh
-#   pf_reset # kill leftovers from prior steps
-#   pf_start "$LNS" svc/ledger  50051:50051 50052:50052
-#   pf_start "$ANS" svc/auditor 40051:40051 40052:40052
-#   pf_wait 50051 50052 40051 40052 # block until reachable
+#   pf_reset       # kill leftovers from prior steps
+#   pf_start_all   # forward both servers and block until reachable
+#
+# Or drive a single server, as the stranded-lock population does while the Ledger is down:
+#
+#   pf_start "$AUDITOR_NS" svc/auditor 40051:40051 40052:40052
+#   pf_wait 40051 40052
+
+# LEDGER_NS / AUDITOR_NS, which pf_start_all needs, come from here.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 # TCP connect check via a bash builtin.
 pf_check_tcp() { timeout 3 bash -c "exec 3<>/dev/tcp/127.0.0.1/$1" 2>/dev/null; }
@@ -46,4 +52,12 @@ pf_wait() {
       return 1
     }
   done
+}
+
+# Start the forwards both servers need and block until they are reachable.
+# Usage: pf_start_all
+pf_start_all() {
+  pf_start "$LEDGER_NS"  svc/ledger  50051:50051 50052:50052
+  pf_start "$AUDITOR_NS" svc/auditor 40051:40051 40052:40052
+  pf_wait 50051 50052 40051 40052
 }

@@ -36,7 +36,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Namespaces, the Auditor TLS SAN, CERTS_DIR, and the kubectl helpers (require_vars,
-# wait_for_job, diag_and_die) live here so run-cleanup.sh sees exactly the same values.
+# wait_for_job, diag_and_die) live here so every script in ci/e2e sees the same values.
 source "$HERE/common.sh"
 
 SCALARDL_VERSION_EXPLICIT="${SCALARDL_VERSION:+yes}"   # "yes" if set and non-empty, else ""
