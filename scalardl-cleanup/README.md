@@ -19,7 +19,7 @@ purge on it. For details about the residual transaction state and the purge opti
 [Purge the Residual Transaction State](https://scalardl.scalar-labs.com/docs/latest/purge-residual-transaction-state/).
 
 The tool is packaged as the container image `ghcr.io/scalar-labs/scalardl-cleanup` and runs as
-one-shot Kubernetes `Job`s in the cluster that already runs Ledger and Auditor. You can run it while
+one-shot Kubernetes Jobs in the cluster that already runs Ledger and Auditor. You can run it while
 Ledger and Auditor are serving traffic. Even so, running it during a window with no traffic or little
 traffic is recommended, because the commands then finish sooner.
 
@@ -60,14 +60,12 @@ flowchart TB
 - The tool supports **Azure Cosmos DB for NoSQL** only. The tool rejects other configurations including `multi-storage`.
 - Ledger must not share the Coordinator table that its ScalarDB manages with any other ScalarDB
   instance.
-- [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled)
-  has never been enabled.
-- [`coordinator.group_commit.enabled`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatorgroup_commitenabled)
-  has never been enabled.
+- [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled) must have never been enabled.
+- [`coordinator.group_commit.enabled`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatorgroup_commitenabled) must have never been enabled.
 
 ## Manifest files
 
-The manifests are in `manifests/`, split into one directory per administrative domain — each
+The manifests are in `manifests/`, split into one directory per administrative domain—each
 operator applies only their own domain's directory:
 
 **`ledger-ad/`** (Ledger AD)
@@ -96,7 +94,7 @@ the **settings each command reads** from its `.properties` file (supplied via th
 
 | Variable | Used in | Description |
 |----------------------------------|------------------------------------------|----------------------------------------------------------------------|
-| `CLEANUP_VERSION`                | the Job manifests                        | Image tag, `ghcr.io/scalar-labs/scalardl-cleanup:<CLEANUP_VERSION>` |
+| `CLEANUP_VERSION`                | The Job manifests                        | Image tag, `ghcr.io/scalar-labs/scalardl-cleanup:<CLEANUP_VERSION>` |
 | `LEDGER_TOKEN` / `AUDITOR_TOKEN` | `ledger-ad/cleanup-coordinator.yaml` | The two completion tokens                                            |
 
 ### 2. Settings the commands accept
@@ -106,7 +104,7 @@ Each command reads these properties from the `.properties` file that its AD's Co
 ScalarDL configuration reference, except the `scalar.dl.tools.*` properties, which belong to this
 tool.
 
-**Ledger AD** — `ledger-ad/configmap.yaml`, read by `finalize-ledger` and `cleanup-coordinator`:
+**Ledger AD** – `ledger-ad/configmap.yaml`, read by `finalize-ledger` and `cleanup-coordinator`:
 
 | Property | Description |
 |---|---|
@@ -116,7 +114,7 @@ tool.
 | `scalar.dl.tools.scan.cosmos.max_threads` | Optional. The scan parallelism. Defaults to `32`. |
 | `scalar.dl.tools.scan.cosmos.page_size` | Optional. The records fetched per query page. Defaults to `100`. |
 
-**Auditor AD** — `auditor-ad/configmap.yaml`, read by `finalize-auditor`:
+**Auditor AD** – `auditor-ad/configmap.yaml`, read by `finalize-auditor`:
 
 | Property | Description |
 |---|---|
@@ -147,7 +145,7 @@ tag (`ghcr.io/scalar-labs/scalardl-cleanup:<CLEANUP_VERSION>`).
   (`requests` equal `limits`).
 - `kubectl` and `envsubst` (from `gettext`) are installed on your machine.
 
-### Step 1 — Ledger AD: `finalize-ledger`
+### Step 1 – Ledger AD: `finalize-ledger`
 
 Set the variables this step uses:
 
@@ -187,7 +185,7 @@ command prints its result as one JSON line:
 {"status_code":"OK","output":{"completion_token":"<base64url-encoded token>"}}
 ```
 
-Keep the token in `completion_token` — it is the **Ledger token**.
+Keep the token in `completion_token`—it is the **Ledger token**.
 
 If the command fails, it prints an error message in place of that result, and the Job retries it up
 to three times (`backoffLimit: 3` in the manifest), starting a new Pod each time. If none of those
@@ -195,7 +193,7 @@ attempts succeeds, the Job fails. Deploying the Job again without deleting the c
 resumes the processing from the same checkpoint data. To start the processing over from the beginning
 instead, see [Re-running after a failure](#re-running-after-a-failure).
 
-### Step 2 — Auditor AD: `finalize-auditor`
+### Step 2 – Auditor AD: `finalize-auditor`
 
 Set the variables this step uses:
 
@@ -224,13 +222,13 @@ below), then apply it:
 kubectl -n "${AUDITOR_NS:?}" apply -f auditor-ad/configmap.yaml
 ```
 
-**Optional — TLS to Auditor.** If TLS is enabled on Auditor, do this *before* step (d).
+**Optional – TLS to Auditor.** If TLS is enabled on Auditor, do this *before* step (d).
 
 In `auditor-ad/configmap.yaml` (step c), uncomment:
 
 - `scalar.dl.client.auditor.tls.enabled=true`
 - `scalar.dl.client.auditor.tls.ca_root_cert_path=/cert/scalardl-cleanup/tls.crt`
-- `scalar.dl.client.auditor.tls.override_authority=<auditor-cert-cn-or-san>` — set the value; only if it differs from the host you connect to
+- `scalar.dl.client.auditor.tls.override_authority=<auditor-cert-cn-or-san>` – Set the value only if it differs from the host you connect to.
 
 Then create the cert Secret holding the CA root cert that signed the Auditor server cert.
 
@@ -238,7 +236,7 @@ Then create the cert Secret holding the CA root cert that signed the Auditor ser
 kubectl -n "${AUDITOR_NS:?}" create secret generic scalardl-cleanup-cert --from-file=tls.crt=<ca.pem>
 ```
 
-**Optional — Auditor authorization credential.** If Auditor requires an authorization credential, do this *before* step (d).
+**Optional – Auditor authorization credential.** If Auditor requires an authorization credential, do this *before* step (d).
 
 In `auditor-ad/configmap.yaml` (step c), uncomment:
 
@@ -261,7 +259,7 @@ Wait for the Job to complete, then read the completion token from the log of its
 command prints its result as one JSON line, in the same shape as the one that `finalize-ledger`
 prints in step 1.
 
-Hand the token in `completion_token` — the **Auditor token** — to the Ledger operator.
+Hand the token in `completion_token`—the **Auditor token**—to the Ledger operator.
 
 If the command fails, it prints an error message in place of that result, and the Job retries it up to
 three times (`backoffLimit: 3` in the manifest), starting a new Pod each time. If none of those
@@ -269,7 +267,7 @@ attempts succeeds, the Job fails. Deploying the Job again without deleting the c
 resumes the processing from the same checkpoint data. To start the processing over from the beginning
 instead, see [Re-running after a failure](#re-running-after-a-failure).
 
-### Step 3 — Ledger AD: `cleanup-coordinator`
+### Step 3 – Ledger AD: `cleanup-coordinator`
 
 Run this once you have **both** tokens; it reuses the checkpoint volume, ConfigMap, and Secret from
 step 1. Set the variables, including both tokens:
@@ -326,7 +324,7 @@ kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
 : "${CLEANUP_VERSION:?}" "${LEDGER_TOKEN:?}" "${AUDITOR_TOKEN:?}" && envsubst < ledger-ad/cleanup-coordinator.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
 ```
 
-On a resumed `cleanup-coordinator`, the token values are ignored — the deletion boundary saved in the
+On a resumed `cleanup-coordinator`, the token values are ignored—the deletion boundary saved in the
 checkpoint is authoritative.
 
 ### Starting over from scratch
