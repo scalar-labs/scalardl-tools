@@ -34,9 +34,7 @@ LOCK_VALID_PERIOD_SECS=15
 
 commit_objects() {
   pf_reset
-  pf_start "$LEDGER_NS"  svc/ledger  50051:50051 50052:50052
-  pf_start "$AUDITOR_NS" svc/auditor 40051:40051 40052:40052
-  pf_wait 50051 50052 40051 40052
+  pf_start_all
   # Register the client identity + the generic object contracts on both servers.
   "$CLIENT" bootstrap --properties "$props"
   # Commit RECORD_COUNT objects. In auditor mode each put-object (object.Put = get+put)

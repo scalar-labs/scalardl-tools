@@ -7,15 +7,7 @@ name: E2E
 #      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
 #   2. Upgrade both servers in place to the new version (which exposes the privileged
 #      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the three operator-facing cleanup subcommands against the upgraded cluster, deployed the
-#      way an operator deploys them: as Kubernetes Jobs from scalardl-cleanup/manifests, in the
-#      documented apply order (so the deployment procedure is under test too).
-#        finalize-ledger      -> emits the Ledger completion token
-#        finalize-auditor     -> recovers the stranded asset locks via RecoverAssetLock and
-#                                cleans up request_proof; emits the Auditor completion token
-#        cleanup-coordinator  -> deletes the settled coordinator.state records
-#   4. Assert, at the ScalarDL application layer, that every existing asset is writable, readable,
-#      and passes validate-ledger.
+#   3. Run the scenario script in ci/e2e/scenarios.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -78,8 +70,7 @@ jobs:
         run: ./gradlew :cli:docker -PdockerVersion="$CLEANUP_VERSION"
 
       - name: Install Azure Cosmos DB Shell
-        # Used by run-cleanup.sh to count rows directly in Cosmos for the post-cleanup reclamation
-        # checks.
+        # Used by the scenarios to count rows directly in Cosmos for their reclamation checks.
         run: |
           set -euo pipefail
           v=1.1.4
@@ -137,35 +128,8 @@ jobs:
           SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
         run: ./ci/e2e/manage-cluster.sh upgrade
 
-      - name: Run the cleanup commands as Kubernetes Jobs
-        run: ./ci/e2e/run-cleanup.sh
-
-      - name: Verify post-cleanup consistency
-        run: |
-          set -euo pipefail
-          source ci/e2e/port-forward.sh
-          pf_reset
-          pf_start ledger-e2e  svc/ledger  50051:50051 50052:50052
-          pf_start auditor-e2e svc/auditor 40051:40051 40052:40052
-          pf_wait 50051 50052 40051 40052
-          props="ci/e2e/client.properties"
-          populated="$RUNNER_TEMP/populated-assets.json"
-
-          # After cleanup, every asset must be fully usable again: writable, readable, and passing
-          # ledger validation.
-          while IFS= read -r id; do
-            hash=$(printf '%s' "$id" | sha256sum | cut -d' ' -f1)
-            if ! "$CLIENT" put-object --properties "$props" --object-id "$id" --hash "$hash"; then
-              echo "::error::put-object on $id failed after cleanup"; exit 1
-            fi
-            if ! "$CLIENT" get-object --properties "$props" --object-id "$id"; then
-              echo "::error::get-object on $id failed after cleanup"; exit 1
-            fi
-            if ! "$CLIENT" validate-ledger --properties "$props" --object-id "$id"; then
-              echo "::error::validate-ledger on $id failed after cleanup"; exit 1
-            fi
-          done < <(jq -r '(.committedAssetIds + .strandedAssetIds)[]' "$populated")
-          echo "Post-cleanup consistency verified."
+      - name: Run scenario - happy path
+        run: ./ci/e2e/scenarios/happy-path.sh
 
       - name: Upload populated-assets
         if: always()
