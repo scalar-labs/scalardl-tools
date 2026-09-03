@@ -14,8 +14,8 @@ ScalarDL 3.14.0. The residual transaction state consists of the following:
 Because ScalarDL does not purge this state by default, it accumulates over time and consumes
 storage. ScalarDL 3.14.0 and later can purge it, but none of the purge options remove the state that
 an earlier version wrote, because that state lacks the information that purge requires. Use this
-tool to remove that state, once, after you upgrade an existing deployment and before you enable
-purge on it. For details about the residual transaction state and the purge options, see
+tool to remove that state after you upgrade an existing deployment and before you enable purge on
+it. For details about the residual transaction state and the purge options, see
 [Purge the Residual Transaction State](https://scalardl.scalar-labs.com/docs/latest/purge-residual-transaction-state/).
 
 The tool is packaged as the container image `ghcr.io/scalar-labs/scalardl-cleanup` and runs as
@@ -62,6 +62,12 @@ flowchart TB
   instance.
 - [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled) must have never been enabled.
 - [`coordinator.group_commit.enabled`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatorgroup_commitenabled) must have never been enabled.
+
+## Prerequisites
+
+- A Kubernetes worker node has room for the **2 vCPU and 4 GiB of memory** that each Job requests
+  (`requests` equal `limits`).
+- `kubectl` and `envsubst` (from `gettext`) are installed on your machine.
 
 ## Manifest files
 
@@ -132,20 +138,14 @@ tool.
 | `scalar.dl.tools.scan.cosmos.max_threads` | Optional. The scan parallelism. Defaults to `32`. |
 | `scalar.dl.tools.scan.cosmos.page_size` | Optional. The records fetched per query page. Defaults to `100`. |
 
-## Getting started
+## Running the cleanup
 
 Run the steps in order, from the `manifests/` directory (the file paths below are relative to it).
 **Steps 1 and 2 are independent** (either operator can go first, or in parallel); **step 3 needs
 both tokens.** Each step exports the variables it needs at the top; `CLEANUP_VERSION` is the image
 tag (`ghcr.io/scalar-labs/scalardl-cleanup:<CLEANUP_VERSION>`).
 
-### Prerequisites
-
-- A Kubernetes worker node has room for the **2 vCPU and 4 GiB of memory** that each Job requests
-  (`requests` equal `limits`).
-- `kubectl` and `envsubst` (from `gettext`) are installed on your machine.
-
-### Step 1 – Ledger AD: `finalize-ledger`
+### Step 1 — Ledger AD: `finalize-ledger`
 
 Set the variables this step uses:
 
