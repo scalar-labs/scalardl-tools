@@ -59,14 +59,16 @@ public interface ScalarDlToolsError {
   /**
    * Builds the error message with the given arguments. The message is built as follows:
    *
-   * <p>{@code <componentName>-<categoryId><id>: <message>}
+   * <p>{@code <componentName>-<categoryId><id>: <message> <solution>}
    *
    * @param args the arguments to be formatted into the message
    * @return the formatted message
    */
   default String buildMessage(Object... args) {
-    return buildCode()
-        + ": "
-        + (args == null || args.length == 0 ? getMessage() : String.format(getMessage(), args));
+    String message =
+        buildCode()
+            + ": "
+            + (args == null || args.length == 0 ? getMessage() : String.format(getMessage(), args));
+    return getSolution().isEmpty() ? message : message + " " + getSolution();
   }
 }

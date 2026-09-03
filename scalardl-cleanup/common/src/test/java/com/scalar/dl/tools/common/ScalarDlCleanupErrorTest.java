@@ -48,7 +48,14 @@ class ScalarDlCleanupErrorTest {
   }
 
   @Test
-  void buildMessage_noArgsGiven_shouldPrefixCodeToMessage() {
+  void values_shouldAllHaveSolution() {
+    for (ScalarDlCleanupError error : ScalarDlCleanupError.values()) {
+      assertThat(error.getSolution()).isNotEmpty();
+    }
+  }
+
+  @Test
+  void buildMessage_noArgsGiven_shouldPrefixCodeAndAppendSolution() {
     // Arrange
     ScalarDlCleanupError error = ScalarDlCleanupError.BOTH_COMPLETION_TOKENS_REQUIRED;
 
@@ -59,11 +66,12 @@ class ScalarDlCleanupErrorTest {
     assertThat(message)
         .isEqualTo(
             "DL-TOOLS-1004: Both Ledger and Auditor completion tokens are required for the "
-                + "initial run.");
+                + "initial run. Provide both the Ledger and Auditor completion tokens emitted by "
+                + "the finalization commands.");
   }
 
   @Test
-  void buildMessage_argsGiven_shouldFormatMessage() {
+  void buildMessage_argsGiven_shouldFormatMessageAndAppendSolution() {
     // Arrange
     ScalarDlCleanupError error = ScalarDlCleanupError.UNKNOWN_SERVER_TYPE;
 
@@ -72,6 +80,53 @@ class ScalarDlCleanupErrorTest {
 
     // Assert
     assertThat(message)
-        .isEqualTo("DL-TOOLS-1003: Unknown server type in the completion token: foo.");
+        .isEqualTo(
+            "DL-TOOLS-1003: Unknown server type in the completion token: foo. Verify that the "
+                + "completion token was copied verbatim and is not truncated or altered.");
+  }
+
+  @Test
+  void buildMessage_solutionEmptyGiven_shouldNotAppendTrailingSpace() {
+    // Arrange
+    ScalarDlToolsError error = new NoSolutionError();
+
+    // Act
+    String message = error.buildMessage();
+
+    // Assert
+    assertThat(message).isEqualTo("DL-TOOLS-1999: Something went wrong.");
+  }
+
+  /** A {@link ScalarDlToolsError} with no solution, which no {@link ScalarDlCleanupError} is. */
+  private static final class NoSolutionError implements ScalarDlToolsError {
+    @Override
+    public String getComponentName() {
+      return "DL-TOOLS";
+    }
+
+    @Override
+    public Category getCategory() {
+      return Category.USER_ERROR;
+    }
+
+    @Override
+    public String getId() {
+      return "999";
+    }
+
+    @Override
+    public String getMessage() {
+      return "Something went wrong.";
+    }
+
+    @Override
+    public String getCause() {
+      return "";
+    }
+
+    @Override
+    public String getSolution() {
+      return "";
+    }
   }
 }

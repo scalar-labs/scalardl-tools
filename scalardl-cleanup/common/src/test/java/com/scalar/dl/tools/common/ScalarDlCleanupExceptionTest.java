@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 
 class ScalarDlCleanupExceptionTest {
 
+  // The assertions below match only the code-and-message prefix: buildMessage() also appends the
+  // solution, and that format is ScalarDlCleanupErrorTest's concern.
+
   @Test
   void constructor_errorGiven_shouldBuildMessageAndCarryCategory() {
     // Arrange & Act
@@ -14,7 +17,7 @@ class ScalarDlCleanupExceptionTest {
 
     // Assert
     assertThat(exception.getMessage())
-        .isEqualTo("DL-TOOLS-1007: The Auditor completion token is required for the initial run.");
+        .startsWith("DL-TOOLS-1007: The Auditor completion token is required for the initial run.");
     assertThat(exception.getCategory()).isEqualTo(Category.USER_ERROR);
   }
 
@@ -26,7 +29,7 @@ class ScalarDlCleanupExceptionTest {
 
     // Assert
     assertThat(exception.getMessage())
-        .isEqualTo("DL-TOOLS-1003: Unknown server type in the completion token: foo.");
+        .startsWith("DL-TOOLS-1003: Unknown server type in the completion token: foo.");
     assertThat(exception.getCategory()).isEqualTo(Category.USER_ERROR);
   }
 
@@ -41,7 +44,7 @@ class ScalarDlCleanupExceptionTest {
 
     // Assert
     assertThat(exception.getMessage())
-        .isEqualTo("DL-TOOLS-2001: Failed to load the state from /tmp/state.");
+        .startsWith("DL-TOOLS-2001: Failed to load the state from /tmp/state.");
     assertThat(exception.getCause()).isSameAs(cause);
     assertThat(exception.getCategory()).isEqualTo(Category.INTERNAL_ERROR);
   }
