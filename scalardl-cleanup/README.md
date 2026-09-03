@@ -43,9 +43,11 @@ flowchart TB
 ## Limitations
 
 - The tool supports **Azure Cosmos DB for NoSQL** only. The tool rejects other configurations including `multi-storage`.
-- Ledger must not share the Coordinator table that its ScalarDB manages with any other ScalarDB instance.
+- If another ScalarDB instance shares the Coordinator table in the Ledger AD's Cosmos DB account, all of that instance's transactional tables must reside in that account.
 - [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled) must have never been enabled.
 - [`coordinator.group_commit.enabled`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatorgroup_commitenabled) must have never been enabled.
+
+Sharing the Coordinator table with other ScalarDB instances is itself supported: the ScalarDB instance that an application uses to reach the namespaces a Ledger function writes to shares it, and `finalize-ledger` finalizes every transactional table in the account no matter which instance owns it. What is not supported is a sharing instance configured with `multi-storage`, because it keeps some of its tables outside the account. The tool cannot detect those tables, so they keep their non-terminal records. In such a case, deleting the Coordinator state records makes those non-terminal records unrecoverable.
 
 ## Prerequisites
 
