@@ -2,7 +2,7 @@
 
 ## What is ScalarDL Cleanup?
 
-ScalarDL Cleanup removes the residual transaction state that a ScalarDL deployment accumulated while it was running a version of ScalarDL that does not support purge, which is a version earlier than ScalarDL 3.14.0. The residual transaction state consists of the following:
+ScalarDL Cleanup is a command-line tool that removes the residual transaction state that a ScalarDL deployment accumulated while it was running a version of ScalarDL that does not support purge, which is a version earlier than ScalarDL 3.14.0. The residual transaction state consists of the following:
 
 - **Coordinator state records:** The transaction state records that ScalarDB manages in the Coordinator table on the Ledger side.
 - **Request proofs:** The records that Auditor stores for each client request to detect Byzantine faults.
