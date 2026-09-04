@@ -7,7 +7,7 @@ ScalarDL Cleanup is a command-line tool that removes the residual transaction st
 - **Coordinator state records:** The transaction state records that ScalarDB manages in the Coordinator table on the Ledger side.
 - **Request proofs:** The records that Auditor stores for each client request to detect Byzantine faults.
 
-Because ScalarDL does not purge this state by default, it accumulates over time and consumes storage. ScalarDL 3.14.0 and later can purge it, but none of the purge options remove the state that an earlier version wrote, because that state lacks the information that purge requires. Use this tool to remove that state after you upgrade an existing deployment and before you enable purge on it. For details about the residual transaction state and the purge options, see [Purge the Residual Transaction State](https://scalardl.scalar-labs.com/docs/latest/purge-residual-transaction-state/).
+Because ScalarDL does not purge this state by default, it accumulates over time and consumes storage. ScalarDL 3.14.0 and later can purge it, but none of the purge options remove the state that an earlier version wrote, because that state lacks the information that purge requires. Use this tool to remove that state after you upgrade an existing deployment to 3.14.0 or later. As a rule, you should remove it before you enable purge on that deployment. For details about the residual transaction state and the purge options, see [Purge the Residual Transaction State](https://scalardl.scalar-labs.com/docs/latest/purge-residual-transaction-state/).
 
 The tool is packaged as the container image `ghcr.io/scalar-labs/scalardl-cleanup` and runs as one-shot Kubernetes Jobs in the cluster that already runs Ledger and Auditor. You can run it while Ledger and Auditor are serving traffic. Even so, running it during a window with no traffic or little traffic is recommended, because the commands then finish sooner.
 
@@ -17,9 +17,9 @@ The tool provides three commands, split across the two administrative domains (A
 
 | Command | AD | Description |
 |-----------------------|---------|--------------------------------------------------------------------------------------------------------------------------|
-| `finalize-ledger`     | Ledger  | Drives every unfinished record in every transactional table to a terminal state, then prints a **completion token**.    |
-| `finalize-auditor`    | Auditor | Releases every unreleased asset lock, deletes the request proofs that are safe to remove, then prints a **completion token**. |
-| `cleanup-coordinator` | Ledger  | Deletes the Coordinator state records that are safe to remove. Requires **both** completion tokens.                     |
+| `finalize-ledger`     | Ledger  | Drives every unfinished record in every transactional table to a terminal state, then prints a **completion token**. Accesses Cosmos DB. |
+| `finalize-auditor`    | Auditor | Releases every unreleased asset lock, deletes the request proofs that are safe to remove, then prints a **completion token**. Accesses Cosmos DB and Auditor. |
+| `cleanup-coordinator` | Ledger  | Deletes the Coordinator state records that are safe to remove. Requires **both** completion tokens. Accesses Cosmos DB. |
 
 You run the commands in three steps:
 
@@ -43,6 +43,7 @@ flowchart TB
 ## Limitations
 
 - The tool supports **Azure Cosmos DB for NoSQL** only. The tool rejects other configurations including `multi-storage`.
+- The tool supports ScalarDL 3.14.0 or later.
 - If another ScalarDB instance shares the Coordinator table in the Ledger AD's Cosmos DB account, all of that instance's transactional tables must reside in that account.
 - [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled) must have never been enabled.
 - [`coordinator.group_commit.enabled`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatorgroup_commitenabled) must have never been enabled.
