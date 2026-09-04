@@ -1,13 +1,13 @@
-# ScalarDL Cleanup
+# ScalarDL Cleanup Tool
 
-## What is ScalarDL Cleanup?
+## What is ScalarDL Cleanup Tool?
 
-ScalarDL Cleanup is a command-line tool that removes the residual transaction state that a ScalarDL deployment accumulated while it was running a version of ScalarDL that does not support purge, which is a version earlier than ScalarDL 3.14.0. The residual transaction state consists of the following:
+ScalarDL Cleanup Tool is a command-line utility that removes the residual transaction state that a ScalarDL deployment accumulated while it was running a version of ScalarDL that does not support purge, which is a version earlier than ScalarDL 3.14.0. The residual transaction state consists of the following:
 
 - **Coordinator state records:** The transaction state records that ScalarDB manages in the Coordinator table on the Ledger side.
 - **Request proofs:** The records that Auditor stores for each client request to detect Byzantine faults.
 
-Because ScalarDL does not purge this state by default, it accumulates over time and consumes storage. ScalarDL 3.14.0 and later can purge it, but none of the purge options remove the state that an earlier version wrote, because that state lacks the information that purge requires. Use this tool to remove that state after you upgrade an existing deployment to 3.14.0 or later. As a rule, you should remove it before you enable purge on that deployment. For details about the residual transaction state and the purge options, see [Purge the Residual Transaction State](https://scalardl.scalar-labs.com/docs/latest/purge-residual-transaction-state/).
+Because ScalarDL does not purge this state by default, it accumulates over time and consumes storage. ScalarDL 3.14.0 and later can purge it, but none of the purge options remove the state that an earlier version wrote, because that state lacks the information that purge requires. Use this tool to remove that state after you upgrade an existing deployment to 3.14.0 or later. For details about the residual transaction state, the purge options, and the recommended order for enabling purge and running this tool, see [Purge the Residual Transaction State](https://scalardl.scalar-labs.com/docs/latest/purge-residual-transaction-state/).
 
 The tool is packaged as the container image `ghcr.io/scalar-labs/scalardl-cleanup` and runs as one-shot Kubernetes Jobs in the cluster that already runs Ledger and Auditor. You can run it while Ledger and Auditor are serving traffic. Even so, running it during a window with no traffic or little traffic is recommended, because the commands then finish sooner.
 
