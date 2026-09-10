@@ -149,7 +149,7 @@ echo "coordinator.state rows: before=$cs_before after=$cs_after (expected delete
 
 # Nothing may still be pointing at the Coordinator records that were just deleted.
 for table in asset asset_metadata; do
-  unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" ledger "$table")
+  unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" scalar "$table")
   [ "$unsettled" -eq 0 ] \
     || { echo "::error::$table holds $unsettled records left mid-transaction"; exit 1; }
 done
