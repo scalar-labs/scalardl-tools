@@ -7,8 +7,8 @@
 #
 # Required environment:
 #   CLEANUP_VERSION  tag of the scalardl-cleanup image
-#   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary (count_cosmos_records only, and it
-#                    checks for it itself)
+#   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary, needed only by the counting helpers,
+#                    which check for it themselves
 #   RUNNER_TEMP      scratch directory for the rendered manifests
 # and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed. It sets no shell
 # options of its own; the caller is expected to run under `set -euo pipefail`, which some of these
@@ -175,7 +175,7 @@ reset_checkpoint() {
 
 # Run a Job, kill the Pod once it logs the caller's marker, and let the Job's own backoffLimit start
 # the Pod that resumes: the checkpoint PVC outlives the Pod. Writes the killed Pod's log to
-# $RUNNER_TEMP/<job>-interrupted.log and the succeeding Pod's to <job>-resumed.log.
+# $RUNNER_TEMP/<job>-interrupted.log and the resuming Pod's to <job>-resumed.log.
 # Usage: interrupt_and_resume <namespace> <job> <manifest> <started-marker> [timeout]
 interrupt_and_resume() {
   local ns="$1" job="$2" manifest="$3" marker="$4" timeout="${5:-900}"
@@ -202,8 +202,7 @@ interrupt_and_resume() {
     sleep 1
   done
 
-  # A Job that had already retried has dead Pods too, so the replacement below is recognised by
-  # being absent from this snapshot rather than by not being the one killed.
+  # Snapshot the Pods that exist now: the one that resumes is the name that is not among them.
   before=$(kubectl -n "$ns" get pod -l "job-name=$job" -o jsonpath='{.items[*].metadata.name}')
 
   # --force skips the graceful delete so the replacement starts promptly. Safe here because the
@@ -221,6 +220,7 @@ interrupt_and_resume() {
     fi
     names=$(kubectl -n "$ns" get pod -l "job-name=$job" -o jsonpath='{.items[*].metadata.name}')
     for n in $names; do
+      # Take the first name missing from the snapshot.
       case " $before " in *" $n "*) ;; *) resuming="$n"; break ;; esac
     done
     [ -n "$resuming" ] && break
@@ -233,6 +233,7 @@ interrupt_and_resume() {
   ok_pod=$(kubectl -n "$ns" get pod -l "job-name=$job" \
     --field-selector=status.phase=Succeeded -o jsonpath='{.items[0].metadata.name}')
   [ -n "$ok_pod" ] || diag_and_die "$ns" "no succeeded Pod found for job/$job in $ns"
+  [ "$ok_pod" = "$resuming" ] || diag_and_die "$ns" "job/$job resumed in pod/$resuming but succeeded in pod/$ok_pod"
   kubectl -n "$ns" logs "$ok_pod" > "$RUNNER_TEMP/$job-resumed.log"
 }
 
