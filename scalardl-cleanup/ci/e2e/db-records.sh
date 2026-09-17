@@ -93,12 +93,16 @@ db_records_sql() {
   echo "$name ran to completion"
 }
 
-# Usage: db_records_create_schema
-db_records_create_schema() {
-  local script="$RUNNER_TEMP/db-records-create-schema.sql"
+# Create the table if it is not there, and empty it if it is. Truncating rather than dropping and
+# recreating: a recreated Cosmos container gets a new resource id, which the long-lived node's SDK
+# would go on answering from its cache with a 410.
+# Usage: db_records_reset_schema
+db_records_reset_schema() {
+  local script="$RUNNER_TEMP/db-records-reset-schema.sql"
   cat > "$script" <<EOF
 CREATE NAMESPACE IF NOT EXISTS $DB_NS;
 CREATE TABLE IF NOT EXISTS $DB_NS.$DB_TABLE (pk TEXT PRIMARY KEY, val TEXT);
+TRUNCATE TABLE $DB_NS.$DB_TABLE;
 EOF
   db_records_sql "$script"
 }

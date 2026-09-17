@@ -39,11 +39,6 @@ reset_checkpoint "$AUDITOR_NS"
 echo "==> put the servers on ${SCALARDL_OLD_VERSION}"
 SCALARDL_VERSION="$SCALARDL_OLD_VERSION" "$HERE/manage-cluster.sh" change-version
 
-echo "==> drop the previous fixture's ScalarDB records"
-load_ad_credentials
-db_records_sql_init
-db_records_drop_schema
-
 echo "==> reset the schema"
 SCALARDL_VERSION="$SCALARDL_OLD_VERSION" "$HERE/manage-cluster.sh" reset-schema
 
@@ -51,7 +46,9 @@ echo "==> populate data"
 "$HERE/populate.sh" commit-objects
 
 echo "==> leave transaction records non-terminal"
-db_records_create_schema
+load_ad_credentials
+db_records_sql_init
+db_records_reset_schema
 db_records_populate "$RECORD_COUNT"
 prepared_at=$SECONDS
 db_records_verify populated "$RECORD_COUNT"
