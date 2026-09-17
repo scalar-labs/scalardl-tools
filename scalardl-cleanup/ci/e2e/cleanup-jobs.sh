@@ -254,12 +254,21 @@ count_cosmos_held_locks() {
     'SELECT VALUE COUNT(1) FROM c WHERE c.values.lock_type IN (2, 3)'
 }
 
-# Count the records left mid-transaction: such a record still needs its Coordinator record, so zero
-# means cleanup-coordinator orphaned none. tx_state and its values are ScalarDB internals.
+# Count the transaction records left non-terminal: such a record still needs its Coordinator record,
+# so zero means cleanup-coordinator orphaned none. tx_state and its values are ScalarDB internals.
 # Usage: count_cosmos_unsettled_records <endpoint> <key> <database> <container>
 count_cosmos_unsettled_records() {
   count_cosmos_records_by_query "$1" "$2" "$3" "$4" \
     'SELECT VALUE COUNT(1) FROM c WHERE c.values.tx_state IN (1, 2)'
+}
+
+# Abort unless a container holds no non-terminal records.
+# Usage: assert_no_unsettled_records <endpoint> <key> <database> <container>
+assert_no_unsettled_records() {
+  local unsettled
+  unsettled=$(count_cosmos_unsettled_records "$1" "$2" "$3" "$4")
+  [ "$unsettled" -eq 0 ] \
+    || { echo "::error::$3.$4 holds $unsettled non-terminal records"; exit 1; }
 }
 
 # Count items in a container, authenticating with the given account endpoint and key.
