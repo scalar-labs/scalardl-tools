@@ -53,6 +53,8 @@ db_records_sql_init() {
     --from-literal=SCALAR_DB_PASSWORD="$ledger_key" \
     --dry-run=client -o yaml | kubectl apply -f -
 
+  # Recreate the node: the schema reset leaves its Cosmos SDK caching a container that is gone.
+  kubectl -n "$LEDGER_NS" delete deployment scalardb-cluster --ignore-not-found --wait
   COSMOS_URI="$ledger_uri" SCALARDB_VERSION="$SCALARDB_VERSION" \
     envsubst '${LEDGER_NS} ${SCALARDB_VERSION} ${COSMOS_URI}' < "$E2E_DIR/scalardb-cluster.yaml" \
     | kubectl apply -f -
