@@ -5,10 +5,12 @@ on:
     branches: [master]
     paths:
       - 'scalardl-cleanup/**'
+      - '!scalardl-cleanup/ci/e2e/**'
       - '.github/workflows/ci.yaml'
   pull_request:
     paths:
       - 'scalardl-cleanup/**'
+      - '!scalardl-cleanup/ci/e2e/**'
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
 
