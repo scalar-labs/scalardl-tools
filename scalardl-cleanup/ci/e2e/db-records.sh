@@ -76,16 +76,17 @@ scalar.db.sql.default_transaction_mode=two_phase_commit_transaction
 EOF
 }
 
-# Internal helper. Run a SQL script through the CLI and fail if any statement did. The CLI always
-# exits 0, so the output is what has to be judged.
+# Internal helper. Run a SQL script through the CLI and fail if any statement did. The exit status
+# alone is not enough -- the CLI returns 0 even when a statement failed, reporting it as an "Error:"
+# line -- and neither is the log, since a launch failure need not print one.
 # Usage: db_records_sql <script-file>
 db_records_sql() {
-  local name log
+  local name log status=0
   name="$(basename "$1" .sql)"
   log="$RUNNER_TEMP/$name.log"
-  java -jar "$SCALARDB_SQL_CLI" --config "$db_records_config" --file "$1" > "$log" 2>&1 || true
-  if grep -qE '^Error' "$log"; then
-    echo "::error::$name failed"
+  java -jar "$SCALARDB_SQL_CLI" --config "$db_records_config" --file "$1" > "$log" 2>&1 || status=$?
+  if [ "$status" -ne 0 ] || grep -qE '^Error' "$log"; then
+    echo "::error::$name failed (exit status $status)"
     cat "$log"
     exit 1
   fi
