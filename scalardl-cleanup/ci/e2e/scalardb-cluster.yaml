@@ -43,9 +43,12 @@ spec:
               value: "${COSMOS_URI}"
             - name: SCALAR_DB_SQL_ENABLED
               value: "true"
-            # Short, because the node outlives the rebuilds that drop and recreate its table.
+            # Short, so a table this node creates is not shadowed by a stale negative entry.
             - name: SCALAR_DB_METADATA_CACHE_EXPIRATION_TIME_SECS
               value: "1"
+            # Off: the cluster's 60s default would reap the fixture's transactions and roll them back.
+            - name: SCALAR_DB_ACTIVE_TRANSACTION_MANAGEMENT_EXPIRATION_TIME_MILLIS
+              value: "-1"
           ports:
             - containerPort: 60053
           startupProbe:
