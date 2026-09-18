@@ -53,6 +53,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Resolve the ScalarDB version
+        # Read it from the build, so the fixture's node and SQL CLI cannot drift from the tool's.
+        run: |
+          set -euo pipefail
+          v=$(./gradlew :cli:properties -q | awk '$1 == "scalarDbVersion:" { print $2 }')
+          [ -n "$v" ] || { echo "::error::could not read scalarDbVersion from the build"; exit 1; }
+          echo "Fixture ScalarDB version: $v"
+          echo "SCALARDB_VERSION=$v" >> "$GITHUB_ENV"
+
       - name: Build the cleanup container image
         # The cleanup commands run from the manifests, which deploy the container image, so build it
         # here with the same :cli:docker task the release workflows use.
@@ -76,6 +85,16 @@ jobs:
           [ -n "$bin" ] || { echo "::error::cosmosdbshell binary not found in the archive"; exit 1; }
           chmod +x "$bin"
           echo "COSMOSDB_SHELL=$bin" >> "$GITHUB_ENV"
+
+      - name: Download ScalarDB Cluster SQL CLI
+        # setup-fixture.sh leaves records non-terminal by preparing transactions it never commits.
+        run: |
+          set -euo pipefail
+          v="$SCALARDB_VERSION"
+          url="https://github.com/scalar-labs/scalardb/releases/download/v${v}/scalardb-cluster-sql-cli-${v}-all.jar"
+          jar="$RUNNER_TEMP/scalardb-cluster-sql-cli.jar"
+          curl -sSfL -o "$jar" "$url"
+          echo "SCALARDB_SQL_CLI=$jar" >> "$GITHUB_ENV"
 
       - name: Download ScalarDL HashStore CLI
         # The garbage is created by the old-version client, so the CLI tracks SCALARDL_OLD_VERSION.
@@ -154,6 +173,20 @@ jobs:
       - name: Collect diagnostics - interrupt and resume
         if: ${{ !cancelled() && steps.interrupt_resume.outcome == 'failure' }}
         run: ./ci/e2e/collect-diagnostics.sh 'scenario - interrupt and resume'
+
+      - name: Drop the fixture's ScalarDB records
+        if: always()
+        run: |
+          set -euo pipefail
+          source ./ci/e2e/db-records.sh
+          if [ ! -f "${SCALARDB_SQL_CLI:-}" ] \
+            || ! kubectl -n "$LEDGER_NS" get deployment scalardb-cluster >/dev/null 2>&1; then
+            echo "No SQL CLI or no cluster node to drop them with; nothing to do."
+            exit 0
+          fi
+          load_ad_credentials
+          db_records_sql_init
+          db_records_drop_schema
 
       - name: Drop Cosmos schema
         if: always()

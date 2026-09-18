@@ -26,6 +26,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 E2E="$HERE/.."
 source "$E2E/run-cleanup.sh"
+source "$E2E/db-records.sh"
 
 require_vars RUNNER_TEMP RECORD_COUNT SCALARDL_NEW_VERSION
 
@@ -97,12 +98,25 @@ scalar.dl.tools.scan.cosmos.max_threads=1'
 
 init_cleanup_commands
 
+# Interrupting finalize-ledger only proves something if the scan has records to settle.
+db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
+[ "$db_unsettled" -eq "$((2 * RECORD_COUNT))" ] \
+  || { echo "::error::$DB_NS.$DB_TABLE holds $db_unsettled non-terminal records (expected $((2 * RECORD_COUNT)))"; exit 1; }
+
 setup_ledger_ad
 interrupt_and_resume "$LEDGER_NS" scalardl-finalize-ledger \
   "$work/ledger-ad/finalize-ledger.yaml" "$SCAN_STARTED"
 assert_resumed_same_run scalardl-finalize-ledger
 ledger_out=$(read_job_output_json "$LEDGER_NS" scalardl-finalize-ledger)
 ledger_token=$(extract_completion_token finalize-ledger "$ledger_out")
+
+# Between the interrupted run and the resumed one, every record has to end where an uninterrupted
+# run would leave it -- none skipped, none finalized twice.
+db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+[ "$db_unsettled" -eq 0 ] \
+  || { echo "::error::finalize-ledger left $db_unsettled non-terminal records in $DB_NS.$DB_TABLE"; exit 1; }
+db_records_verify finalized "$RECORD_COUNT"
 
 rp_before=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
 setup_auditor_ad
@@ -137,23 +151,28 @@ coord_out=$(read_job_output_json "$LEDGER_NS" scalardl-cleanup-coordinator)
 [ "$(printf '%s' "$coord_out" | jq -r '.status_code')" = "OK" ] \
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
 
-# What an uninterrupted run of this fixture reclaims: exactly the committed transactions settled
-# before the boundary are removed, and the rows finalize-auditor wrote while aborting the stranded
-# nonces survive. This fixture sees no traffic after the tokens, so nothing else is in play.
 cs_after=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
-echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$RECORD_COUNT)"
-[ "$((cs_before - cs_after))" -eq "$RECORD_COUNT" ] \
-  || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $RECORD_COUNT)"; exit 1; }
-[ "$cs_after" -eq "$((2 * RECORD_COUNT))" ] \
-  || { echo "::error::coordinator.state has $cs_after rows after cleanup (expected $((2 * RECORD_COUNT)))"; exit 1; }
+# Settled before the deletable-before boundary: the committed put transactions, and the one the
+# fixture committed.
+deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS))
+# Written after it: finalize-ledger's aborts and finalize-auditor's of the stranded nonces. This
+# fixture sees no traffic after the tokens.
+surviving=$((DB_ABORTED_COORDINATOR_ROWS + 2 * RECORD_COUNT))
+echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$deletable)"
+[ "$((cs_before - cs_after))" -eq "$deletable" ] \
+  || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $deletable)"; exit 1; }
+[ "$cs_after" -eq "$surviving" ] \
+  || { echo "::error::coordinator.state has $cs_after rows after cleanup (expected $surviving)"; exit 1; }
 
-# Nothing may still be pointing at the Coordinator records that were just deleted.
-for table in asset asset_metadata; do
-  unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" scalar "$table")
-  [ "$unsettled" -eq 0 ] \
-    || { echo "::error::$table holds $unsettled records left mid-transaction"; exit 1; }
-done
-echo "no records left mid-transaction in asset or asset_metadata"
+# Nothing may still be pointing at the Coordinator records that were just deleted. The scalar ones
+# are a sanity check only: setup-fixture.sh leaves nothing non-terminal in the Ledger's own tables.
+assert_no_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE"
+assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset
+assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset_metadata
+echo "no non-terminal records in the fixture's table or the Ledger's own"
+
+# Verified again: the deletion must not have disturbed them.
+db_records_verify finalized "$RECORD_COUNT"
 
 echo "== Verify the contracts still run =="
 # Interrupting is where a double delete or a skipped record would show up, so exercise the assets

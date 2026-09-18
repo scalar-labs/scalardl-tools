@@ -1,0 +1,91 @@
+# A ScalarDB Cluster instance sharing ScalarDL's Coordinator table, deployed into ${LEDGER_NS}.
+# Standalone mode, so no membership, ServiceAccount or RBAC.
+#
+# envsubst variables (see db-records.sh):
+#   ${LEDGER_NS}          k8s namespace, the Ledger's, because the account is the Ledger's
+#   ${SCALARDB_VERSION}   image tag, matching the ScalarDB the cleanup tool builds against
+#   ${COSMOS_URI}         Cosmos DB account URI, read back from the deployed Ledger's own config
+#
+# The account key goes in the scalardb-cluster-credentials Secret, pulled in below with envFrom.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalardb-cluster
+  namespace: ${LEDGER_NS}
+  labels:
+    app: scalardb-cluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scalardb-cluster
+  template:
+    metadata:
+      labels:
+        app: scalardb-cluster
+    spec:
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: scalardb-cluster
+          image: ghcr.io/scalar-labs/scalardb-cluster-node:${SCALARDB_VERSION}
+          envFrom:
+            - secretRef:
+                name: scalardb-cluster-credentials
+          env:
+            - name: SCALAR_DB_CLUSTER_NODE_STANDALONE_MODE_ENABLED
+              value: "true"
+            - name: SCALAR_DB_STORAGE
+              value: "cosmos"
+            - name: SCALAR_DB_CONTACT_POINTS
+              value: "${COSMOS_URI}"
+            - name: SCALAR_DB_SQL_ENABLED
+              value: "true"
+            # Short, so a table this node creates is not shadowed by a stale negative entry.
+            - name: SCALAR_DB_METADATA_CACHE_EXPIRATION_TIME_SECS
+              value: "1"
+            # Off: the cluster's 60s default would reap the fixture's transactions and roll them back.
+            - name: SCALAR_DB_ACTIVE_TRANSACTION_MANAGEMENT_EXPIRATION_TIME_MILLIS
+              value: "-1"
+          ports:
+            - containerPort: 60053
+          startupProbe:
+            exec:
+              command:
+                - /usr/local/bin/grpc_health_probe
+                - -addr=:60053
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/grpc_health_probe
+                - -addr=:60053
+            failureThreshold: 6
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: scalardb-cluster
+  namespace: ${LEDGER_NS}
+spec:
+  selector:
+    app: scalardb-cluster
+  ports:
+    - protocol: TCP
+      port: 60053
+      targetPort: 60053
