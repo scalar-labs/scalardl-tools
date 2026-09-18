@@ -41,8 +41,6 @@ jobs:
       # than "latest" keeps the default imagePullPolicy at IfNotPresent, so the locally loaded image
       # is used and nothing is pulled from ghcr.
       CLEANUP_VERSION: dev
-      # The ScalarDB the cleanup tool builds against; the fixture's node and SQL CLI track it.
-      SCALARDB_VERSION: 3.19.1
     steps:
       - uses: actions/checkout@v7
 
@@ -54,6 +52,15 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Resolve the ScalarDB version
+        # Read it from the build, so the fixture's node and SQL CLI cannot drift from the tool's.
+        run: |
+          set -euo pipefail
+          v=$(./gradlew :cli:properties -q | awk '$1 == "scalarDbVersion:" { print $2 }')
+          [ -n "$v" ] || { echo "::error::could not read scalarDbVersion from the build"; exit 1; }
+          echo "Fixture ScalarDB version: $v"
+          echo "SCALARDB_VERSION=$v" >> "$GITHUB_ENV"
 
       - name: Build the cleanup container image
         # The cleanup commands run from the manifests, which deploy the container image, so build it
