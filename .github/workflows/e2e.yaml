@@ -1,13 +1,6 @@
 name: E2E
 
-# End-to-end test for ScalarDL Cleanup. The tool reclaims garbage left behind by an older ScalarDL
-# server, while coordinating with the upgraded server. This test reproduces exactly that:
-#
-#   1. Deploy ScalarDL Ledger + Auditor at the old version on minikube against a real Cosmos DB,
-#      load the schema, and populate committed + stranded data with the old client (HashStore CLI).
-#   2. Upgrade both servers in place to the new version (which exposes the privileged
-#      RecoverAssetLock RPC that finalize-auditor needs).
-#   3. Run the scenario script in ci/e2e/scenarios.
+# End-to-end test for ScalarDL Cleanup against a real Cosmos DB. Runs scenarios in ci/e2e/scenarios.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -107,6 +100,7 @@ jobs:
         run: minikube image load "ghcr.io/scalar-labs/scalardl-cleanup:$CLEANUP_VERSION"
 
       - name: Deploy ScalarDL (old version) + load schema
+        id: deploy
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
@@ -114,56 +108,58 @@ jobs:
           SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         run: ./ci/e2e/manage-cluster.sh deploy
 
-      - name: Populate committed data
-        run: ./ci/e2e/populate.sh commit-objects
+      # Diagnostics are collected per step, not once at the end of the job: the scenarios below keep
+      # running after an earlier one failed and each rebuilds the fixture, so a single dump would
+      # only ever describe the last scenario. collect-diagnostics.sh has the details.
+      #
+      # `!cancelled() &&` is not redundant: an `if:` with no status check function is evaluated as
+      # `success() && ...`, which is false precisely when the step to diagnose failed.
+      - name: Collect diagnostics - deploy
+        if: ${{ !cancelled() && steps.deploy.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'deploy'
 
-      - name: Generate stranded locks (Ledger down)
-        run: ./ci/e2e/populate.sh strand-locks
-
-      - name: Write populated-assets metadata
-        run: ./ci/e2e/populate.sh write-metadata
-
-      - name: Upgrade ScalarDL to the new version
+      - name: Run scenario - Auditor without RecoverAssetLock
+        id: old_auditor
         env:
-          SCALARDL_VERSION: ${{ env.SCALARDL_NEW_VERSION }}
-        run: ./ci/e2e/manage-cluster.sh upgrade
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          RECORD_COUNT: 1
+        run: ./ci/e2e/scenarios/old-auditor.sh
+
+      - name: Collect diagnostics - Auditor without RecoverAssetLock
+        if: ${{ !cancelled() && steps.old_auditor.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - Auditor without RecoverAssetLock'
 
       - name: Run scenario - happy path
+        id: happy_path
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
         run: ./ci/e2e/scenarios/happy-path.sh
 
-      - name: Upload populated-assets
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-populated-assets
-          path: ${{ runner.temp }}/populated-assets.json
-          if-no-files-found: warn
+      - name: Collect diagnostics - happy path
+        if: ${{ !cancelled() && steps.happy_path.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - happy path'
 
-      - name: Collect diagnostics on failure
-        if: failure()
-        run: |
-          set +e
-          for ns in ledger-e2e auditor-e2e; do
-            echo "===== namespace: $ns ====="
-            kubectl -n "$ns" get all -o wide
-            # `get all` omits PVCs; the cleanup Jobs cannot start without their checkpoint volume.
-            kubectl -n "$ns" get pvc -o wide
-            kubectl -n "$ns" get events --sort-by=.lastTimestamp
-            kubectl -n "$ns" describe pods
-            for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
-              echo "----- logs $p -----"
-              kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=300
-            done
-          done
-          echo "===== port-forward logs ====="
-          cat /tmp/pf-*.log 2>/dev/null || true
+      - name: Run scenario - interrupt and resume
+        id: interrupt_resume
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          RECORD_COUNT: 20 # Enough rows that the scan is still running when the Pod is deleted.
+        run: ./ci/e2e/scenarios/interrupt-resume.sh
+
+      - name: Collect diagnostics - interrupt and resume
+        if: ${{ !cancelled() && steps.interrupt_resume.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - interrupt and resume'
 
       - name: Drop Cosmos schema
         if: always()
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
-          CR_PAT: ${{ secrets.CR_PAT }}
           SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         # Fatal on purpose: the shared Cosmos account must be left clean, so a failed
         # drop fails the job to alert an operator (who then drops it manually).

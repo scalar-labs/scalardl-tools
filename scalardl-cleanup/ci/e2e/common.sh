@@ -16,8 +16,8 @@ export AUDITOR_NS="auditor-e2e"
 export AUDITOR_TLS_SAN="auditor.e2e.scalar-labs.com"
 CERTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/certs"
 
-# require_vars VAR...
 # Abort unless every named environment variable is set and non-empty.
+# Usage: require_vars <var>...
 require_vars() {
   for v in "$@"; do
     if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
@@ -25,6 +25,7 @@ require_vars() {
 }
 
 # Dump everything useful about a namespace's workloads, then fail.
+# Usage: diag_and_die <namespace> <message>
 diag_and_die() {
   local ns="$1" msg="$2"
   echo "::error::${msg}"
@@ -39,20 +40,36 @@ diag_and_die() {
   exit 1
 }
 
-# Poll a Job for complete/failed (kubectl wait --for=complete hangs on failure),
-# printing diagnostics inline the moment it fails or times out.
-wait_for_job() {
-  local ns="$1" job="$2" timeout="${3:-300}" waited=0
+# Poll a Job until it reaches the awaited condition (kubectl wait --for=complete hangs on failure),
+# printing diagnostics inline the moment it reaches the other one or times out.
+# Usage: wait_for_job_condition <namespace> <job> <awaited: Complete|Failed> <timeout>
+wait_for_job_condition() {
+  local ns="$1" job="$2" awaited="$3" timeout="$4" waited=0 other
+  if [ "$awaited" = Complete ]; then other=Failed; else other=Complete; fi
   while true; do
-    if kubectl -n "$ns" get "job/$job" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then
-      echo "job/$job complete"; return 0
+    if job_condition_true "$ns" "$job" "$awaited"; then
+      echo "job/$job reached $awaited"; return 0
     fi
-    if kubectl -n "$ns" get "job/$job" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then
-      diag_and_die "$ns" "job/$job failed"
+    if job_condition_true "$ns" "$job" "$other"; then
+      diag_and_die "$ns" "job/$job reached $other but $awaited was expected"
     fi
     if (( waited >= timeout )); then
-      diag_and_die "$ns" "job/$job did not complete within ${timeout}s"
+      diag_and_die "$ns" "job/$job reached neither $awaited nor $other within ${timeout}s"
     fi
     sleep 5; waited=$((waited + 5))
   done
 }
+
+# Usage: job_condition_true <namespace> <job> <condition>
+job_condition_true() {
+  kubectl -n "$1" get "job/$2" \
+    -o jsonpath="{.status.conditions[?(@.type==\"$3\")].status}" 2>/dev/null | grep -q True
+}
+
+# Wait for a Job to succeed.
+# Usage: wait_for_job <namespace> <job> [timeout]
+wait_for_job() { wait_for_job_condition "$1" "$2" Complete "${3:-300}"; }
+
+# Wait for a Job to fail.
+# Usage: wait_for_job_failure <namespace> <job> [timeout]
+wait_for_job_failure() { wait_for_job_condition "$1" "$2" Failed "${3:-300}"; }
