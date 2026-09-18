@@ -108,42 +108,21 @@ jobs:
           SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
         run: ./ci/e2e/manage-cluster.sh deploy
 
-      # Diagnostics are collected per step, not once at the end of the job: the scenarios below keep
-      # running after an earlier one failed and each rebuilds the fixture, so a single dump would
-      # only ever describe the last scenario. collect-diagnostics.sh has the details.
-      #
-      # `!cancelled() &&` is not redundant: an `if:` with no status check function is evaluated as
-      # `success() && ...`, which is false precisely when the step to diagnose failed.
-      - name: Collect diagnostics - deploy
-        if: ${{ !cancelled() && steps.deploy.outcome == 'failure' }}
-        run: ./ci/e2e/collect-diagnostics.sh 'deploy'
-
       - name: Run scenario - Auditor without RecoverAssetLock
-        id: old_auditor
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
           RECORD_COUNT: 1
         run: ./ci/e2e/scenarios/old-auditor.sh
 
-      - name: Collect diagnostics - Auditor without RecoverAssetLock
-        if: ${{ !cancelled() && steps.old_auditor.outcome == 'failure' }}
-        run: ./ci/e2e/collect-diagnostics.sh 'scenario - Auditor without RecoverAssetLock'
-
       - name: Run scenario - happy path
-        id: happy_path
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
           COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
         run: ./ci/e2e/scenarios/happy-path.sh
 
-      - name: Collect diagnostics - happy path
-        if: ${{ !cancelled() && steps.happy_path.outcome == 'failure' }}
-        run: ./ci/e2e/collect-diagnostics.sh 'scenario - happy path'
-
       - name: Run scenario - interrupt and resume
-        id: interrupt_resume
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
         env:
           COSMOS_URI: ${{ secrets.COSMOS_URI }}
@@ -151,9 +130,24 @@ jobs:
           RECORD_COUNT: 20 # Enough rows that the scan is still running when the Pod is deleted.
         run: ./ci/e2e/scenarios/interrupt-resume.sh
 
-      - name: Collect diagnostics - interrupt and resume
-        if: ${{ !cancelled() && steps.interrupt_resume.outcome == 'failure' }}
-        run: ./ci/e2e/collect-diagnostics.sh 'scenario - interrupt and resume'
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          for ns in ledger-e2e auditor-e2e; do
+            echo "===== namespace: $ns ====="
+            kubectl -n "$ns" get all -o wide
+            # `get all` omits PVCs; the cleanup Jobs cannot start without their checkpoint volume.
+            kubectl -n "$ns" get pvc -o wide
+            kubectl -n "$ns" get events --sort-by=.lastTimestamp
+            kubectl -n "$ns" describe pods
+            for p in $(kubectl -n "$ns" get pods -o name 2>/dev/null); do
+              echo "----- logs $p -----"
+              kubectl -n "$ns" logs "$p" --all-containers --prefix --tail=300
+            done
+          done
+          echo "===== port-forward logs ====="
+          cat /tmp/pf-*.log 2>/dev/null || true
 
       - name: Drop Cosmos schema
         if: always()
