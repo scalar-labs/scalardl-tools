@@ -93,7 +93,8 @@ echo "request_proof rows: before=$rp_before_cleanup after=$rp_after_cleanup"
 [ "$rp_after_cleanup" -eq "$rp_before_cleanup" ] \
   || { echo "::error::cleanup-coordinator changed request_proof from $rp_before_cleanup to $rp_after_cleanup"; exit 1; }
 
-# Nothing may still be pointing at the Coordinator records that were just deleted.
+# Nothing may still be pointing at the Coordinator records that were just deleted. The scalar ones
+# are a sanity check only: setup-fixture.sh leaves nothing non-terminal in the Ledger's own tables.
 assert_no_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE"
 assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset
 assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset_metadata
