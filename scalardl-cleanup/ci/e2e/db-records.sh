@@ -23,7 +23,8 @@ source "$E2E_DIR/port-forward.sh"
 DB_NS="e2e_db"
 DB_TABLE="records"
 
-# Mirrors RecoveryHandler.n in ScalarDB: how long recovery leaves a prepared record alone.
+# Mirrors RecoveryHandler.TRANSACTION_LIFETIME_MILLIS in ScalarDB: how long recovery leaves a
+# prepared record alone.
 RECOVERY_EXPIRY_SECS=15
 
 # The cluster node's gRPC port, forwarded to the same port locally.

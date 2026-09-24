@@ -34,9 +34,11 @@ require_vars RUNNER_TEMP RECORD_COUNT SCALARDL_NEW_VERSION
 # on it, rather than on the "starting a new run" line that precedes any scan state, is what makes
 # the replacement Pod resume a scan instead of beginning one.
 SCAN_STARTED='Cosmos DB physical partitions:'
+# finalize-ledger sweeps several tables and the line above names none of them, so the kill would
+# always land in whichever it scans first. Name the fixture's table, the only one with work to do.
+LEDGER_SCAN_STARTED="FeedRanges for $DB_NS.$DB_TABLE"
 # What a Pod logs when it picks up scan state the interrupted run left behind: either it reloaded a
-# table's partition list, or it skipped a table that run had already finished. Which of the two
-# appears depends on how far the interrupted Pod got, and finalize-ledger sweeps several tables.
+# table's partition list, or it skipped a table that run had already finished.
 SCAN_RESUMED='Loaded [0-9]+ persisted FeedRanges|Skipping already'
 
 # The line each command writes when it begins a run of its own, which is how the assertions tell a
@@ -45,9 +47,9 @@ FINALIZE_STARTED='Starting a new run at'
 CLEANUP_STARTED='Starting a new run.'
 
 # The resuming Pod must pick the interrupted run up rather than begin its own.
-# Usage: assert_resumed <job> <started-marker>
+# Usage: assert_resumed <job> <started-marker> [resumed-marker]
 assert_resumed() {
-  local job="$1" marker="$2" log
+  local job="$1" marker="$2" resumed="${3:-$SCAN_RESUMED}" log
   log="$RUNNER_TEMP/$job-resumed.log"
   grep -q 'resuming the previous run' "$log" \
     || { echo "::error::$job did not resume the interrupted run"; exit 1; }
@@ -55,8 +57,8 @@ assert_resumed() {
     echo "::error::$job started a new run instead of resuming the interrupted one"; exit 1
   fi
   # The checkpoint carries the scan's own state too, not just the run's boundary.
-  grep -qE "$SCAN_RESUMED" "$log" \
-    || { echo "::error::$job kept no scan state from the interrupted run"; exit 1; }
+  grep -qE "$resumed" "$log" \
+    || { echo "::error::$job kept no scan state matching '$resumed'"; exit 1; }
   # How far the resumed run got, for the log only: the tool logs nothing that would show a mid-page
   # resume from a continuation token, so there is nothing to assert on.
   grep -o 'Scan complete for [^ ]* [0-9]* records' "$log" || true
@@ -64,10 +66,10 @@ assert_resumed() {
 
 # The finalize commands also log which run they started and which they resumed, so for them the
 # timestamps must match -- and the completion token is derived from that timestamp.
-# Usage: assert_resumed_same_run <job>
+# Usage: assert_resumed_same_run <job> [resumed-marker]
 assert_resumed_same_run() {
   local job="$1" started resumed
-  assert_resumed "$job" "$FINALIZE_STARTED"
+  assert_resumed "$job" "$FINALIZE_STARTED" "${2:-$SCAN_RESUMED}"
   # `|| true` keeps a no-match (grep exit 1, fatal under `set -o pipefail`) from aborting before the
   # empty-check below can report which log line was missing.
   started=$(grep -o "$FINALIZE_STARTED [^ ]*" "$RUNNER_TEMP/$job-interrupted.log" \
@@ -106,8 +108,10 @@ echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
 
 setup_ledger_ad
 interrupt_and_resume "$LEDGER_NS" scalardl-finalize-ledger \
-  "$work/ledger-ad/finalize-ledger.yaml" "$SCAN_STARTED"
-assert_resumed_same_run scalardl-finalize-ledger
+  "$work/ledger-ad/finalize-ledger.yaml" "$LEDGER_SCAN_STARTED"
+# Naming the table fails a kill that landed after it rather than letting the run pass unexercised.
+assert_resumed_same_run scalardl-finalize-ledger \
+  "Loaded [0-9]+ persisted FeedRanges for $DB_NS\.$DB_TABLE"
 ledger_out=$(read_job_output_json "$LEDGER_NS" scalardl-finalize-ledger)
 ledger_token=$(extract_completion_token finalize-ledger "$ledger_out")
 
