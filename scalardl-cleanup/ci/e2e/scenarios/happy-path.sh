@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Scenario: every command in run-cleanup.sh, in the documented apply order, against a cluster
-# holding both committed data and stranded Auditor locks.
+# holding committed data, stranded Auditor locks, and transaction records left non-terminal.
 #
 # New traffic runs once the finalize commands have taken their completion tokens, because that is
 # the normal way to run the tool: the servers keep serving. The tokens fix the deletable-before
@@ -22,6 +22,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 E2E="$HERE/.."
 source "$E2E/run-cleanup.sh"
+source "$E2E/db-records.sh"
 
 require_vars RUNNER_TEMP RECORD_COUNT SCALARDL_NEW_VERSION
 
@@ -35,7 +36,19 @@ echo "== Run the finalize commands and check what they reclaimed =="
 
 init_cleanup_commands
 
+# Verify the non-terminal records are there first, or the zero afterwards proves nothing.
+db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
+[ "$db_unsettled" -eq "$((2 * RECORD_COUNT))" ] \
+  || { echo "::error::$DB_NS.$DB_TABLE holds $db_unsettled non-terminal records (expected $((2 * RECORD_COUNT)))"; exit 1; }
+
 run_finalize_ledger
+
+db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+[ "$db_unsettled" -eq 0 ] \
+  || { echo "::error::finalize-ledger left $db_unsettled non-terminal records in $DB_NS.$DB_TABLE"; exit 1; }
+# Terminal is not enough: each record has to have gone the way aborting its transaction takes it.
+db_records_verify finalized "$RECORD_COUNT"
 
 rp_before=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
 run_finalize_auditor
@@ -61,15 +74,17 @@ run_cleanup_coordinator "$ledger_token" "$auditor_token"
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
 
 cs_after=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
-# Only the RECORD_COUNT committed put transactions are settled before the deletable-before boundary,
-# so exactly those are removed. What survives is everything written after it: finalize-auditor
-# aborted each stranded lock's nonce (2 * RECORD_COUNT), and the new traffic committed RECORD_COUNT
-# more.
-echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$RECORD_COUNT)"
-[ "$((cs_before - cs_after))" -eq "$RECORD_COUNT" ] \
-  || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $RECORD_COUNT)"; exit 1; }
-[ "$cs_after" -eq "$((3 * RECORD_COUNT))" ] \
-  || { echo "::error::coordinator.state has $cs_after rows after cleanup (expected $((3 * RECORD_COUNT)))"; exit 1; }
+# Settled before the deletable-before boundary: the committed put transactions, and the one the
+# fixture committed.
+deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS))
+# Written after it: finalize-ledger's aborts, finalize-auditor's of the stranded nonces, and the
+# new traffic's commits.
+surviving=$((DB_ABORTED_COORDINATOR_ROWS + 2 * RECORD_COUNT + RECORD_COUNT))
+echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$deletable)"
+[ "$((cs_before - cs_after))" -eq "$deletable" ] \
+  || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $deletable)"; exit 1; }
+[ "$cs_after" -eq "$surviving" ] \
+  || { echo "::error::coordinator.state has $cs_after rows after cleanup (expected $surviving)"; exit 1; }
 
 # cleanup-coordinator deletes Coordinator state only; the request proofs the new traffic wrote are
 # not its to touch.
@@ -78,13 +93,15 @@ echo "request_proof rows: before=$rp_before_cleanup after=$rp_after_cleanup"
 [ "$rp_after_cleanup" -eq "$rp_before_cleanup" ] \
   || { echo "::error::cleanup-coordinator changed request_proof from $rp_before_cleanup to $rp_after_cleanup"; exit 1; }
 
-# Nothing may still be pointing at the Coordinator records that were just deleted.
-for table in asset asset_metadata; do
-  unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" scalar "$table")
-  [ "$unsettled" -eq 0 ] \
-    || { echo "::error::$table holds $unsettled records left mid-transaction"; exit 1; }
-done
-echo "no records left mid-transaction in asset or asset_metadata"
+# Nothing may still be pointing at the Coordinator records that were just deleted. The scalar ones
+# are a sanity check only: setup-fixture.sh leaves nothing non-terminal in the Ledger's own tables.
+assert_no_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE"
+assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset
+assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset_metadata
+echo "no non-terminal records in the fixture's table or the Ledger's own"
+
+# Verified again: the deletion must not have disturbed them.
+db_records_verify finalized "$RECORD_COUNT"
 
 echo "== Verify the contracts still run =="
 # Three categories of RECORD_COUNT: the committed data, the stranded ids, and the new traffic.
