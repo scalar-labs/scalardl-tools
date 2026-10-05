@@ -1,5 +1,5 @@
 plugins {
-    id("com.diffplug.spotless") version "8.10.2"
+    id("com.diffplug.spotless") version "8.10.3"
 }
 
 subprojects {
@@ -13,7 +13,7 @@ subprojects {
     project.version = project.findProperty('projectVersion') ?: '4.0.0-SNAPSHOT'
 
     ext {
-        guavaVersion = '33.7.1-jre'
+        guavaVersion = '33.7.2-jre'
         slf4jVersion = '2.0.20'
         log4jVersion = '2.26.1'
         jacksonVersion = '2.22.3'
@@ -27,7 +27,7 @@ subprojects {
         errorproneVersion = '2.50.0'
         errorpronePluginVersion = '5.1.1'
         spotbugsVersion = '4.10.4'
-        spotbugsPluginVersion = '6.5.11'
+        spotbugsPluginVersion = '6.5.12'
         googleJavaFormatVersion = '1.35.0'
         // azureCosmosVersion is resolved dynamically from ScalarDB's transitive dependencies
     }
