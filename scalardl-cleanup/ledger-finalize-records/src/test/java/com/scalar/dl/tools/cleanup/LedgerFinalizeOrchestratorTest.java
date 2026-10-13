@@ -23,6 +23,7 @@ import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
@@ -245,6 +246,32 @@ class LedgerFinalizeOrchestratorTest {
     // Act & Assert
     assertThatThrownBy(orchestrator::execute)
         .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("ns1.tbl1");
+
+    verify(scanner, never()).scan(anyString(), anyString(), any());
+    assertThat(new LedgerFinalizeStateManager(tempDir).load()).isNull();
+  }
+
+  @Test
+  void execute_unscannableTableGiven_shouldThrowBeforePersistingState() throws Exception {
+    // Arrange
+    // The target table list is fixed on the first run, so a table the scanner cannot handle has to
+    // fail before any state is written; otherwise every retry stalls at the same table.
+    when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+    when(admin.getTableMetadata("ns1", "tbl1")).thenReturn(TRANSACTION_TABLE_METADATA);
+    org.mockito.Mockito.doThrow(
+            new ScalarDlCleanupException(
+                ScalarDlCleanupError.UNSUPPORTED_PRIMARY_KEY_TYPE, "ns1.tbl1", "k", "BLOB"))
+        .when(scannerFactory)
+        .validateScannable(eq("ns1.tbl1"), any());
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(ScalarDlCleanupException.class)
         .hasMessageContaining("ns1.tbl1");
 
     verify(scanner, never()).scan(anyString(), anyString(), any());

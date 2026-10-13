@@ -102,6 +102,20 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
   //
   // Errors for the internal error category
   //
+  UNSUPPORTED_PRIMARY_KEY_TYPE(
+      Category.USER_ERROR,
+      "015",
+      "The table '%s' has a primary-key column '%s' of type %s, which this tool cannot scan"
+          + " resumably.",
+      "",
+      "Exclude the table from the target database, or use a supported primary-key column type."),
+  CHECKPOINT_MISMATCH(
+      Category.USER_ERROR,
+      "016",
+      "The checkpoint for the table '%s' does not match the table: %s",
+      "",
+      "The checkpoint was written for a different table or schema. Re-run with a new checkpoint"
+          + " directory."),
   STATE_LOAD_FAILED(
       Category.INTERNAL_ERROR,
       "001",

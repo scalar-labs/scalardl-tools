@@ -182,10 +182,15 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
         if (qualifiedTable.equals(coordinatorTable)) {
           continue;
         }
-        if (!isTransactionTable(namespace, table)) {
+        TableMetadata metadata = getTableMetadata(namespace, table);
+        if (!ConsensusCommitUtils.isTransactionTableMetadata(metadata)) {
           logger.info("Skipping the table because it is not transactional: {}", qualifiedTable);
           continue;
         }
+        // Fail before any table is processed rather than partway through the run: the target table
+        // list is fixed on the first run, so a table that cannot be scanned would otherwise block
+        // every retry at the same point.
+        scannerFactory.validateScannable(qualifiedTable, metadata);
         tables.add(qualifiedTable);
       }
     }
@@ -193,17 +198,17 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   }
 
   /**
-   * Returns whether the table is managed by the Consensus Commit transaction manager.
+   * Returns the metadata of the table.
    *
    * @throws IllegalStateException if the table has no metadata even though it was just listed.
    */
-  private boolean isTransactionTable(String namespace, String table) throws ExecutionException {
+  private TableMetadata getTableMetadata(String namespace, String table) throws ExecutionException {
     TableMetadata metadata = admin.getTableMetadata(namespace, table);
     if (metadata == null) {
       throw new IllegalStateException(
           "Table metadata not found for " + ScalarDbUtils.getFullTableName(namespace, table));
     }
-    return ConsensusCommitUtils.isTransactionTableMetadata(metadata);
+    return metadata;
   }
 
   /**
