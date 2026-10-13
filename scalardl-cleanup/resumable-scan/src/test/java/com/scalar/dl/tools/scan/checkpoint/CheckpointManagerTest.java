@@ -1,4 +1,4 @@
-package com.scalar.dl.tools.scan.cosmos;
+package com.scalar.dl.tools.scan.checkpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -23,32 +23,32 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void loadContinuationToken_nonExistentTokenGiven_shouldReturnNull() {
+  void loadToken_nonExistentTokenGiven_shouldReturnNull() {
     // Arrange
 
     // Act
-    String token = manager.loadContinuationToken("ns.table", "range1");
+    String token = manager.loadToken("ns.table", "range1");
 
     // Assert
     assertThat(token).isNull();
   }
 
   @Test
-  void loadContinuationToken_existentFileGiven_shouldReturnContent() throws IOException {
+  void loadToken_existentFileGiven_shouldReturnContent() throws IOException {
     // Arrange
     Path dir = tempDir.resolve("checkpoint").resolve("ns.table");
     Files.createDirectories(dir);
     Files.write(dir.resolve("range1.token"), "saved-token".getBytes(StandardCharsets.UTF_8));
 
     // Act
-    String loaded = manager.loadContinuationToken("ns.table", "range1");
+    String loaded = manager.loadToken("ns.table", "range1");
 
     // Assert
     assertThat(loaded).isEqualTo("saved-token");
   }
 
   @Test
-  void loadContinuationToken_onlyTmpFilePresent_shouldReturnNull() throws IOException {
+  void loadToken_onlyTmpFilePresent_shouldReturnNull() throws IOException {
     // Arrange
     // Simulate a crash that left only the .tmp file
     Path dir = tempDir.resolve("checkpoint").resolve("ns.table");
@@ -57,31 +57,31 @@ class CheckpointManagerTest {
     Files.write(tmpPath, "incomplete-token".getBytes(StandardCharsets.UTF_8));
 
     // Act
-    String loaded = manager.loadContinuationToken("ns.table", "range1");
+    String loaded = manager.loadToken("ns.table", "range1");
 
     // Assert
     assertThat(loaded).isNull();
   }
 
   @Test
-  void loadContinuationToken_IOExceptionThrown_shouldThrowRuntimeException() throws IOException {
+  void loadToken_IOExceptionThrown_shouldThrowRuntimeException() throws IOException {
     // Arrange
     // Create a directory where the token file is expected so reading it causes an IOException
     Path tokenPath = tempDir.resolve("checkpoint").resolve("ns.table").resolve("range1.token");
     Files.createDirectories(tokenPath);
 
     // Act & Assert
-    assertThatThrownBy(() -> manager.loadContinuationToken("ns.table", "range1"))
+    assertThatThrownBy(() -> manager.loadToken("ns.table", "range1"))
         .isInstanceOf(RuntimeException.class);
   }
 
   @Test
-  void persistContinuationToken_shouldWriteToken() throws IOException {
+  void persistToken_shouldWriteToken() throws IOException {
     // Arrange
     manager.initCheckpointFor("ns.table");
 
     // Act
-    manager.persistContinuationToken("ns.table", "range1", "token-abc");
+    manager.persistToken("ns.table", "range1", "token-abc");
 
     // Assert
     Path tokenPath = tempDir.resolve("checkpoint").resolve("ns.table").resolve("range1.token");
@@ -90,7 +90,7 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void persistContinuationToken_existingTokenGiven_shouldOverwriteToken() throws IOException {
+  void persistToken_existingTokenGiven_shouldOverwriteToken() throws IOException {
     // Arrange
     Path dir = tempDir.resolve("checkpoint").resolve("ns.table");
     Files.createDirectories(dir);
@@ -98,7 +98,7 @@ class CheckpointManagerTest {
     Files.write(tokenPath, "first".getBytes(StandardCharsets.UTF_8));
 
     // Act
-    manager.persistContinuationToken("ns.table", "range1", "second");
+    manager.persistToken("ns.table", "range1", "second");
 
     // Assert
     assertThat(new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8))
@@ -118,12 +118,12 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void persistContinuationToken_shouldNotLeaveTemporaryFile() {
+  void persistToken_shouldNotLeaveTemporaryFile() {
     // Arrange
     manager.initCheckpointFor("ns.table");
 
     // Act
-    manager.persistContinuationToken("ns.table", "range1", "token");
+    manager.persistToken("ns.table", "range1", "token");
 
     // Assert
     Path tmpPath = tempDir.resolve("checkpoint").resolve("ns.table").resolve("range1.token.tmp");
@@ -131,16 +131,15 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void persistContinuationToken_shouldStoreTokensIndependentlyPerRangeAndTable()
-      throws IOException {
+  void persistToken_shouldStoreTokensIndependentlyPerRangeAndTable() throws IOException {
     // Arrange
     manager.initCheckpointFor("ns.table");
     manager.initCheckpointFor("ns.table2");
 
     // Act
-    manager.persistContinuationToken("ns.table", "rangeA", "tokenA");
-    manager.persistContinuationToken("ns.table", "rangeB", "tokenB");
-    manager.persistContinuationToken("ns.table2", "rangeA", "tokenC");
+    manager.persistToken("ns.table", "rangeA", "tokenA");
+    manager.persistToken("ns.table", "rangeB", "tokenB");
+    manager.persistToken("ns.table2", "rangeA", "tokenC");
 
     // Assert
     Path pathA = tempDir.resolve("checkpoint").resolve("ns.table").resolve("rangeA.token");
@@ -244,7 +243,7 @@ class CheckpointManagerTest {
   }
 
   @Test
-  void persistContinuationToken_IOExceptionThrown_shouldThrowRuntimeException() {
+  void persistToken_IOExceptionThrown_shouldThrowRuntimeException() {
     // Arrange
     // Use a CheckpointManager pointing to a file (not a directory) so directory creation fails
     CheckpointManager brokenManager =
@@ -259,7 +258,7 @@ class CheckpointManagerTest {
     }
 
     // Act & Assert
-    assertThatThrownBy(() -> brokenManager.persistContinuationToken("ns.table", "range1", "token"))
+    assertThatThrownBy(() -> brokenManager.persistToken("ns.table", "range1", "token"))
         .isInstanceOf(RuntimeException.class);
   }
 

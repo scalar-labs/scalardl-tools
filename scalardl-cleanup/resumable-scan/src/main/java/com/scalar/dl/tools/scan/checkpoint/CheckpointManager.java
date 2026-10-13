@@ -1,4 +1,4 @@
-package com.scalar.dl.tools.scan.cosmos;
+package com.scalar.dl.tools.scan.checkpoint;
 
 import com.scalar.dl.tools.common.FileUtils;
 import edu.umd.cs.findbugs.annotations.NonNull;
@@ -12,16 +12,22 @@ import java.nio.file.attribute.BasicFileAttributes;
 import javax.annotation.Nullable;
 
 /**
- * Manages scan-internal checkpoint state: per-partition continuation tokens and FeedRange files.
+ * Manages scan-internal checkpoint state: per-table progress tokens keyed by an
+ * implementation-defined ID, plus an optional feed-ranges file used by the Cosmos DB scanner.
+ *
+ * <p>The token format is opaque to this class: the Cosmos DB scanner stores one continuation token
+ * per FeedRange (the FeedRange ID is the token ID), while other scanner implementations may store a
+ * single token under a fixed ID.
  *
  * <p>The checkpoint directory is provided by the caller (typically the orchestrator) and should
  * point to a scan-specific subdirectory (e.g., {@code <checkpoint-root>/scan}). Files are stored
- * under {@code <checkpointDir>/<tableName>/} with per-partition token files and a feed_ranges.json.
+ * under {@code <checkpointDir>/<tableName>/} with per-ID token files and, for Cosmos DB, a
+ * feed_ranges.json.
  *
  * <p><b>Thread safety:</b> Multiple scan workers concurrently write their own .token files. Each
  * .token file is written by exactly one scan worker, so no file locks are needed.
  */
-class CheckpointManager {
+public class CheckpointManager {
 
   private static final String FEED_RANGES_FILE = "feed_ranges.json";
 
@@ -31,29 +37,27 @@ class CheckpointManager {
     this.checkpointDir = checkpointDir;
   }
 
-  /** Load continuation token for a given table and range, or null. */
+  /** Load the progress token for a given table and token ID, or null. */
   @Nullable
-  public String loadContinuationToken(String tableName, String rangeId) {
-    Path tokenPath = checkpointDir.resolve(tableName).resolve(rangeId + ".token");
+  public String loadToken(String tableName, String tokenId) {
+    Path tokenPath = checkpointDir.resolve(tableName).resolve(tokenId + ".token");
     if (!Files.exists(tokenPath)) {
       return null;
     }
     try {
       return new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8);
     } catch (IOException e) {
-      throw new RuntimeException(
-          "Failed to load continuation token for " + tableName + "/" + rangeId, e);
+      throw new RuntimeException("Failed to load token for " + tableName + "/" + tokenId, e);
     }
   }
 
-  /** Atomically persist continuation token for a given table and range. */
-  public void persistContinuationToken(String tableName, String rangeId, String token) {
-    Path tokenPath = checkpointDir.resolve(tableName).resolve(rangeId + ".token");
+  /** Atomically persist the progress token for a given table and token ID. */
+  public void persistToken(String tableName, String tokenId, String token) {
+    Path tokenPath = checkpointDir.resolve(tableName).resolve(tokenId + ".token");
     try {
       FileUtils.writeAtomic(tokenPath, token.getBytes(StandardCharsets.UTF_8));
     } catch (IOException e) {
-      throw new RuntimeException(
-          "Failed to persist continuation token for " + tableName + "/" + rangeId, e);
+      throw new RuntimeException("Failed to persist token for " + tableName + "/" + tokenId, e);
     }
   }
 

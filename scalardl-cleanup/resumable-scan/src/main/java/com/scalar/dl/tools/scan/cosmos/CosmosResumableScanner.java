@@ -19,6 +19,7 @@ import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ScanResult;
+import com.scalar.dl.tools.scan.checkpoint.CheckpointManager;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -152,8 +153,7 @@ public final class CosmosResumableScanner implements ResumableScanner {
       List<Future<Long>> futures = new ArrayList<>();
       for (FeedRange feedRange : feedRanges) {
         String feedRangeId = FeedRangeSerializer.toId(feedRange);
-        String continuationToken =
-            checkpointManager.loadContinuationToken(qualifiedTableName, feedRangeId);
+        String continuationToken = checkpointManager.loadToken(qualifiedTableName, feedRangeId);
 
         CosmosScanWorker worker =
             new CosmosScanWorker(

@@ -9,6 +9,7 @@ import com.scalar.db.api.Result;
 import com.scalar.db.storage.cosmos.Record;
 import com.scalar.db.storage.cosmos.ResultInterpreter;
 import com.scalar.dl.tools.scan.RecordHandler;
+import com.scalar.dl.tools.scan.checkpoint.CheckpointManager;
 import java.util.concurrent.Callable;
 import javax.annotation.Nullable;
 import org.slf4j.Logger;
@@ -91,7 +92,7 @@ class CosmosScanWorker implements Callable<Long> {
       // Checkpoint after each page
       String nextToken = page.getContinuationToken();
       if (nextToken != null) {
-        checkpointManager.persistContinuationToken(tableName, feedRangeId, nextToken);
+        checkpointManager.persistToken(tableName, feedRangeId, nextToken);
       }
     }
 

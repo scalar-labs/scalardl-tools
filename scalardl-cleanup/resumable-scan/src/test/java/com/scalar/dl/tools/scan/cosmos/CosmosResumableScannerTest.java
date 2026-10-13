@@ -26,6 +26,7 @@ import com.scalar.db.io.DataType;
 import com.scalar.db.storage.cosmos.Record;
 import com.scalar.dl.tools.scan.RecordHandler;
 import com.scalar.dl.tools.scan.ScanResult;
+import com.scalar.dl.tools.scan.checkpoint.CheckpointManager;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -90,7 +91,7 @@ class CosmosResumableScannerTest {
 
   private void setupNoCheckpoint() {
     when(checkpointManager.loadFeedRanges(QUALIFIED_TABLE)).thenReturn(null);
-    when(checkpointManager.loadContinuationToken(anyString(), anyString())).thenReturn(null);
+    when(checkpointManager.loadToken(anyString(), anyString())).thenReturn(null);
   }
 
   @Test
@@ -115,7 +116,7 @@ class CosmosResumableScannerTest {
     FeedRange feedRange = FeedRange.forFullRange();
     String persistedJson = "[\"" + FeedRangeSerializer.toJson(feedRange) + "\"]";
     when(checkpointManager.loadFeedRanges(QUALIFIED_TABLE)).thenReturn(persistedJson);
-    when(checkpointManager.loadContinuationToken(anyString(), anyString())).thenReturn(null);
+    when(checkpointManager.loadToken(anyString(), anyString())).thenReturn(null);
 
     List<Record> records = CosmosMockHelper.createMockRecords(1);
     FeedResponse<Record> page = CosmosMockHelper.createMockPage(records, null);
@@ -181,8 +182,7 @@ class CosmosResumableScannerTest {
 
     when(cosmosContainer.getFeedRanges()).thenReturn(feedRanges);
     when(checkpointManager.loadFeedRanges(QUALIFIED_TABLE)).thenReturn(null);
-    when(checkpointManager.loadContinuationToken(QUALIFIED_TABLE, feedRangeId))
-        .thenReturn("resume-token");
+    when(checkpointManager.loadToken(QUALIFIED_TABLE, feedRangeId)).thenReturn("resume-token");
 
     List<Record> records = CosmosMockHelper.createMockRecords(1);
     FeedResponse<Record> page = CosmosMockHelper.createMockPage(records, null);
@@ -260,7 +260,7 @@ class CosmosResumableScannerTest {
     when(container2.getFeedRanges()).thenReturn(feedRanges);
     when(checkpointManager.loadFeedRanges(QUALIFIED_TABLE)).thenReturn(null);
     when(checkpointManager.loadFeedRanges(qualifiedTable2)).thenReturn(null);
-    when(checkpointManager.loadContinuationToken(anyString(), anyString())).thenReturn(null);
+    when(checkpointManager.loadToken(anyString(), anyString())).thenReturn(null);
 
     // Act & Assert
     try (CosmosResumableScanner scanner = createScanner()) {

@@ -20,6 +20,7 @@ import com.scalar.db.api.Result;
 import com.scalar.db.storage.cosmos.Record;
 import com.scalar.db.storage.cosmos.ResultInterpreter;
 import com.scalar.dl.tools.scan.RecordHandler;
+import com.scalar.dl.tools.scan.checkpoint.CheckpointManager;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -129,8 +130,8 @@ class CosmosScanWorkerTest {
     createWorker(null).call();
 
     // Assert
-    verify(checkpointManager).persistContinuationToken(TABLE_NAME, RANGE_ID, "token-1");
-    verify(checkpointManager).persistContinuationToken(TABLE_NAME, RANGE_ID, "token-2");
+    verify(checkpointManager).persistToken(TABLE_NAME, RANGE_ID, "token-1");
+    verify(checkpointManager).persistToken(TABLE_NAME, RANGE_ID, "token-2");
   }
 
   @Test
@@ -146,8 +147,7 @@ class CosmosScanWorkerTest {
     createWorker(null).call();
 
     // Assert
-    verify(checkpointManager, never())
-        .persistContinuationToken(anyString(), anyString(), anyString());
+    verify(checkpointManager, never()).persistToken(anyString(), anyString(), anyString());
   }
 
   @Test
