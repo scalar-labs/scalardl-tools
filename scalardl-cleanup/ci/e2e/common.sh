@@ -11,6 +11,33 @@
 export LEDGER_NS="ledger-e2e"
 export AUDITOR_NS="auditor-e2e"
 
+# The database the whole run uses, for every script:
+#   cosmos : a real Cosmos DB account, addressed by COSMOS_URI / COSMOS_KEY (the default)
+#   jdbc   : PostgreSQL, which manage-cluster.sh deploys into the Ledger namespace
+# Resolving the settings requires nothing, so a script that never touches the database runs without
+# the Cosmos credentials; one that renders database config calls require_db_settings first.
+export STORAGE="${STORAGE:-cosmos}"
+case "$STORAGE" in
+  cosmos)
+    export DB_CONTACT_POINTS="${COSMOS_URI:-}"
+    export DB_USERNAME=""
+    export DB_PASSWORD="${COSMOS_KEY:-}"
+    ;;
+  jdbc)
+    # Both namespaces reach the database through its cluster DNS name.
+    export DB_CONTACT_POINTS="jdbc:postgresql://postgres.${LEDGER_NS}.svc.cluster.local:5432/postgres"
+    export DB_USERNAME="postgres"
+    export DB_PASSWORD="e2e-postgres-disposable-password"
+    ;;
+  *)
+    echo "::error::unsupported STORAGE: $STORAGE (expected cosmos or jdbc)" >&2
+    exit 1
+    ;;
+esac
+# The whole scalar.db.username line, empty for a storage that takes no user: the manifests carry it
+# as one placeholder, and a blank line in a properties file is ignored.
+export DB_USERNAME_LINE="${DB_USERNAME:+scalar.db.username=$DB_USERNAME}"
+
 # CN/SAN of the disposable Auditor server cert, and the directory manage-cluster.sh generates it
 # into. A client that reaches the Auditor under a different name has to pin this as the TLS authority.
 export AUDITOR_TLS_SAN="auditor.e2e.scalar-labs.com"
@@ -22,6 +49,14 @@ require_vars() {
   for v in "$@"; do
     if [[ -z "${!v:-}" ]]; then echo "ERROR: $v must be set" >&2; exit 1; fi
   done
+}
+
+# Abort unless the settings the selected storage needs to render database config are present.
+# Usage: require_db_settings
+require_db_settings() {
+  if [ "$STORAGE" = cosmos ]; then
+    require_vars COSMOS_URI COSMOS_KEY
+  fi
 }
 
 # Dump everything useful about a namespace's workloads, then fail.

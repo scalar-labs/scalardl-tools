@@ -1,0 +1,67 @@
+# PostgreSQL for the JDBC E2E — the database the Ledger, the Auditor, and the cleanup Jobs share.
+#
+# The Cosmos E2E talks to a real account outside the cluster; the JDBC E2E runs its own database in
+# the cluster instead, so the run needs no credentials of its own.
+#
+# envsubst variables (see manage-cluster.sh):
+#   ${LEDGER_NS}     Ledger namespace (must already exist)
+#   ${DB_PASSWORD}   password for the database superuser
+#
+# Deployed in the Ledger namespace and reached from the Auditor namespace through the cluster DNS
+# name postgres.${LEDGER_NS}.svc.cluster.local.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ${LEDGER_NS}
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ${LEDGER_NS}
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      containers:
+        - name: postgres
+          # Pinned to a version the keyset paging query plans were measured on.
+          image: postgres:16
+          env:
+            - name: POSTGRES_PASSWORD
+              value: ${DB_PASSWORD}
+          # The servers and the cleanup Jobs each open connection pools against this one instance,
+          # so it needs more than the default 100 connections.
+          args: ["-c", "max_connections=400"]
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

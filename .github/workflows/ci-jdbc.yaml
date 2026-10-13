@@ -1,0 +1,123 @@
+name: CI (JDBC)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'scalardl-cleanup/**'
+      - '.github/workflows/ci-jdbc.yaml'
+  pull_request:
+    paths:
+      - 'scalardl-cleanup/**'
+      - '.github/workflows/ci-jdbc.yaml'
+  workflow_dispatch:
+
+# No concurrency group: each run gets its own database containers, so unlike the Cosmos workflows
+# there is no shared account to serialize against.
+
+defaults:
+  run:
+    working-directory: scalardl-cleanup
+
+jobs:
+  postgresql-integration-test:
+    name: PostgreSQL integration test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start PostgreSQL
+        # Started with docker run rather than as a service container so the server command can
+        # raise max_connections. The integration tests hold several ScalarDB instances at once and
+        # each opens a pool eagerly (20 idle connections for a storage pool alone), which peaks
+        # near PostgreSQL's default limit of 100 and would make the job flaky.
+        # Pinned to a version the keyset paging query plans were measured on.
+        run: |
+          docker run -d --name postgres -p 5432:5432 \
+            -e POSTGRES_PASSWORD=pw \
+            postgres:16 -c max_connections=400
+          for _ in $(seq 1 30); do
+            docker exec postgres pg_isready -U postgres >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "::error::PostgreSQL did not become ready"; exit 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run JDBC integration tests
+        run: |
+          ./gradlew jdbcIntegrationTest \
+            -Dscalardb.jdbc.url=jdbc:postgresql://localhost:5432/postgres \
+            -Dscalardb.jdbc.username=postgres \
+            -Dscalardb.jdbc.password=pw
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jdbc-integration-test-reports-postgresql
+          path: |
+            scalardl-cleanup/resumable-scan/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/coordinator-state-cleanup/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/ledger-finalize-records/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/auditor-finalize-records/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/request-proof-cleanup/build/reports/tests/jdbcIntegrationTest/
+
+  mysql-integration-test:
+    name: MySQL integration test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start MySQL
+        # Started with docker run for the same reason as PostgreSQL: the server command raises
+        # max_connections above the default, which the concurrent ScalarDB pools would otherwise
+        # sit close to. Pinned to a version the keyset paging query plans were measured on.
+        run: |
+          docker run -d --name mysql -p 3306:3306 \
+            -e MYSQL_ROOT_PASSWORD=pw \
+            mysql:8.4 --max-connections=400
+          for _ in $(seq 1 40); do
+            docker exec mysql mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1 && exit 0
+            sleep 3
+          done
+          echo "::error::MySQL did not become ready"; exit 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run JDBC integration tests
+        # MySQL 8 defaults to caching_sha2_password, whose password exchange the driver refuses
+        # over a plain connection, so the URL has to allow public key retrieval.
+        run: |
+          ./gradlew jdbcIntegrationTest \
+            '-Dscalardb.jdbc.url=jdbc:mysql://localhost:3306/?allowPublicKeyRetrieval=true&useSSL=false' \
+            -Dscalardb.jdbc.username=root \
+            -Dscalardb.jdbc.password=pw
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jdbc-integration-test-reports-mysql
+          path: |
+            scalardl-cleanup/resumable-scan/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/coordinator-state-cleanup/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/ledger-finalize-records/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/auditor-finalize-records/build/reports/tests/jdbcIntegrationTest/
+            scalardl-cleanup/request-proof-cleanup/build/reports/tests/jdbcIntegrationTest/

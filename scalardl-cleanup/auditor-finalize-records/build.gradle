@@ -55,6 +55,21 @@ spotbugs {
     jvmArgs = ['-Duser.language=en']
 }
 
+tasks.register('jdbcIntegrationTest', Test) {
+    useJUnitPlatform()
+    description 'Runs the JDBC integration tests. Requires a running MySQL or PostgreSQL instance.'
+    group 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    outputs.upToDateWhen { false }
+    shouldRunAfter test
+    filter { includeTestsMatching 'com.scalar.dl.tools.cleanup.jdbc.*' }
+    // Forward scalardb.jdbc.* system properties to the test JVM
+    options {
+        systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)
+    }
+}
+
 tasks.register('cosmosIntegrationTest', Test) {
     useJUnitPlatform()
     description 'Runs the Cosmos DB integration tests. Requires a real Cosmos DB instance.'
@@ -63,6 +78,7 @@ tasks.register('cosmosIntegrationTest', Test) {
     classpath = sourceSets.integrationTest.runtimeClasspath
     outputs.upToDateWhen { false }
     shouldRunAfter test
+    filter { includeTestsMatching 'com.scalar.dl.tools.cleanup.cosmos.*' }
     // Forward scalardb.cosmos.* system properties to the test JVM
     options {
         systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)

@@ -4,8 +4,10 @@
 #   ${AUDITOR_NS}   k8s namespace for the auditor
 #   ${LEDGER_NS}    namespace where the ledger Service lives (for cross-ns DNS)
 #   ${AUDITOR_IMAGE} full image ref, e.g. ghcr.io/scalar-labs/scalardl-auditor:3.13.0
-#   ${COSMOS_URI}   Cosmos DB account URI
-#   ${COSMOS_KEY}   Cosmos DB primary key
+#   ${STORAGE}            cosmos or jdbc (see common.sh)
+#   ${DB_CONTACT_POINTS}  Cosmos DB account URI, or the JDBC URL
+#   ${DB_USERNAME_LINE}   the scalar.db.username line, empty for Cosmos
+#   ${DB_PASSWORD}        Cosmos DB primary key, or the database password
 #
 # Auth is HMAC. SERVERS_HMAC_SECRET / HMAC_CIPHER_KEY are injected by
 # manage-cluster.sh (single source, shared with ledger.yaml) so the secret can't drift.
@@ -24,9 +26,10 @@ metadata:
   namespace: ${AUDITOR_NS}
 stringData:
   auditor.properties: |
-    scalar.db.storage=cosmos
-    scalar.db.contact_points=${COSMOS_URI}
-    scalar.db.password=${COSMOS_KEY}
+    scalar.db.storage=${STORAGE}
+    scalar.db.contact_points=${DB_CONTACT_POINTS}
+    ${DB_USERNAME_LINE}
+    scalar.db.password=${DB_PASSWORD}
 
     # Ports (gRPC / privileged / admin). Prometheus disabled.
     scalar.dl.auditor.server.port=40051

@@ -10,6 +10,7 @@
 # Required environment:
 #   SCALARDL_OLD_VERSION                 the version that leaves the garbage behind
 #   COSMOS_URI / COSMOS_KEY              the schema-loader Jobs are rendered with these
+#                                        (STORAGE=cosmos only)
 #   CLIENT / RECORD_COUNT / RUNNER_TEMP  populate.sh and db-records.sh need these
 #   SCALARDB_SQL_CLI / SCALARDB_VERSION  db-records.sh drives these against the account
 #
@@ -26,8 +27,8 @@ source "$HERE/db-records.sh"
 
 # Check everything up front: the checkpoint reset below destroys state, so a missing variable should
 # stop us before that rather than halfway through.
-require_vars SCALARDL_OLD_VERSION COSMOS_URI COSMOS_KEY CLIENT RECORD_COUNT RUNNER_TEMP \
-  SCALARDB_SQL_CLI SCALARDB_VERSION
+require_vars SCALARDL_OLD_VERSION CLIENT RECORD_COUNT RUNNER_TEMP SCALARDB_SQL_CLI SCALARDB_VERSION
+require_db_settings
 
 # The metadata describes what this fixture populated, so the previous one's must not survive it.
 rm -f "$RUNNER_TEMP/populated-assets.json"

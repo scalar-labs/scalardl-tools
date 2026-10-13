@@ -8,11 +8,11 @@
 # their completion token is derived from it, so an identical timestamp means an identical token.
 #
 # Catching a scan mid-flight needs it to last long enough, so this scenario rebuilds the fixture
-# with more records than the others.
+# with more records than the others, and on JDBC pads each scanned table as well (see pad_table).
 #
 # Required environment:
 #   CLEANUP_VERSION           tag of the scalardl-cleanup image
-#   COSMOSDB_SHELL            path to the Azure Cosmos DB Shell binary
+#   COSMOSDB_SHELL            path to the Azure Cosmos DB Shell binary (STORAGE=cosmos only)
 #   RECORD_COUNT              records per category. e2e.yaml overrides the other scenarios' value
 #                             for this step, because the scan has to walk enough rows to still be
 #                             running when the Pod is deleted
@@ -30,16 +30,52 @@ source "$E2E/db-records.sh"
 
 require_vars RUNNER_TEMP RECORD_COUNT SCALARDL_NEW_VERSION
 
-# The line the scanner writes once it has the partition list and is about to read rows. Interrupting
-# on it, rather than on the "starting a new run" line that precedes any scan state, is what makes
-# the replacement Pod resume a scan instead of beginning one.
-SCAN_STARTED='Cosmos DB physical partitions:'
-# finalize-ledger sweeps several tables and the line above names none of them, so the kill would
-# always land in whichever it scans first. Name the fixture's table, the only one with work to do.
-LEDGER_SCAN_STARTED="FeedRanges for $DB_NS.$DB_TABLE"
-# What a Pod logs when it picks up scan state the interrupted run left behind: either it reloaded a
-# table's partition list, or it skipped a table that run had already finished.
-SCAN_RESUMED='Loaded [0-9]+ persisted FeedRanges|Skipping already'
+# The scanners log different lines, so each storage names its own. For both:
+#   SCAN_STARTED         the line a scanner writes once it has scan state an interrupted run can
+#                        resume from. Interrupting on it, rather than on the "starting a new run"
+#                        line that precedes any scan state, is what makes the replacement Pod resume
+#                        a scan instead of beginning one.
+#   LEDGER_SCAN_STARTED  finalize-ledger sweeps several tables, so the kill has to wait for the
+#                        fixture's table, the only one with work to do.
+#   SCAN_RESUMED         what a Pod logs when it picks up scan state the interrupted run left
+#                        behind, or skips a table that run had already finished.
+#   LEDGER_SCAN_RESUMED  the same, for the fixture's table specifically.
+# extra_cleanup_properties makes each query return one row and runs a single worker: the scan then
+# lasts long enough to interrupt, and it checkpoints as often as it can. E2E-only -- the shipped
+# manifests keep the defaults.
+if [ "$STORAGE" = jdbc ]; then
+  # A JDBC scan has state only once its first page is checkpointed.
+  SCAN_STARTED='Saved the first scan checkpoint for'
+  LEDGER_SCAN_STARTED="Saved the first scan checkpoint for $DB_NS.$DB_TABLE"
+  SCAN_RESUMED='Resuming the scan of [^ ]+ from the persisted keyset checkpoint|Skipping already'
+  LEDGER_SCAN_RESUMED="Resuming the scan of $DB_NS\.$DB_TABLE from the persisted keyset checkpoint"
+  extra_cleanup_properties='scalar.dl.tools.scan.jdbc.page_size=1
+scalar.dl.tools.scan.jdbc.max_handler_threads=1'
+  # Even a page of one row takes a JDBC scan only a couple of milliseconds, so a table of the few
+  # dozen rows populate can afford is through before the kill lands. pad_table puts this many rows
+  # that need no work ahead of the ones that do.
+  padding_rows=5000
+else
+  # A Cosmos scan has state once it has persisted the partition list, which it logs right after.
+  SCAN_STARTED='Cosmos DB physical partitions:'
+  LEDGER_SCAN_STARTED="FeedRanges for $DB_NS.$DB_TABLE"
+  SCAN_RESUMED='Loaded [0-9]+ persisted FeedRanges|Skipping already'
+  LEDGER_SCAN_RESUMED="Loaded [0-9]+ persisted FeedRanges for $DB_NS\.$DB_TABLE"
+  extra_cleanup_properties='scalar.dl.tools.scan.cosmos.page_size=1
+scalar.dl.tools.scan.cosmos.max_threads=1'
+  padding_rows=0
+fi
+
+# Insert padding_rows rows into a table directly in PostgreSQL, so the scan has enough to walk to
+# still be running when the Pod is deleted. The caller picks ids that sort before the rows the
+# command has to act on, so the kill lands with that work still ahead of it. A no-op unless JDBC.
+# Usage: pad_table <table> <columns> <select-list over i>
+pad_table() {
+  [ "$padding_rows" -gt 0 ] || return 0
+  kubectl -n "$LEDGER_NS" exec deploy/postgres -- psql -U postgres -v ON_ERROR_STOP=1 -q -c \
+    "INSERT INTO $1 ($2) SELECT $3 FROM generate_series(1, $padding_rows) AS i"
+  echo "padded $1 with $padding_rows rows"
+}
 
 # The line each command writes when it begins a run of its own, which is how the assertions tell a
 # resumption from a fresh start. Only the finalize commands append the run's start timestamp.
@@ -60,7 +96,7 @@ assert_resumed() {
   grep -qE "$resumed" "$log" \
     || { echo "::error::$job kept no scan state matching '$resumed'"; exit 1; }
   # How far the resumed run got, for the log only: the tool logs nothing that would show a mid-page
-  # resume from a continuation token, so there is nothing to assert on.
+  # resume from a continuation token or a keyset, so there is nothing to assert on.
   grep -o 'Scan complete for [^ ]* [0-9]* records' "$log" || true
 }
 
@@ -93,36 +129,40 @@ SCALARDL_VERSION="$SCALARDL_NEW_VERSION" "$E2E/manage-cluster.sh" change-version
 
 echo "== Run the finalize commands, interrupting each one =="
 
-# One row per query and a single worker: the scan then lasts long enough to interrupt, and it
-# checkpoints as often as it can. E2E-only -- the shipped manifests keep the defaults.
-extra_cleanup_properties='scalar.dl.tools.scan.cosmos.page_size=1
-scalar.dl.tools.scan.cosmos.max_threads=1'
-
 init_cleanup_commands
 
 # Interrupting finalize-ledger only proves something if the scan has records to settle.
-db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+db_unsettled=$(count_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
 echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
 [ "$db_unsettled" -eq "$((2 * RECORD_COUNT))" ] \
   || { echo "::error::$DB_NS.$DB_TABLE holds $db_unsettled non-terminal records (expected $((2 * RECORD_COUNT)))"; exit 1; }
+
+# Committed, so there is nothing to finalize. 'padding-' sorts after the deleted records and before
+# the prepared ones, which the resumed run then has to finalize.
+pad_table "$DB_NS.$DB_TABLE" 'pk, val, tx_id, tx_state, tx_version, tx_prepared_at, tx_committed_at' \
+  "'padding-' || i, 'value-padding', 'e2e-padding', $DB_TX_STATE_COMMITTED, 1, 1, 1"
 
 setup_ledger_ad
 interrupt_and_resume "$LEDGER_NS" scalardl-finalize-ledger \
   "$work/ledger-ad/finalize-ledger.yaml" "$LEDGER_SCAN_STARTED"
 # Naming the table fails a kill that landed after it rather than letting the run pass unexercised.
-assert_resumed_same_run scalardl-finalize-ledger \
-  "Loaded [0-9]+ persisted FeedRanges for $DB_NS\.$DB_TABLE"
+assert_resumed_same_run scalardl-finalize-ledger "$LEDGER_SCAN_RESUMED"
 ledger_out=$(read_job_output_json "$LEDGER_NS" scalardl-finalize-ledger)
 ledger_token=$(extract_completion_token finalize-ledger "$ledger_out")
 
 # Between the interrupted run and the resumed one, every record has to end where an uninterrupted
 # run would leave it -- none skipped, none finalized twice.
-db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+db_unsettled=$(count_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
 [ "$db_unsettled" -eq 0 ] \
   || { echo "::error::finalize-ledger left $db_unsettled non-terminal records in $DB_NS.$DB_TABLE"; exit 1; }
 db_records_verify finalized "$RECORD_COUNT"
 
-rp_before=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
+rp_before=$(count_records "$auditor_uri" "$auditor_key" auditor request_proof)
+# Released locks (lock_type NONE), which the sweep passes over. 'e2e-padding-' sorts before the
+# 'o_' ids of the stranded locks, so all of them are still to recover when the Pod is deleted.
+pad_table auditor.asset_lock 'id, age, lock_type, lock_count, input, last_updated_at' \
+  "'e2e-padding-' || i, 0, 1, 0, '{}', 1"
+
 setup_auditor_ad
 interrupt_and_resume "$AUDITOR_NS" scalardl-finalize-auditor \
   "$work/auditor-ad/finalize-auditor.yaml" "$SCAN_STARTED"
@@ -132,16 +172,21 @@ auditor_token=$(extract_completion_token finalize-auditor "$auditor_out")
 # Known gap: finalize-auditor runs the lock sweep and then the request_proof cleanup, and the
 # interruption always lands in the first. The second therefore runs start to finish inside the
 # resumed Pod, so its own checkpoint and resume path are not covered here.
-rp_after=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
+rp_after=$(count_records "$auditor_uri" "$auditor_key" auditor request_proof)
 echo "request_proof rows: before=$rp_before after=$rp_after"
 [ "$rp_after" -eq 0 ] \
   || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0)"; exit 1; }
-held=$(count_cosmos_held_locks "$auditor_uri" "$auditor_key" auditor)
+held=$(count_held_locks "$auditor_uri" "$auditor_key" auditor)
 [ "$held" -eq 0 ] || { echo "::error::finalize-auditor left $held asset locks held"; exit 1; }
 
 echo "== Run cleanup-coordinator, interrupting it =="
 
-cs_before=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
+# Settled long before the boundary, so cleanup-coordinator has to delete these too, and the kill
+# lands among rows it must still delete after resuming.
+pad_table coordinator.state 'tx_id, tx_state, tx_created_at' \
+  "'e2e-padding-' || i, $DB_TX_STATE_COMMITTED, 1"
+
+cs_before=$(count_records "$ledger_uri" "$ledger_key" coordinator state)
 export LEDGER_TOKEN="$ledger_token" AUDITOR_TOKEN="$auditor_token"
 interrupt_and_resume "$LEDGER_NS" scalardl-cleanup-coordinator \
   "$work/ledger-ad/cleanup-coordinator.yaml" "$SCAN_STARTED"
@@ -155,10 +200,10 @@ coord_out=$(read_job_output_json "$LEDGER_NS" scalardl-cleanup-coordinator)
 [ "$(printf '%s' "$coord_out" | jq -r '.status_code')" = "OK" ] \
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
 
-cs_after=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
-# Settled before the deletable-before boundary: the committed put transactions, and the one the
-# fixture committed.
-deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS))
+cs_after=$(count_records "$ledger_uri" "$ledger_key" coordinator state)
+# Settled before the deletable-before boundary: the committed put transactions, the one the
+# fixture committed, and the padding.
+deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS + padding_rows))
 # Written after it: finalize-ledger's aborts and finalize-auditor's of the stranded nonces. This
 # fixture sees no traffic after the tokens.
 surviving=$((DB_ABORTED_COORDINATOR_ROWS + 2 * RECORD_COUNT))

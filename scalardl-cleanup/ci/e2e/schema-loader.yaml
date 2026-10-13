@@ -12,8 +12,10 @@
 #   ${LEDGER_NS}        Ledger namespace (must already exist)
 #   ${AUDITOR_NS}       Auditor namespace (must already exist)
 #   ${SL_IMAGE}         schema-loader image, e.g. ghcr.io/scalar-labs/scalardl-schema-loader:3.13.0
-#   ${COSMOS_URI}       Cosmos DB account URI
-#   ${COSMOS_KEY}       Cosmos DB primary key
+#   ${STORAGE}            cosmos or jdbc (see common.sh)
+#   ${DB_CONTACT_POINTS}  Cosmos DB account URI, or the JDBC URL
+#   ${DB_USERNAME_LINE}   the scalar.db.username line, empty for Cosmos
+#   ${DB_PASSWORD}        Cosmos DB primary key, or the database password
 #   ${SL_JOB_SUFFIX}    "" (create) or "-delete"
 #   ${SL_LEDGER_ARGS}   ledger schema-loader CLI args (JSON array)
 #   ${SL_AUDITOR_ARGS}  auditor schema-loader CLI args (JSON array)
@@ -25,9 +27,10 @@ metadata:
   namespace: ${LEDGER_NS}
 stringData:
   database.properties: |
-    scalar.db.storage=cosmos
-    scalar.db.contact_points=${COSMOS_URI}
-    scalar.db.password=${COSMOS_KEY}
+    scalar.db.storage=${STORAGE}
+    scalar.db.contact_points=${DB_CONTACT_POINTS}
+    ${DB_USERNAME_LINE}
+    scalar.db.password=${DB_PASSWORD}
 
 ---
 
@@ -38,9 +41,10 @@ metadata:
   namespace: ${AUDITOR_NS}
 stringData:
   database.properties: |
-    scalar.db.storage=cosmos
-    scalar.db.contact_points=${COSMOS_URI}
-    scalar.db.password=${COSMOS_KEY}
+    scalar.db.storage=${STORAGE}
+    scalar.db.contact_points=${DB_CONTACT_POINTS}
+    ${DB_USERNAME_LINE}
+    scalar.db.password=${DB_PASSWORD}
 
 ---
 

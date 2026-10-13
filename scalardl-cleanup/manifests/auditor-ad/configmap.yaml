@@ -11,8 +11,11 @@ metadata:
 data:
   cleanup-auditor.properties: |
     # ScalarDB backend storage — the Cosmos DB account the Auditor uses.
+    # For a JDBC database, set storage to jdbc, contact_points to the JDBC URL, and uncomment
+    # scalar.db.username below.
     scalar.db.storage=cosmos
     scalar.db.contact_points=<cosmos-account-uri>
+    #scalar.db.username=<database-user>
     scalar.db.password=${env:SCALAR_DB_PASSWORD}
 
     # Auditor namespace name (default "auditor").

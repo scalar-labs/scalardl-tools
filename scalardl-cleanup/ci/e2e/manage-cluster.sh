@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 #
-# Lifecycle helper for the E2E ScalarDL cluster on minikube against a real Cosmos DB.
-# Driven by .github/workflows/e2e.yaml. CI-only: needs network access, ghcr
-# credentials, and a Cosmos account.
+# Lifecycle helper for the E2E ScalarDL cluster on minikube, against a real Cosmos DB or against
+# PostgreSQL deployed into the cluster (STORAGE, see common.sh). Driven by
+# .github/workflows/e2e.yaml and e2e-jdbc.yaml. CI-only: needs network access and ghcr credentials,
+# plus a Cosmos account for STORAGE=cosmos.
 #
 # Modes:
-#   deploy          load the ScalarDB schema, deploy Ledger + Auditor, wait until healthy
+#   deploy          deploy PostgreSQL (jdbc only), load the ScalarDB schema, deploy Ledger + Auditor,
+#                   wait until healthy
 #   stop-ledger     scale the Ledger to 0 and wait for its pod to be deleted
 #   change-version  switch Ledger + Auditor to the SCALARDL_VERSION images, bring the Ledger back
 #                   up (it may have been scaled to 0 to strand locks), and wait until both are
 #                   healthy. Works in both directions, so the fixture can roll back to the old one
-#   drop-schema     delete the ScalarDB schema (Cosmos cleanup)
+#   drop-schema     delete the ScalarDB schema
 #   reset-schema    replace the schema with an empty one, and restart the servers so they see it
 #   clean           delete the k8s namespaces
 #
@@ -21,16 +23,18 @@
 #   SCALARDL_VERSION=<new>     ./manage-cluster.sh change-version  # roll to the new version
 #
 # Required environment:
-#   COSMOS_URI   Cosmos DB account URI                        (schema modes and deploy)
-#   COSMOS_KEY   Cosmos DB primary key                        (schema modes and deploy)
+#   COSMOS_URI   Cosmos DB account URI           (STORAGE=cosmos only; schema modes and deploy)
+#   COSMOS_KEY   Cosmos DB primary key           (STORAGE=cosmos only; schema modes and deploy)
 #   CR_PAT       ghcr Personal Access Token with read:packages (deploy only: it creates the
 #   GHCR_USER    ghcr username that owns CR_PAT                 ghcr-secret the Jobs pull with)
 #
 # Optional (default shown):
 #   SCALARDL_VERSION=3.13.0   # image tag for ledger, auditor, and schema-loader
+#   STORAGE=cosmos            # or jdbc
 #
 # Usage:
 #   COSMOS_URI=... COSMOS_KEY=... CR_PAT=... GHCR_USER=... ./manage-cluster.sh deploy
+#   STORAGE=jdbc CR_PAT=... GHCR_USER=... ./manage-cluster.sh deploy
 #   SCALARDL_VERSION=<new> ./manage-cluster.sh change-version
 #   ./manage-cluster.sh stop-ledger | drop-schema | reset-schema | clean
 
@@ -57,7 +61,8 @@ export HMAC_CIPHER_KEY="e2e-hmac-cipher-key-disposable-0123456789abcdef"
 # Without a list, envsubst expands EVERY $VAR in the manifests, which would wrongly
 # rewrite unrelated shell-style tokens (e.g. a literal $@ in a container command).
 SUBST_VARS='${LEDGER_NS} ${AUDITOR_NS} ${LEDGER_IMAGE} ${AUDITOR_IMAGE} ${SL_IMAGE} '
-SUBST_VARS+='${COSMOS_URI} ${COSMOS_KEY} ${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KEY} '
+SUBST_VARS+='${STORAGE} ${DB_CONTACT_POINTS} ${DB_USERNAME_LINE} ${DB_PASSWORD} '
+SUBST_VARS+='${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KEY} '
 SUBST_VARS+='${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS}'
 
 # Substitute the placeholders above into one of the manifests next to this script.
@@ -185,7 +190,7 @@ load_schema() {
 # Delete the ScalarDB schema.
 # Usage: drop_schema
 drop_schema() {
-  echo "==> delete ScalarDB schema (Cosmos cleanup)"
+  echo "==> delete ScalarDB schema"
   run_schema_loader "-delete" \
     '["--config", "/config/database.properties", "-D", "--coordinator"]' \
     '["--config", "/config/database.properties", "-D"]'
@@ -221,6 +226,12 @@ deploy_all() {
       --dry-run=client -o yaml | kubectl apply -f -
   done
 
+  if [ "$STORAGE" = jdbc ]; then
+    echo "==> deploy PostgreSQL"
+    render postgres.yaml | kubectl apply -f -
+    wait_for_deploy "$LEDGER_NS" postgres 300
+  fi
+
   load_schema
 
   echo "==> create Auditor TLS cert + secret"
@@ -243,7 +254,8 @@ deploy_all() {
 
 case "${1:-}" in
   deploy)
-    require_vars COSMOS_URI COSMOS_KEY CR_PAT GHCR_USER
+    require_vars CR_PAT GHCR_USER
+    require_db_settings
     deploy_all
     echo
     echo "DEPLOY OK: servers Ready in $LEDGER_NS / $AUDITOR_NS."
@@ -262,7 +274,7 @@ case "${1:-}" in
     echo "CHANGE-VERSION OK: $LEDGER_NS / $AUDITOR_NS rolled to ${SCALARDL_VERSION} and healthy."
     ;;
   drop-schema)
-    require_vars COSMOS_URI COSMOS_KEY
+    require_db_settings
     # If neither namespace exists, there is nothing to drop.
     if ! kubectl get namespace "$LEDGER_NS" >/dev/null 2>&1 \
         && ! kubectl get namespace "$AUDITOR_NS" >/dev/null 2>&1; then
@@ -274,7 +286,7 @@ case "${1:-}" in
     echo "DROP-SCHEMA OK"
     ;;
   reset-schema)
-    require_vars COSMOS_URI COSMOS_KEY
+    require_db_settings
     reset_schema
     echo
     echo "RESET-SCHEMA OK: the schema is empty."

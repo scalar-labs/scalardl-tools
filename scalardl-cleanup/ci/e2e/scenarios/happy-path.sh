@@ -10,6 +10,7 @@
 # Required environment:
 #   CLEANUP_VERSION           tag of the scalardl-cleanup image
 #   COSMOSDB_SHELL            path to the Azure Cosmos DB Shell binary, used to count rows in Cosmos
+#                             (STORAGE=cosmos only)
 #   RECORD_COUNT              records generated per category
 #   RUNNER_TEMP               scratch directory for the rendered manifests and the populated-assets
 #                             metadata
@@ -37,43 +38,43 @@ echo "== Run the finalize commands and check what they reclaimed =="
 init_cleanup_commands
 
 # Verify the non-terminal records are there first, or the zero afterwards proves nothing.
-db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+db_unsettled=$(count_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
 echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
 [ "$db_unsettled" -eq "$((2 * RECORD_COUNT))" ] \
   || { echo "::error::$DB_NS.$DB_TABLE holds $db_unsettled non-terminal records (expected $((2 * RECORD_COUNT)))"; exit 1; }
 
 run_finalize_ledger
 
-db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
+db_unsettled=$(count_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
 [ "$db_unsettled" -eq 0 ] \
   || { echo "::error::finalize-ledger left $db_unsettled non-terminal records in $DB_NS.$DB_TABLE"; exit 1; }
 # Terminal is not enough: each record has to have gone the way aborting its transaction takes it.
 db_records_verify finalized "$RECORD_COUNT"
 
-rp_before=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
+rp_before=$(count_records "$auditor_uri" "$auditor_key" auditor request_proof)
 run_finalize_auditor
-rp_after=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
+rp_after=$(count_records "$auditor_uri" "$auditor_key" auditor request_proof)
 echo "request_proof rows: before=$rp_before after=$rp_after"
 [ "$rp_after" -eq 0 ] || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0)"; exit 1; }
-held=$(count_cosmos_held_locks "$auditor_uri" "$auditor_key" auditor)
+held=$(count_held_locks "$auditor_uri" "$auditor_key" auditor)
 [ "$held" -eq 0 ] || { echo "::error::finalize-auditor left $held asset locks held"; exit 1; }
 
 echo "== Run new traffic now that both tokens are taken =="
 "$E2E/populate.sh" commit-post-token-objects
 
-rp_before_cleanup=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
+rp_before_cleanup=$(count_records "$auditor_uri" "$auditor_key" auditor request_proof)
 # The new traffic has to have written state, or the assertions below prove nothing.
 [ "$rp_before_cleanup" -gt 0 ] \
   || { echo "::error::the new traffic left no request_proof rows"; exit 1; }
 
 echo "== Run cleanup-coordinator and check what it reclaimed =="
 
-cs_before=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
+cs_before=$(count_records "$ledger_uri" "$ledger_key" coordinator state)
 run_cleanup_coordinator "$ledger_token" "$auditor_token"
 [ "$(printf '%s' "$cleanup_coordinator_output" | jq -r '.status_code')" = "OK" ] \
   || { echo "::error::cleanup-coordinator did not report OK"; exit 1; }
 
-cs_after=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
+cs_after=$(count_records "$ledger_uri" "$ledger_key" coordinator state)
 # Settled before the deletable-before boundary: the committed put transactions, and the one the
 # fixture committed.
 deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS))
@@ -88,7 +89,7 @@ echo "coordinator.state rows: before=$cs_before after=$cs_after (expected delete
 
 # cleanup-coordinator deletes Coordinator state only; the request proofs the new traffic wrote are
 # not its to touch.
-rp_after_cleanup=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
+rp_after_cleanup=$(count_records "$auditor_uri" "$auditor_key" auditor request_proof)
 echo "request_proof rows: before=$rp_before_cleanup after=$rp_after_cleanup"
 [ "$rp_after_cleanup" -eq "$rp_before_cleanup" ] \
   || { echo "::error::cleanup-coordinator changed request_proof from $rp_before_cleanup to $rp_after_cleanup"; exit 1; }

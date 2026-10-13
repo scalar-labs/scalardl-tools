@@ -13,6 +13,7 @@ import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.io.Column;
 import com.scalar.db.io.DataType;
 import com.scalar.db.service.StorageFactory;
+import com.scalar.db.storage.jdbc.JdbcConfig;
 import com.scalar.db.util.ScalarDbUtils;
 import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
@@ -72,6 +73,15 @@ public final class JdbcResumableScanner implements ResumableScanner {
   private static final String CHECKPOINT_TOKEN_ID = "keyset";
   private static final int SHUTDOWN_TIMEOUT_SECONDS = 30;
 
+  /**
+   * The connection pool ceiling for the scan's own storage. The scan runs on one thread and holds
+   * one page query at a time, so it needs a single connection; the rest is headroom. Without this
+   * the scan would inherit ScalarDB's defaults (up to 200 connections for the storage and 25 each
+   * for its admin and metadata pools) and double the connections the tool needs, on top of the pool
+   * the caller already holds for its own reads and writes.
+   */
+  private static final int SCAN_CONNECTION_POOL_MAX_TOTAL = 4;
+
   private final DistributedStorage storage;
   private final DistributedStorageAdmin storageAdmin;
   private final CheckpointManager checkpointManager;
@@ -120,7 +130,38 @@ public final class JdbcResumableScanner implements ResumableScanner {
     enableScanOption(properties, DatabaseConfig.CROSS_PARTITION_SCAN);
     enableScanOption(properties, DatabaseConfig.CROSS_PARTITION_SCAN_FILTERING);
     enableScanOption(properties, DatabaseConfig.CROSS_PARTITION_SCAN_ORDERING);
+    capConnectionPool(
+        properties,
+        JdbcConfig.CONNECTION_POOL_MAX_TOTAL,
+        JdbcConfig.DEFAULT_CONNECTION_POOL_MAX_TOTAL);
+    capConnectionPool(
+        properties,
+        JdbcConfig.TABLE_METADATA_CONNECTION_POOL_MAX_TOTAL,
+        JdbcConfig.DEFAULT_TABLE_METADATA_CONNECTION_POOL_MAX_TOTAL);
+    capConnectionPool(
+        properties,
+        JdbcConfig.ADMIN_CONNECTION_POOL_MAX_TOTAL,
+        JdbcConfig.DEFAULT_ADMIN_CONNECTION_POOL_MAX_TOTAL);
     return properties;
+  }
+
+  /**
+   * Lowers a connection pool ceiling to what the scan actually uses. A caller that already
+   * configured a smaller pool keeps it; this only ever reduces.
+   */
+  private static void capConnectionPool(Properties properties, String key, int defaultValue) {
+    int configured = defaultValue;
+    String value = properties.getProperty(key);
+    if (value != null) {
+      try {
+        configured = Integer.parseInt(value.trim());
+      } catch (NumberFormatException e) {
+        // Leave an unparsable value alone; ScalarDB reports it when it builds the config.
+        return;
+      }
+    }
+    properties.setProperty(
+        key, String.valueOf(Math.min(configured, SCAN_CONNECTION_POOL_MAX_TOTAL)));
   }
 
   private static void enableScanOption(Properties properties, String key) {
@@ -193,6 +234,7 @@ public final class JdbcResumableScanner implements ResumableScanner {
                 .build());
     try {
       long totalScanned = 0;
+      boolean checkpointed = false;
       while (true) {
         if (Thread.interrupted()) {
           throw new InterruptedException("Scan interrupted for " + qualifiedTableName);
@@ -208,6 +250,12 @@ public final class JdbcResumableScanner implements ResumableScanner {
         lastKey = extractKey(page.get(page.size() - 1), keyNames, qualifiedTableName);
         checkpointManager.persistToken(
             qualifiedTableName, CHECKPOINT_TOKEN_ID, KeysetCheckpointCodec.encode(lastKey));
+        if (!checkpointed) {
+          // Until the first page is checkpointed there is no scan state, and an interrupted run
+          // starts this table over. Logged once, so the point it becomes resumable is visible.
+          logger.info("Saved the first scan checkpoint for {}", qualifiedTableName);
+          checkpointed = true;
+        }
 
         if (page.size() < pageSize) {
           break;

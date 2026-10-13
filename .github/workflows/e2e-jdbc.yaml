@@ -1,0 +1,182 @@
+name: E2E (JDBC)
+
+# End-to-end test for ScalarDL Cleanup against PostgreSQL. Runs the scenarios in ci/e2e/scenarios with
+# STORAGE=jdbc: manage-cluster.sh deploys PostgreSQL into the cluster, so this workflow needs no
+# database credentials of its own.
+#
+# CI-only. Requires repository secret: CR_PAT.
+
+on:
+  pull_request:
+    paths:
+      - 'scalardl-cleanup/**'
+      - '.github/workflows/e2e-jdbc.yaml'
+  workflow_dispatch:
+    inputs:
+      old_version:
+        description: 'OLD ScalarDL version that populates data'
+        default: '3.13.0'
+      new_version:
+        description: 'NEW ScalarDL server version the tool coordinates with'
+        default: '3.14.0-SNAPSHOT'
+
+defaults:
+  run:
+    working-directory: scalardl-cleanup
+
+# No concurrency group: the database lives in the cluster this run creates, so there is no shared
+# account to serialize against.
+
+jobs:
+  e2e:
+    name: cleanup
+    runs-on: ubuntu-latest
+    env:
+      SCALARDL_OLD_VERSION: ${{ github.event.inputs.old_version || '3.13.0' }}
+      SCALARDL_NEW_VERSION: ${{ github.event.inputs.new_version || '3.14.0-SNAPSHOT' }}
+      GHCR_USER: ${{ github.repository_owner }}
+      # Records generated per category (committed / stranded write / stranded read).
+      RECORD_COUNT: 5
+      # Tag of the cleanup image built from this checkout and loaded into minikube. The manifests
+      # resolve the image as ghcr.io/scalar-labs/scalardl-cleanup:${CLEANUP_VERSION}; any tag other
+      # than "latest" keeps the default imagePullPolicy at IfNotPresent, so the locally loaded image
+      # is used and nothing is pulled from ghcr.
+      CLEANUP_VERSION: dev
+      # Selects the database for every script under ci/e2e.
+      STORAGE: jdbc
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Resolve the ScalarDB version
+        # Read it from the build, so the fixture's node and SQL CLI cannot drift from the tool's.
+        run: |
+          set -euo pipefail
+          v=$(./gradlew :cli:properties -q | awk '$1 == "scalarDbVersion:" { print $2 }')
+          [ -n "$v" ] || { echo "::error::could not read scalarDbVersion from the build"; exit 1; }
+          echo "Fixture ScalarDB version: $v"
+          echo "SCALARDB_VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Build the cleanup container image
+        # The cleanup commands run from the manifests, which deploy the container image, so build it
+        # here with the same :cli:docker task the release workflows use.
+        # GPR_* let Gradle pull the ScalarDL artifacts from GitHub Packages.
+        env:
+          GPR_USERNAME: ${{ github.repository_owner }}
+          GPR_PASSWORD: ${{ secrets.CR_PAT }}
+        run: ./gradlew :cli:docker -PdockerVersion="$CLEANUP_VERSION"
+
+      - name: Download ScalarDB Cluster SQL CLI
+        # setup-fixture.sh leaves records non-terminal by preparing transactions it never commits.
+        run: |
+          set -euo pipefail
+          v="$SCALARDB_VERSION"
+          url="https://github.com/scalar-labs/scalardb/releases/download/v${v}/scalardb-cluster-sql-cli-${v}-all.jar"
+          jar="$RUNNER_TEMP/scalardb-cluster-sql-cli.jar"
+          curl -sSfL -o "$jar" "$url"
+          echo "SCALARDB_SQL_CLI=$jar" >> "$GITHUB_ENV"
+
+      - name: Download ScalarDL HashStore CLI
+        # The garbage is created by the old-version client, so the CLI tracks SCALARDL_OLD_VERSION.
+        run: |
+          set -euo pipefail
+          v="$SCALARDL_OLD_VERSION"
+          url="https://github.com/scalar-labs/scalardl/releases/download/v${v}/scalardl-hashstore-java-client-sdk-${v}.zip"
+          curl -sSfL -o "$RUNNER_TEMP/hashstore.zip" "$url"
+          unzip -q "$RUNNER_TEMP/hashstore.zip" -d "$RUNNER_TEMP/hashstore"
+          bin="$RUNNER_TEMP/hashstore/scalardl-hashstore-java-client-sdk-${v}/bin/scalardl-hashstore"
+          chmod +x "$bin"
+          echo "CLIENT=$bin" >> "$GITHUB_ENV"
+
+      - name: Set up minikube
+        uses: medyagh/setup-minikube@e9e035a86bbc3caea26a450bd4dbf9d0c453682e # v0.0.21
+        with:
+          cpus: '4'
+          memory: '8192'
+
+      - name: Load the cleanup image into minikube
+        # The image was built into the runner's Docker daemon, which the minikube node cannot see.
+        run: minikube image load "ghcr.io/scalar-labs/scalardl-cleanup:$CLEANUP_VERSION"
+
+      - name: Deploy ScalarDL (old version) + load schema
+        id: deploy
+        env:
+          CR_PAT: ${{ secrets.CR_PAT }}
+          SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
+        run: ./ci/e2e/manage-cluster.sh deploy
+
+      # Diagnostics are collected per step, not once at the end of the job: the scenarios below keep
+      # running after an earlier one failed and each rebuilds the fixture, so a single dump would
+      # only ever describe the last scenario. collect-diagnostics.sh has the details.
+      #
+      # `!cancelled() &&` is not redundant: an `if:` with no status check function is evaluated as
+      # `success() && ...`, which is false precisely when the step to diagnose failed.
+      - name: Collect diagnostics - deploy
+        if: ${{ !cancelled() && steps.deploy.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'deploy'
+
+      - name: Run scenario - Auditor without RecoverAssetLock
+        id: old_auditor
+        env:
+          RECORD_COUNT: 1
+        run: ./ci/e2e/scenarios/old-auditor.sh
+
+      - name: Collect diagnostics - Auditor without RecoverAssetLock
+        if: ${{ !cancelled() && steps.old_auditor.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - Auditor without RecoverAssetLock'
+
+      - name: Run scenario - happy path
+        id: happy_path
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        run: ./ci/e2e/scenarios/happy-path.sh
+
+      - name: Collect diagnostics - happy path
+        if: ${{ !cancelled() && steps.happy_path.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - happy path'
+
+      - name: Run scenario - interrupt and resume
+        id: interrupt_resume
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          RECORD_COUNT: 20 # Enough rows that the scan is still running when the Pod is deleted.
+        run: ./ci/e2e/scenarios/interrupt-resume.sh
+
+      - name: Collect diagnostics - interrupt and resume
+        if: ${{ !cancelled() && steps.interrupt_resume.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - interrupt and resume'
+
+      - name: Drop the fixture's ScalarDB records
+        if: always()
+        run: |
+          set -euo pipefail
+          source ./ci/e2e/db-records.sh
+          if [ ! -f "${SCALARDB_SQL_CLI:-}" ] \
+            || ! kubectl -n "$LEDGER_NS" get deployment scalardb-cluster >/dev/null 2>&1; then
+            echo "No SQL CLI or no cluster node to drop them with; nothing to do."
+            exit 0
+          fi
+          load_ad_credentials
+          db_records_sql_init
+          db_records_drop_schema
+
+      - name: Drop the schema
+        if: always()
+        # Not fatal: the database lives in this cluster and the next step deletes it with the
+        # namespace, so nothing is left behind if the drop fails. Failing here would only replace
+        # the real failure -- a deploy that never brought the database up, say -- with this one.
+        continue-on-error: true
+        env:
+          SCALARDL_VERSION: ${{ env.SCALARDL_OLD_VERSION }}
+        run: ./ci/e2e/manage-cluster.sh drop-schema
+
+      - name: Tear down namespaces
+        if: always()
+        run: ./ci/e2e/manage-cluster.sh clean

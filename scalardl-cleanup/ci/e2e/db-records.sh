@@ -11,15 +11,15 @@
 #   RUNNER_TEMP        scratch directory for the rendered manifest, the CLI config and the scripts
 #   SCALARDB_SQL_CLI   path to the ScalarDB Cluster SQL CLI jar
 #   SCALARDB_VERSION   tag of the scalardb-cluster-node image
-#   COSMOSDB_SHELL     needed by db_records_verify, which checks for it itself
-# plus $ledger_uri / $ledger_key, which load_ad_credentials (cleanup-jobs.sh) sets.
+#   COSMOSDB_SHELL     needed by db_records_verify with STORAGE=cosmos; it checks for it itself
+# plus $ledger_uri / $ledger_key / $ledger_user, which load_ad_credentials (cleanup-jobs.sh) sets.
 
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "$E2E_DIR/cleanup-jobs.sh"
 source "$E2E_DIR/port-forward.sh"
 
-# Exposed because a scenario counts rows in Cosmos itself.
+# Exposed because a scenario counts rows in the database itself.
 DB_NS="e2e_db"
 DB_TABLE="records"
 
@@ -49,16 +49,20 @@ db_records_sql_init() {
     exit 1
   fi
 
-  # The node reads the account key as SCALAR_DB_PASSWORD, which the manifest pulls in with envFrom.
+  # The node reads the password as SCALAR_DB_PASSWORD, and for JDBC the user as SCALAR_DB_USERNAME,
+  # which the manifest pulls in with envFrom. Cosmos takes no user, so it gets none.
+  local credentials=(--from-literal=SCALAR_DB_PASSWORD="$ledger_key")
+  if [ -n "${ledger_user:-}" ]; then
+    credentials+=(--from-literal=SCALAR_DB_USERNAME="$ledger_user")
+  fi
   kubectl -n "$LEDGER_NS" create secret generic scalardb-cluster-credentials \
-    --from-literal=SCALAR_DB_PASSWORD="$ledger_key" \
-    --dry-run=client -o yaml | kubectl apply -f -
+    "${credentials[@]}" --dry-run=client -o yaml | kubectl apply -f -
 
   # Recreate the node: the schema reset leaves its Cosmos SDK caching a container that is gone.
   kubectl -n "$LEDGER_NS" delete deployment scalardb-cluster --ignore-not-found --wait
-  COSMOS_URI="$ledger_uri" SCALARDB_VERSION="$SCALARDB_VERSION" \
-    envsubst '${LEDGER_NS} ${SCALARDB_VERSION} ${COSMOS_URI}' < "$E2E_DIR/scalardb-cluster.yaml" \
-    | kubectl apply -f -
+  DB_CONTACT_POINTS="$ledger_uri" SCALARDB_VERSION="$SCALARDB_VERSION" \
+    envsubst '${LEDGER_NS} ${SCALARDB_VERSION} ${STORAGE} ${DB_CONTACT_POINTS}' \
+    < "$E2E_DIR/scalardb-cluster.yaml" | kubectl apply -f -
   if ! kubectl -n "$LEDGER_NS" rollout status deployment/scalardb-cluster --timeout=300s; then
     diag_and_die "$LEDGER_NS" "the ScalarDB Cluster node the fixture writes through did not become ready"
   fi
@@ -148,16 +152,24 @@ db_records_populate() {
   db_records_sql "$hang"
 }
 
-# Internal helper. Reads Cosmos, not SQL: SQL cannot see tx_state and a cluster read triggers
-# recovery.
+# Internal helper. Reads the storage directly, not through the cluster's SQL: SQL cannot see
+# tx_state and a cluster read triggers recovery.
 # Usage: db_records_count <category> [tx_state]
 db_records_count() {
   local category="$1" state="${2:-}" filter=""
-  if [ -n "$state" ]; then
-    filter=" AND c.values.tx_state = $state"
+  if [ "$STORAGE" = jdbc ]; then
+    if [ -n "$state" ]; then
+      filter=" AND \"tx_state\" = $state"
+    fi
+    count_jdbc_records_by_query \
+      "SELECT COUNT(*) FROM \"$DB_NS\".\"$DB_TABLE\" WHERE \"pk\" LIKE '$category-%'$filter"
+  else
+    if [ -n "$state" ]; then
+      filter=" AND c.values.tx_state = $state"
+    fi
+    count_cosmos_records_by_query "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE" \
+      "SELECT VALUE COUNT(1) FROM c WHERE STARTSWITH(c.partitionKey.pk, '$category-')$filter"
   fi
-  count_cosmos_records_by_query "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE" \
-    "SELECT VALUE COUNT(1) FROM c WHERE STARTSWITH(c.partitionKey.pk, '$category-')$filter"
 }
 
 # Internal helper.

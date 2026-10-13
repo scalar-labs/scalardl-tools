@@ -7,8 +7,8 @@
 #
 # Required environment:
 #   CLEANUP_VERSION  tag of the scalardl-cleanup image
-#   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary, needed only by the counting helpers,
-#                    which check for it themselves
+#   COSMOSDB_SHELL   path to the Azure Cosmos DB Shell binary, needed only by the counting helpers
+#                    and only with STORAGE=cosmos; they check for it themselves
 #   RUNNER_TEMP      scratch directory for the rendered manifests
 # and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed. It sets no shell
 # options of its own; the caller is expected to run under `set -euo pipefail`, which some of these
@@ -17,8 +17,9 @@
 # The setup functions communicate through globals rather than arguments. Call them in this order,
 # and read what they set:
 #   init_manifests_workdir              -> work
-#   load_ad_credentials                 -> ledger_uri / ledger_key / auditor_uri / auditor_key
-#                                          (and ledger_props / auditor_props, their source files)
+#   load_ad_credentials                 -> ledger_uri / ledger_key / ledger_user and the auditor_*
+#                                          equivalents (and ledger_props / auditor_props, their
+#                                          source files)
 #   setup_ledger_ad / setup_auditor_ad  take no arguments; both of the above must be set by then
 
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,9 +40,10 @@ init_manifests_workdir() {
 # Usage: read_prop_value <file> <key>
 read_prop_value() { grep -m1 "^$2=" "$1" | cut -d= -f2-; }
 
-# Each AD's Cosmos endpoint and key, taken from that AD's deployed server config. Reading them back
-# from the cluster points the cleanup Jobs at exactly the account and credentials their server uses,
-# and keeps these scripts free of secrets of their own.
+# Each AD's database endpoint and credentials, taken from that AD's deployed server config. Reading
+# them back from the cluster points the cleanup Jobs at exactly the database and credentials their
+# server uses, and keeps these scripts free of secrets of their own. The username is empty for
+# Cosmos, which takes none.
 # Usage: load_ad_credentials
 load_ad_credentials() {
   ledger_props="$RUNNER_TEMP/ledger.properties"
@@ -51,13 +53,30 @@ load_ad_credentials() {
   kubectl -n "$AUDITOR_NS" get secret auditor-config -o jsonpath='{.data.auditor\.properties}' | base64 -d > "$auditor_props"
   ledger_uri=$(read_prop_value "$ledger_props" scalar.db.contact_points)
   ledger_key=$(read_prop_value "$ledger_props" scalar.db.password)
+  ledger_user=$(read_prop_value "$ledger_props" scalar.db.username || true)
   auditor_uri=$(read_prop_value "$auditor_props" scalar.db.contact_points)
   auditor_key=$(read_prop_value "$auditor_props" scalar.db.password)
+  auditor_user=$(read_prop_value "$auditor_props" scalar.db.username || true)
+}
+
+# Render an AD's ConfigMap from the shipped manifest, pointing it at the deployed database. Rendering
+# the shipped manifests is what makes the run exercise what an operator applies; for JDBC that means
+# switching the preset storage and uncommenting the username line the manifest ships commented out.
+# Usage: render_configmap <source> <destination> <contact-points> <username> [extra sed args...]
+render_configmap() {
+  local source="$1" destination="$2" contact_points="$3" username="$4"
+  shift 4
+  local args=(-E -e "s|<cosmos-account-uri>|${contact_points}|")
+  if [ "$STORAGE" = jdbc ]; then
+    args+=(-e 's|^([[:space:]]*)scalar\.db\.storage=cosmos$|\1scalar.db.storage=jdbc|')
+    args+=(-e "s|^([[:space:]]*)#scalar\\.db\\.username=.*|\\1scalar.db.username=${username}|")
+  fi
+  sed "${args[@]}" "$@" "$source" > "$destination"
 }
 
 # Upsert an AD's credentials Secret. The Jobs pull it in with envFrom, so it has to exist before they
 # run. `create --dry-run=client | apply` is the upsert: a plain `create` fails once it exists.
-# Usage: upsert_credentials_secret <namespace> <cosmos-key>
+# Usage: upsert_credentials_secret <namespace> <password>
 upsert_credentials_secret() {
   kubectl -n "$1" create secret generic scalardl-cleanup-credentials \
     --from-literal=SCALAR_DB_PASSWORD="$2" \
@@ -87,9 +106,9 @@ setup_ledger_ad() {
   # Create the checkpoint volume.
   kubectl -n "$LEDGER_NS" apply -f "$work/ledger-ad/pvc.yaml"
 
-  # Apply the ConfigMap, substituting contact_points first.
-  sed "s|<cosmos-account-uri>|$ledger_uri|" \
-    "$MANIFESTS/ledger-ad/configmap.yaml" > "$work/ledger-ad/configmap.yaml"
+  # Apply the ConfigMap, pointing it at the database first.
+  render_configmap "$MANIFESTS/ledger-ad/configmap.yaml" "$work/ledger-ad/configmap.yaml" \
+    "$ledger_uri" "$ledger_user"
   append_extra_properties "$work/ledger-ad/configmap.yaml"
   kubectl -n "$LEDGER_NS" apply -f "$work/ledger-ad/configmap.yaml"
 }
@@ -103,14 +122,13 @@ setup_auditor_ad() {
   # Create the checkpoint volume.
   kubectl -n "$AUDITOR_NS" apply -f "$work/auditor-ad/pvc.yaml"
 
-  # Apply the ConfigMap, substituting contact_points and the Auditor host first. The E2E Auditor
+  # Apply the ConfigMap, pointing it at the database and the Auditor host first. The E2E Auditor
   # serves TLS, so uncomment the tls.* lines too and pin its cert SAN, which the host above is not.
-  sed -E \
-    -e "s|<cosmos-account-uri>|$auditor_uri|" \
+  render_configmap "$MANIFESTS/auditor-ad/configmap.yaml" "$work/auditor-ad/configmap.yaml" \
+    "$auditor_uri" "$auditor_user" \
     -e "s|<auditor-host>|auditor|" \
     -e "s|<auditor-cert-cn-or-san>|$AUDITOR_TLS_SAN|" \
-    -e 's|^([[:space:]]*)#(scalar\.dl\.client\.auditor\.tls\.)|\1\2|' \
-    "$MANIFESTS/auditor-ad/configmap.yaml" > "$work/auditor-ad/configmap.yaml"
+    -e 's|^([[:space:]]*)#(scalar\.dl\.client\.auditor\.tls\.)|\1\2|'
   append_extra_properties "$work/auditor-ad/configmap.yaml"
   kubectl -n "$AUDITOR_NS" apply -f "$work/auditor-ad/configmap.yaml"
 
@@ -246,35 +264,70 @@ extract_completion_token() {
   printf '%s\n' "$token"
 }
 
+# The counting helpers below take a Cosmos endpoint and key, which the JDBC paths ignore: there both
+# ADs share the one PostgreSQL deployed in the Ledger namespace, which the helpers reach themselves.
+# With JDBC a ScalarDB namespace is a schema and a table a table, so <database> / <container> name
+# them the same way for both storages.
+
 # Count the asset locks still held: finalize-auditor recovers every one it finds, so zero is what
 # says it left none behind. lock_type comes from AuditorInternalValues.
-# Usage: count_cosmos_held_locks <endpoint> <key> <database>
-count_cosmos_held_locks() {
-  count_cosmos_records_by_query "$1" "$2" "$3" asset_lock \
-    'SELECT VALUE COUNT(1) FROM c WHERE c.values.lock_type IN (2, 3)'
+# Usage: count_held_locks <endpoint> <key> <database>
+count_held_locks() {
+  if [ "$STORAGE" = jdbc ]; then
+    count_jdbc_records_by_query "SELECT COUNT(*) FROM \"$3\".\"asset_lock\" WHERE \"lock_type\" IN (2, 3)"
+  else
+    count_cosmos_records_by_query "$1" "$2" "$3" asset_lock \
+      'SELECT VALUE COUNT(1) FROM c WHERE c.values.lock_type IN (2, 3)'
+  fi
 }
 
 # Count the transaction records left non-terminal: such a record still needs its Coordinator record,
 # so zero means cleanup-coordinator orphaned none. tx_state and its values are ScalarDB internals.
-# Usage: count_cosmos_unsettled_records <endpoint> <key> <database> <container>
-count_cosmos_unsettled_records() {
-  count_cosmos_records_by_query "$1" "$2" "$3" "$4" \
-    'SELECT VALUE COUNT(1) FROM c WHERE c.values.tx_state IN (1, 2)'
+# Usage: count_unsettled_records <endpoint> <key> <database> <container>
+count_unsettled_records() {
+  if [ "$STORAGE" = jdbc ]; then
+    count_jdbc_records_by_query "SELECT COUNT(*) FROM \"$3\".\"$4\" WHERE \"tx_state\" IN (1, 2)"
+  else
+    count_cosmos_records_by_query "$1" "$2" "$3" "$4" \
+      'SELECT VALUE COUNT(1) FROM c WHERE c.values.tx_state IN (1, 2)'
+  fi
 }
 
 # Abort unless a container holds no non-terminal records.
 # Usage: assert_no_unsettled_records <endpoint> <key> <database> <container>
 assert_no_unsettled_records() {
   local unsettled
-  unsettled=$(count_cosmos_unsettled_records "$1" "$2" "$3" "$4")
+  unsettled=$(count_unsettled_records "$1" "$2" "$3" "$4")
   [ "$unsettled" -eq 0 ] \
     || { echo "::error::$3.$4 holds $unsettled non-terminal records"; exit 1; }
 }
 
-# Count items in a container, authenticating with the given account endpoint and key.
-# Usage: count_cosmos_records <endpoint> <key> <database> <container>
-count_cosmos_records() {
-  count_cosmos_records_by_query "$1" "$2" "$3" "$4" 'SELECT VALUE COUNT(1) FROM c'
+# Count the records in a container.
+# Usage: count_records <endpoint> <key> <database> <container>
+count_records() {
+  if [ "$STORAGE" = jdbc ]; then
+    count_jdbc_records_by_query "SELECT COUNT(*) FROM \"$3\".\"$4\""
+  else
+    count_cosmos_records_by_query "$1" "$2" "$3" "$4" 'SELECT VALUE COUNT(1) FROM c'
+  fi
+}
+
+# Run a SQL query that returns a single number against the E2E PostgreSQL, and echo it. psql runs in
+# the database's own Pod, so the scripts need no client of their own.
+# Usage: count_jdbc_records_by_query <query>
+count_jdbc_records_by_query() {
+  local query="$1" output count
+  # `|| true`, with the check below, so a failed query is reported with psql's own message rather
+  # than aborting silently under `set -e`.
+  output=$(kubectl -n "$LEDGER_NS" exec deploy/postgres -- \
+    psql -U postgres -v ON_ERROR_STOP=1 -tA -c "$query" 2>&1 || true)
+  count=$(printf '%s\n' "$output" | grep -oxE '[0-9]+' | tail -n1 || true)
+  if [ -z "$count" ]; then
+    echo "::error::could not read a count from PostgreSQL for: $query" >&2
+    printf '%s\n' "$output" >&2
+    return 1
+  fi
+  printf '%s\n' "$count"
 }
 
 # Run a query that returns a single number, and echo it.

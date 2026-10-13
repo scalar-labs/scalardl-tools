@@ -4,9 +4,12 @@
 # envsubst variables (see db-records.sh):
 #   ${LEDGER_NS}          k8s namespace, the Ledger's, because the account is the Ledger's
 #   ${SCALARDB_VERSION}   image tag, matching the ScalarDB the cleanup tool builds against
-#   ${COSMOS_URI}         Cosmos DB account URI, read back from the deployed Ledger's own config
+#   ${STORAGE}            cosmos or jdbc (see common.sh)
+#   ${DB_CONTACT_POINTS}  Cosmos DB account URI or JDBC URL, read back from the deployed Ledger's
+#                         own config
 #
-# The account key goes in the scalardb-cluster-credentials Secret, pulled in below with envFrom.
+# The password, and for JDBC the username, go in the scalardb-cluster-credentials Secret, pulled in
+# below with envFrom.
 
 apiVersion: apps/v1
 kind: Deployment
@@ -38,9 +41,9 @@ spec:
             - name: SCALAR_DB_CLUSTER_NODE_STANDALONE_MODE_ENABLED
               value: "true"
             - name: SCALAR_DB_STORAGE
-              value: "cosmos"
+              value: "${STORAGE}"
             - name: SCALAR_DB_CONTACT_POINTS
-              value: "${COSMOS_URI}"
+              value: "${DB_CONTACT_POINTS}"
             - name: SCALAR_DB_SQL_ENABLED
               value: "true"
             # Short, so a table this node creates is not shadowed by a stale negative entry.
