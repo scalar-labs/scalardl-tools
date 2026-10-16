@@ -2,7 +2,9 @@ package com.scalar.dl.tools.scan;
 
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.storage.cosmos.CosmosConfig;
+import com.scalar.db.storage.jdbc.JdbcConfig;
 import com.scalar.dl.tools.scan.cosmos.CosmosResumableScanner;
+import com.scalar.dl.tools.scan.jdbc.JdbcResumableScanner;
 import java.nio.file.Path;
 
 /** Factory for creating {@link ResumableScanner} instances based on the configured storage. */
@@ -26,7 +28,10 @@ public final class ResumableScannerFactory {
     if (CosmosConfig.STORAGE_NAME.equals(storage)) {
       return new CosmosResumableScanner(databaseConfig, checkpointDir);
     }
+    if (JdbcConfig.STORAGE_NAME.equals(storage)) {
+      return new JdbcResumableScanner(databaseConfig, checkpointDir);
+    }
     throw new IllegalArgumentException(
-        "This tool only supports Cosmos DB. Configured storage: " + storage);
+        "This tool only supports Cosmos DB and JDBC databases. Configured storage: " + storage);
   }
 }

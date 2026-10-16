@@ -40,6 +40,9 @@ tasks.register('cosmosIntegrationTest', Test) {
     group 'verification'
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
+    filter {
+        includeTestsMatching 'com.scalar.dl.tools.scan.cosmos.*'
+    }
     outputs.upToDateWhen { false }
     shouldRunAfter test
     // Forward scalardb.cosmos.* system properties to the test JVM
@@ -48,6 +51,23 @@ tasks.register('cosmosIntegrationTest', Test) {
     }
     maxHeapSize '6g'
     jvmArgs '-XX:MaxDirectMemorySize=4g'
+}
+
+tasks.register('jdbcIntegrationTest', Test) {
+    useJUnitPlatform()
+    description 'Runs the JDBC integration tests. Requires a real JDBC database.'
+    group 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    filter {
+        includeTestsMatching 'com.scalar.dl.tools.scan.jdbc.*'
+    }
+    outputs.upToDateWhen { false }
+    shouldRunAfter test
+    // Forward scalardb.jdbc.* system properties to the test JVM
+    options {
+        systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)
+    }
 }
 
 spotless {
