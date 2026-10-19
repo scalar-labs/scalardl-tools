@@ -63,6 +63,14 @@ class PrimaryKeySerializerTest {
           .addClusteringKey("ck")
           .build();
 
+  private static final TableMetadata FLOATING_POINT_KEY_METADATA =
+      TableMetadata.newBuilder()
+          .addColumn("pk", DataType.FLOAT)
+          .addColumn("ck", DataType.DOUBLE)
+          .addPartitionKey("pk")
+          .addClusteringKey("ck")
+          .build();
+
   @Test
   void toJsonAndFromJson_allDataTypesGiven_shouldRoundTrip() {
     // Arrange
@@ -87,6 +95,33 @@ class PrimaryKeySerializerTest {
 
     // Assert
     assertThat(restored).isEqualTo(key);
+  }
+
+  @Test
+  void toJsonAndFromJson_specialFloatingPointValuesGiven_shouldRoundTrip() {
+    // Arrange
+    List<List<Column<?>>> keys =
+        Arrays.asList(
+            Arrays.asList(FloatColumn.of("pk", Float.NaN), DoubleColumn.of("ck", Double.NaN)),
+            Arrays.asList(
+                FloatColumn.of("pk", Float.POSITIVE_INFINITY),
+                DoubleColumn.of("ck", Double.POSITIVE_INFINITY)),
+            Arrays.asList(
+                FloatColumn.of("pk", Float.NEGATIVE_INFINITY),
+                DoubleColumn.of("ck", Double.NEGATIVE_INFINITY)),
+            Arrays.asList(FloatColumn.of("pk", -0.0f), DoubleColumn.of("ck", -0.0d)),
+            Arrays.asList(
+                FloatColumn.of("pk", Float.MIN_VALUE), DoubleColumn.of("ck", Double.MAX_VALUE)));
+
+    for (List<Column<?>> key : keys) {
+      // Act
+      List<Column<?>> restored =
+          PrimaryKeySerializer.fromJson(
+              PrimaryKeySerializer.toJson(key), FLOATING_POINT_KEY_METADATA);
+
+      // Assert
+      assertThat(restored).isEqualTo(key);
+    }
   }
 
   @Test

@@ -33,8 +33,9 @@ import java.util.Objects;
  * them.
  *
  * <p>The JSON is an array of {@code {"name": ..., "type": ..., "value": ...}} objects in primary
- * key order (partition key columns followed by clustering key columns). BLOB values are encoded in
- * Base64 and date/time values in ISO-8601.
+ * key order (partition key columns followed by clustering key columns). FLOAT and DOUBLE values are
+ * encoded as strings so that NaN and infinities, which JSON numbers cannot represent, round-trip
+ * exactly. BLOB values are encoded in Base64 and date/time values in ISO-8601.
  */
 final class PrimaryKeySerializer {
 
@@ -70,8 +71,8 @@ final class PrimaryKeySerializer {
       case BOOLEAN -> node.put(VALUE, column.getBooleanValue());
       case INT -> node.put(VALUE, column.getIntValue());
       case BIGINT -> node.put(VALUE, column.getBigIntValue());
-      case FLOAT -> node.put(VALUE, column.getFloatValue());
-      case DOUBLE -> node.put(VALUE, column.getDoubleValue());
+      case FLOAT -> node.put(VALUE, Float.toString(column.getFloatValue()));
+      case DOUBLE -> node.put(VALUE, Double.toString(column.getDoubleValue()));
       case TEXT -> node.put(VALUE, column.getTextValue());
       case BLOB ->
           node.put(
@@ -139,8 +140,7 @@ final class PrimaryKeySerializer {
           case BOOLEAN -> value.isBoolean();
           case INT -> value.isInt();
           case BIGINT -> value.isIntegralNumber() && value.canConvertToLong();
-          case FLOAT, DOUBLE -> value.isNumber();
-          case TEXT, BLOB, DATE, TIME, TIMESTAMP, TIMESTAMPTZ -> value.isTextual();
+          case FLOAT, DOUBLE, TEXT, BLOB, DATE, TIME, TIMESTAMP, TIMESTAMPTZ -> value.isTextual();
         };
     if (!validJsonType) {
       throw new IllegalArgumentException("Unexpected JSON value type for column " + name);
@@ -149,8 +149,8 @@ final class PrimaryKeySerializer {
       case BOOLEAN -> BooleanColumn.of(name, value.booleanValue());
       case INT -> IntColumn.of(name, value.intValue());
       case BIGINT -> BigIntColumn.of(name, value.longValue());
-      case FLOAT -> FloatColumn.of(name, value.floatValue());
-      case DOUBLE -> DoubleColumn.of(name, value.doubleValue());
+      case FLOAT -> FloatColumn.of(name, Float.parseFloat(value.textValue()));
+      case DOUBLE -> DoubleColumn.of(name, Double.parseDouble(value.textValue()));
       case TEXT -> TextColumn.of(name, value.textValue());
       case BLOB -> BlobColumn.of(name, Base64.getDecoder().decode(value.textValue()));
       case DATE -> DateColumn.of(name, LocalDate.parse(value.textValue()));
