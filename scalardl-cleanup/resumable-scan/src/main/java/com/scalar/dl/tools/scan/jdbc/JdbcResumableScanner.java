@@ -72,8 +72,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>The first scan without a checkpoint has no condition (level -1).
  *
- * <p>The handler is invoked sequentially in the scan order. Records in a page whose handling did
- * not complete are delivered again on resume (at-least-once).
+ * <p>The handler is invoked sequentially in the scan order.
  */
 @NotThreadSafe
 public final class JdbcResumableScanner implements ResumableScanner {

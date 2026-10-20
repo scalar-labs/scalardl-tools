@@ -39,6 +39,9 @@ import org.slf4j.LoggerFactory;
  * <p>Encapsulates all Cosmos-specific details: CosmosClient creation, namespace-to-database /
  * table-to-container mapping, FeedRange discovery, per-partition parallel scanning, and
  * raw-document-to-Result conversion.
+ *
+ * <p>The handler is invoked concurrently from multiple scan worker threads (one per physical
+ * partition).
  */
 @NotThreadSafe
 public final class CosmosResumableScanner implements ResumableScanner {
