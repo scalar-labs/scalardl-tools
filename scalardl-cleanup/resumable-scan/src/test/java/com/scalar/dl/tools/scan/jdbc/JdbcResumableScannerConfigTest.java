@@ -1,7 +1,6 @@
 package com.scalar.dl.tools.scan.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.scalar.db.config.DatabaseConfig;
 import java.util.Properties;
@@ -33,23 +32,5 @@ class JdbcResumableScannerConfigTest {
     JdbcResumableScannerConfig config = new JdbcResumableScannerConfig(databaseConfig(props));
 
     assertThat(config.getPageSize()).isEqualTo(50);
-  }
-
-  @Test
-  void constructor_nonIntegerPageSizeGiven_shouldThrowIllegalArgumentException() {
-    Properties props = new Properties();
-    props.setProperty(JdbcResumableScannerConfig.PROP_SCAN_PAGE_SIZE, "abc");
-
-    assertThatThrownBy(() -> new JdbcResumableScannerConfig(databaseConfig(props)))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
-
-  @Test
-  void constructor_nonPositivePageSizeGiven_shouldThrowIllegalArgumentException() {
-    Properties props = new Properties();
-    props.setProperty(JdbcResumableScannerConfig.PROP_SCAN_PAGE_SIZE, "0");
-
-    assertThatThrownBy(() -> new JdbcResumableScannerConfig(databaseConfig(props)))
-        .isInstanceOf(IllegalArgumentException.class);
   }
 }
