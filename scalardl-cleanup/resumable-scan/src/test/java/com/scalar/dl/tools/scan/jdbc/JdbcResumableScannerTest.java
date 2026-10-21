@@ -250,15 +250,17 @@ class JdbcResumableScannerTest {
     Result r1 = compositeRecord("p1", 9, "a");
     Result r2 = compositeRecord("p1", 5, "a");
     Result r3 = compositeRecord("p1", 5, "b");
-    Result r4 = compositeRecord("p2", 7, "a");
+    Result r4 = compositeRecord("p1", 5, "c");
+    Result r5 = compositeRecord("p2", 7, "a");
+    Result r6 = compositeRecord("p2", 6, "a");
     enqueuePages(
         Arrays.asList(r1, r2), // no condition
-        Collections.singletonList(r3), // pk=p1 AND ck1=5 AND ck2>a
-        Collections.emptyList(), // pk=p1 AND ck1=5 AND ck2>b
+        Arrays.asList(r3, r4), // pk=p1 AND ck1=5 AND ck2>a
+        Collections.emptyList(), // pk=p1 AND ck1=5 AND ck2>c
         Collections.emptyList(), // pk=p1 AND ck1<5
-        Collections.singletonList(r4), // pk>p1
-        Collections.emptyList(), // pk=p2 AND ck1=7 AND ck2>a
-        Collections.emptyList(), // pk=p2 AND ck1<7
+        Arrays.asList(r5, r6), // pk>p1
+        Collections.emptyList(), // pk=p2 AND ck1=6 AND ck2>a
+        Collections.emptyList(), // pk=p2 AND ck1<6
         Collections.emptyList()); // pk>p2
     List<Result> handled = new ArrayList<>();
 
@@ -269,8 +271,8 @@ class JdbcResumableScannerTest {
     }
 
     // Assert
-    assertThat(result.getTotalScanned()).isEqualTo(4);
-    assertThat(handled).containsExactly(r1, r2, r3, r4);
+    assertThat(result.getTotalScanned()).isEqualTo(6);
+    assertThat(handled).containsExactly(r1, r2, r3, r4, r5, r6);
     assertThat(issuedScans).hasSize(8);
     assertThat(conditionsOf(issuedScans.get(0))).isEmpty();
     assertThat(conditionsOf(issuedScans.get(1)))
@@ -279,13 +281,13 @@ class JdbcResumableScannerTest {
                 ConditionBuilder.column("pk").isEqualToText("p1"),
                 ConditionBuilder.column("ck1").isEqualToInt(5),
                 ConditionBuilder.column("ck2").isGreaterThanText("a")));
-    // A non-empty page, even if not full, restarts from the narrowest level after the new last key
+    // A full page restarts from the narrowest level after the new last key
     assertThat(conditionsOf(issuedScans.get(2)))
         .isEqualTo(
             ImmutableSet.of(
                 ConditionBuilder.column("pk").isEqualToText("p1"),
                 ConditionBuilder.column("ck1").isEqualToInt(5),
-                ConditionBuilder.column("ck2").isGreaterThanText("b")));
+                ConditionBuilder.column("ck2").isGreaterThanText("c")));
     // An empty page widens the range. ck1 is a DESC clustering key, so "after" means "less than"
     assertThat(conditionsOf(issuedScans.get(3)))
         .isEqualTo(
@@ -315,7 +317,7 @@ class JdbcResumableScannerTest {
 
     // Act
     ScanResult result;
-    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 100)) {
+    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 1)) {
       result = scanner.scan(NAMESPACE, TABLE, r -> {});
     }
 
@@ -343,11 +345,111 @@ class JdbcResumableScannerTest {
   }
 
   @Test
+  void scan_whenPageWithFewerRecordsThanPageSizeReturned_shouldMoveToNextWiderLevelDirectly()
+      throws Exception {
+    // Arrange
+    writeLastKey(compositeKey("p1", 5, "b"));
+    Result r1 = compositeRecord("p1", 5, "c");
+    Result r2 = compositeRecord("p1", 3, "a");
+    Result r3 = compositeRecord("p2", 1, "a");
+    Result r4 = compositeRecord("p2", 1, "b");
+    Result r5 = compositeRecord("p2", 0, "a");
+    enqueuePages(
+        Collections.singletonList(r1), // pk=p1 AND ck1=5 AND ck2>b
+        Collections.singletonList(r2), // pk=p1 AND ck1<5
+        Arrays.asList(r3, r4), // pk>p1
+        Collections.emptyList(), // pk=p2 AND ck1=1 AND ck2>b
+        Collections.singletonList(r5), // pk=p2 AND ck1<1
+        Collections.emptyList()); // pk>p2
+    List<Result> handled = new ArrayList<>();
+
+    // Act
+    ScanResult result;
+    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 2)) {
+      result = scanner.scan(NAMESPACE, TABLE, handled::add);
+    }
+
+    // Assert
+    assertThat(result.getTotalScanned()).isEqualTo(5);
+    assertThat(handled).containsExactly(r1, r2, r3, r4, r5);
+    assertThat(issuedScans).hasSize(6);
+    // A page with fewer records exhausts the level, so the next wider level follows without
+    // reading the narrower levels after the new last key
+    assertThat(conditionsOf(issuedScans.get(1)))
+        .isEqualTo(
+            ImmutableSet.of(
+                ConditionBuilder.column("pk").isEqualToText("p1"),
+                ConditionBuilder.column("ck1").isLessThanInt(5)));
+    assertThat(conditionsOf(issuedScans.get(2)))
+        .isEqualTo(ImmutableSet.of(ConditionBuilder.column("pk").isGreaterThanText("p1")));
+    // A full page restarts from the narrowest level
+    assertThat(conditionsOf(issuedScans.get(3)))
+        .isEqualTo(
+            ImmutableSet.of(
+                ConditionBuilder.column("pk").isEqualToText("p2"),
+                ConditionBuilder.column("ck1").isEqualToInt(1),
+                ConditionBuilder.column("ck2").isGreaterThanText("b")));
+    assertThat(conditionsOf(issuedScans.get(4)))
+        .isEqualTo(
+            ImmutableSet.of(
+                ConditionBuilder.column("pk").isEqualToText("p2"),
+                ConditionBuilder.column("ck1").isLessThanInt(1)));
+    assertThat(conditionsOf(issuedScans.get(5)))
+        .isEqualTo(ImmutableSet.of(ConditionBuilder.column("pk").isGreaterThanText("p2")));
+    assertThat(issuedScans).allSatisfy(s -> assertPageScan(s, 2, COMPOSITE_KEY_ORDERINGS));
+  }
+
+  @Test
+  void scan_whenPageWithFewerRecordsThanPageSizeReturnedAtWidestLevel_shouldComplete()
+      throws Exception {
+    // Arrange
+    writeLastKey(compositeKey("p1", 5, "b"));
+    Result r = compositeRecord("p2", 7, "a");
+    enqueuePages(
+        Collections.emptyList(), // pk=p1 AND ck1=5 AND ck2>b
+        Collections.emptyList(), // pk=p1 AND ck1<5
+        Collections.singletonList(r)); // pk>p1
+
+    // Act
+    ScanResult result;
+    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 2)) {
+      result = scanner.scan(NAMESPACE, TABLE, ignored -> {});
+    }
+
+    // Assert
+    assertThat(result.getTotalScanned()).isEqualTo(1);
+    assertThat(issuedScans).hasSize(3);
+    assertThat(checkpointDir.resolve(QUALIFIED_TABLE)).doesNotExist();
+  }
+
+  @Test
+  void scan_whenFirstPageHasFewerRecordsThanPageSize_shouldCompleteWithoutFurtherQuery()
+      throws Exception {
+    // Arrange
+    Result r = compositeRecord("p1", 9, "a");
+    enqueuePages(Collections.singletonList(r));
+    List<Result> handled = new ArrayList<>();
+
+    // Act
+    ScanResult result;
+    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 2)) {
+      result = scanner.scan(NAMESPACE, TABLE, handled::add);
+    }
+
+    // Assert
+    assertThat(result.getTotalScanned()).isEqualTo(1);
+    assertThat(handled).containsExactly(r);
+    assertThat(issuedScans).hasSize(1);
+    assertThat(conditionsOf(issuedScans.get(0))).isEmpty();
+  }
+
+  @Test
   void scan_singleColumnPrimaryKeyGiven_shouldUseOnlyGreaterThanCondition() throws Exception {
     // Arrange
     enqueuePages(
         Arrays.asList(singleKeyRecord("a"), singleKeyRecord("b")),
-        Collections.singletonList(singleKeyRecord("c")));
+        Arrays.asList(singleKeyRecord("c"), singleKeyRecord("d")),
+        Collections.emptyList());
 
     // Act
     ScanResult result;
@@ -356,14 +458,14 @@ class JdbcResumableScannerTest {
     }
 
     // Assert
-    assertThat(result.getTotalScanned()).isEqualTo(3);
+    assertThat(result.getTotalScanned()).isEqualTo(4);
     assertThat(issuedScans).hasSize(3);
     assertThat(issuedScans)
         .allSatisfy(s -> assertPageScan(s, 2, Collections.singletonList(Scan.Ordering.asc("id"))));
     assertThat(conditionsOf(issuedScans.get(1)))
         .isEqualTo(ImmutableSet.of(ConditionBuilder.column("id").isGreaterThanText("b")));
     assertThat(conditionsOf(issuedScans.get(2)))
-        .isEqualTo(ImmutableSet.of(ConditionBuilder.column("id").isGreaterThanText("c")));
+        .isEqualTo(ImmutableSet.of(ConditionBuilder.column("id").isGreaterThanText("d")));
   }
 
   @Test
@@ -380,7 +482,7 @@ class JdbcResumableScannerTest {
 
     // Act
     ScanResult result;
-    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 100)) {
+    try (JdbcResumableScanner scanner = createScanner(COMPOSITE_KEY_METADATA, 1)) {
       result = scanner.scan(NAMESPACE, TABLE, handled::add);
     }
 
@@ -408,7 +510,7 @@ class JdbcResumableScannerTest {
                 ConditionBuilder.column("ck1").isLessThanInt(5)));
     assertThat(conditionsOf(issuedScans.get(3)))
         .isEqualTo(ImmutableSet.of(ConditionBuilder.column("pk").isGreaterThanText("p1")));
-    assertThat(issuedScans).allSatisfy(s -> assertPageScan(s, 100, COMPOSITE_KEY_ORDERINGS));
+    assertThat(issuedScans).allSatisfy(s -> assertPageScan(s, 1, COMPOSITE_KEY_ORDERINGS));
   }
 
   @Test

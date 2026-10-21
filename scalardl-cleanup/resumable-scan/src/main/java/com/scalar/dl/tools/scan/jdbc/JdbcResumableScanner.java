@@ -67,8 +67,11 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Each query reads one page of a level. After a page is handled, L moves to its last record and
  * the levels are rebuilt from the new L, so the scan starts again from the narrowest level. An
- * empty page means that the level has no more records, so the scan moves to the next wider level.
- * When the widest level is also empty, no record is left after L, and the scan is complete.
+ * empty page, or a page with fewer records than the page size, means that the level has no more
+ * records, so the scan moves to the next wider level. (After a page with fewer records, the levels
+ * from the new L that are as narrow as that level or narrower are within it, so they have no more
+ * records either.) When the widest level has no more records, no record is left after L, and the
+ * scan is complete.
  *
  * <p>The first scan without a checkpoint has no condition (level -1).
  *
@@ -174,8 +177,18 @@ public final class JdbcResumableScanner implements ResumableScanner {
       }
       lastKey = extractKey(page.get(page.size() - 1), primaryKeyColumnNames);
       checkpointManager.persistLastKey(qualifiedTableName, PrimaryKeySerializer.toJson(lastKey));
-      // Look for the records right after the new last key, from the narrowest range
-      level = narrowestLevel;
+      if (page.size() < pageSize) {
+        // The page did not fill up, so this range has no more records. The narrower ranges after
+        // the new last key are within this range, so they have no more records either.
+        if (level <= 0) {
+          // Nothing left even in the widest range (or in the whole table)
+          break;
+        }
+        level--;
+      } else {
+        // Look for the records right after the new last key, from the narrowest range
+        level = narrowestLevel;
+      }
     }
 
     logger.info("Scan complete for {}: {} records", qualifiedTableName, scanned);
