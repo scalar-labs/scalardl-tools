@@ -304,8 +304,7 @@ class JdbcResumableScannerTest {
   }
 
   @Test
-  void scan_whenNonEmptyPageReturnedAtWiderLevel_shouldRestartFromNarrowestLevel()
-      throws Exception {
+  void scan_whenFullPageReturnedAtWiderLevel_shouldRestartFromNarrowestLevel() throws Exception {
     // Arrange
     enqueuePages(
         Collections.singletonList(compositeRecord("p1", 9, "a")), // no condition
@@ -566,7 +565,7 @@ class JdbcResumableScannerTest {
     Exception failure = new Exception("handler failure");
     RecordHandler handler =
         r -> {
-          if (r == r2) {
+          if (r.getColumns().get("ck").getIntValue() == 4) {
             throw failure;
           }
         };

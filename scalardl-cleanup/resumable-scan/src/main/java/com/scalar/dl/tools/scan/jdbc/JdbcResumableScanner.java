@@ -67,13 +67,18 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Each query reads one page of a level. After a page is handled, L moves to its last record and
  * the levels are rebuilt from the new L, so the scan starts again from the narrowest level. An
- * empty page, or a page with fewer records than the page size, means that the level has no more
- * records, so the scan moves to the next wider level. (After a page with fewer records, the levels
- * from the new L that are as narrow as that level or narrower are within it, so they have no more
- * records either.) When the widest level has no more records, no record is left after L, and the
- * scan is complete.
+ * empty page means that the level has no more records, so the scan moves to the next wider level. A
+ * page with fewer records than the page size also means that the level has no more records. The
+ * levels from the new L that are as narrow as that level or narrower are within it, so the scan
+ * moves to the next wider level directly. When the widest level has no more records, no record is
+ * left after L, and the scan is complete.
  *
  * <p>The first scan without a checkpoint has no condition (level -1).
+ *
+ * <p>The scan relies on cross-partition scan ordering and filtering on every primary key column.
+ * ScalarDB does not support them on BLOB columns with Oracle and Db2. On these databases, a table
+ * can have a BLOB primary key column only through table import, and such a table cannot be scanned:
+ * the scan fails with an {@link UnsupportedOperationException} on the first query.
  *
  * <p>The handler is invoked sequentially in the scan order.
  */

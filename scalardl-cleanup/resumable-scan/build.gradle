@@ -64,7 +64,7 @@ tasks.register('jdbcIntegrationTest', Test) {
     }
     outputs.upToDateWhen { false }
     shouldRunAfter test
-    // Forward scalardb.jdbc.* system properties to the test JVM
+    // Forward scalardb.* system properties to the test JVM
     options {
         systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)
     }
