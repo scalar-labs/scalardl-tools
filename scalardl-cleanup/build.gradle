@@ -26,8 +26,8 @@ subprojects {
         mockitoVersion = '5.24.0'
         errorproneVersion = '2.50.0'
         errorpronePluginVersion = '5.1.1'
-        spotbugsVersion = '4.10.4'
-        spotbugsPluginVersion = '6.5.12'
+        spotbugsVersion = '4.10.5'
+        spotbugsPluginVersion = '6.5.13'
         googleJavaFormatVersion = '1.35.0'
         // azureCosmosVersion is resolved dynamically from ScalarDB's transitive dependencies
     }
