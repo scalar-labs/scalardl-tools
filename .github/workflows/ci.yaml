@@ -64,6 +64,47 @@ jobs:
             scalardl-cleanup/request-proof-cleanup/build/reports/tests/test/
             scalardl-cleanup/cli/build/reports/tests/test/
 
+  jdbc-integration-test:
+    name: JDBC integration test (resumable-scan, PostgreSQL)
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name db -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:17-alpine
+          for i in $(seq 1 60); do
+            docker exec db psql -U postgres -c "SELECT 1;" > /dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs db
+          exit 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run integration tests
+        run: |
+          ./gradlew :resumable-scan:jdbcIntegrationTest \
+            -Dscalardb.jdbc.url=jdbc:postgresql://localhost:5432/postgres \
+            -Dscalardb.jdbc.username=postgres \
+            -Dscalardb.jdbc.password=postgres
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jdbc-integration-test-reports
+          path: scalardl-cleanup/resumable-scan/build/reports/tests/jdbcIntegrationTest/
+
   integration-test:
     name: Cosmos DB integration test (resumable-scan)
     needs: check

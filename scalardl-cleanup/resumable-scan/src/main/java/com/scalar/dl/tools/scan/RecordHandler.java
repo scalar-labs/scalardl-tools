@@ -5,8 +5,11 @@ import com.scalar.db.api.Result;
 /**
  * Callback invoked by {@link ResumableScanner} for each scanned record.
  *
- * <p>Implementations must be thread-safe: the scanner invokes the handler concurrently from
- * multiple scan worker threads (one per physical partition).
+ * <p>Implementations must be thread-safe, because some scanners invoke the handler concurrently
+ * from multiple threads.
+ *
+ * <p>Implementations must be idempotent, because a record may be delivered more than once (see
+ * {@link ResumableScanner}).
  */
 @FunctionalInterface
 public interface RecordHandler {
