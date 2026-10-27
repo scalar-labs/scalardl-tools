@@ -227,7 +227,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
         new FinalizeTransactionRecordHandler(
             stateChecker, new RecordFinalizer(txManager), namespace, tableName);
 
-    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
+    try (ResumableScanner scanner = scannerFactory.create(namespace, scanCheckpointDir)) {
       ScanResult scanResult = scanner.scan(namespace, tableName, handler);
 
       logger.info(

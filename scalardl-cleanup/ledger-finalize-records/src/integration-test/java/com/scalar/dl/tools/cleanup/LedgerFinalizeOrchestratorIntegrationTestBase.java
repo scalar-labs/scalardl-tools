@@ -42,6 +42,14 @@ import org.junit.jupiter.api.io.TempDir;
 public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
   private static final String NAMESPACE = "it_ledger_orch";
+
+  /**
+   * Namespace of the tables that are not ScalarDL's, such as the tables of ScalarDB Cluster that
+   * shares the Coordinator table with Ledger. With multi-storage, it can be mapped to another
+   * storage than the one of ScalarDL's tables.
+   */
+  protected static final String OTHER_NAMESPACE = "it_ledger_orch_other";
+
   private static final String TABLE_1 = "test_table_1";
   private static final String TABLE_2 = "test_table_2";
   private static final String TABLE_EMPTY = "test_table_empty";
@@ -76,19 +84,22 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
     admin.createCoordinatorTables(true);
     admin.createNamespace(NAMESPACE);
+    admin.createNamespace(OTHER_NAMESPACE);
     TableMetadata metadata = createMetadataWithClusteringKey();
-    admin.createTable(NAMESPACE, TABLE_1, metadata);
-    admin.createTable(NAMESPACE, TABLE_2, metadata);
-    admin.createTable(NAMESPACE, TABLE_EMPTY, metadata);
+    admin.createTable(namespaceOf(TABLE_1), TABLE_1, metadata);
+    admin.createTable(namespaceOf(TABLE_2), TABLE_2, metadata);
+    admin.createTable(namespaceOf(TABLE_EMPTY), TABLE_EMPTY, metadata);
   }
 
   @AfterAll
   void tearDownAll() throws Exception {
     try {
-      for (String table : admin.getNamespaceTableNames(NAMESPACE)) {
-        admin.dropTable(NAMESPACE, table);
+      for (String namespace : new String[] {NAMESPACE, OTHER_NAMESPACE}) {
+        for (String table : admin.getNamespaceTableNames(namespace)) {
+          admin.dropTable(namespace, table);
+        }
+        admin.dropNamespace(namespace, true);
       }
-      admin.dropNamespace(NAMESPACE, true);
       admin.dropCoordinatorTables(true);
     } finally {
       admin.close();
@@ -97,6 +108,14 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       storage.close();
       twoPhaseCommitTxManager.close();
     }
+  }
+
+  /**
+   * Returns the namespace of the given table. {@code TABLE_2} is in {@code OTHER_NAMESPACE}, so
+   * that the tests cover tables in two storages with multi-storage.
+   */
+  private static String namespaceOf(String table) {
+    return TABLE_2.equals(table) ? OTHER_NAMESPACE : NAMESPACE;
   }
 
   private ResumableScannerFactory realScannerFactory() {
@@ -117,7 +136,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     DistributedTransaction tx = txManager.start();
     tx.insert(
         Insert.newBuilder()
-            .namespace(NAMESPACE)
+            .namespace(namespaceOf(table))
             .table(table)
             .partitionKey(Key.ofText(PARTITION_KEY, pk))
             .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
@@ -130,7 +149,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     TwoPhaseCommitTransaction tx = twoPhaseCommitTxManager.start();
     tx.insert(
         Insert.newBuilder()
-            .namespace(NAMESPACE)
+            .namespace(namespaceOf(table))
             .table(table)
             .partitionKey(Key.ofText(PARTITION_KEY, pk))
             .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
@@ -146,14 +165,14 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     TwoPhaseCommitTransaction tx = twoPhaseCommitTxManager.start();
     tx.get(
         Get.newBuilder()
-            .namespace(NAMESPACE)
+            .namespace(namespaceOf(table))
             .table(table)
             .partitionKey(Key.ofText(PARTITION_KEY, pk))
             .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
             .build());
     tx.delete(
         Delete.newBuilder()
-            .namespace(NAMESPACE)
+            .namespace(namespaceOf(table))
             .table(table)
             .partitionKey(Key.ofText(PARTITION_KEY, pk))
             .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
@@ -216,7 +235,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
   private Get buildGet(String table, String pk, int ck) {
     return Get.newBuilder()
-        .namespace(NAMESPACE)
+        .namespace(namespaceOf(table))
         .table(table)
         .partitionKey(Key.ofText(PARTITION_KEY, pk))
         .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
@@ -225,9 +244,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
   @BeforeEach
   void setUp() throws Exception {
-    admin.truncateTable(NAMESPACE, TABLE_1);
-    admin.truncateTable(NAMESPACE, TABLE_2);
-    admin.truncateTable(NAMESPACE, TABLE_EMPTY);
+    for (String table : new String[] {TABLE_1, TABLE_2, TABLE_EMPTY}) {
+      admin.truncateTable(namespaceOf(table), table);
+    }
 
     for (String table : new String[] {TABLE_1, TABLE_2}) {
       for (int i = 0; i < RECORDS_PER_TABLE; i++) {
@@ -374,8 +393,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   public void execute_partiallyCompletedStateGiven_shouldResumeAndPreserveTimestamp(
       @TempDir Path checkpointDir) throws Exception {
     // Arrange
-    String qualifiedTable1 = NAMESPACE + "." + TABLE_1;
-    String qualifiedTable2 = NAMESPACE + "." + TABLE_2;
+    String qualifiedTable1 = namespaceOf(TABLE_1) + "." + TABLE_1;
+    String qualifiedTable2 = namespaceOf(TABLE_2) + "." + TABLE_2;
     List<String> allTables = discoverAllTables();
 
     Thread.sleep(10);

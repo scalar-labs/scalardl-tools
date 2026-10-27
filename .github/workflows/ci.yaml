@@ -171,9 +171,55 @@ jobs:
           name: ledger-finalize-integration-test-reports
           path: scalardl-cleanup/ledger-finalize-records/build/reports/tests/cosmosIntegrationTest/
 
+  ledger-finalize-multi-storage-integration-test:
+    name: Multi-storage integration test (ledger-finalize-records, Cosmos DB and PostgreSQL)
+    needs: ledger-finalize-integration-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start PostgreSQL
+        run: |
+          docker run -d --name db -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:17-alpine
+          for i in $(seq 1 60); do
+            docker exec db psql -U postgres -c "SELECT 1;" > /dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          docker logs db
+          exit 1
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run integration tests
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+        run: |
+          ./gradlew :ledger-finalize-records:multiStorageIntegrationTest \
+            -Dscalardb.cosmos.uri="$COSMOS_URI" \
+            -Dscalardb.cosmos.password="$COSMOS_KEY" \
+            -Dscalardb.jdbc.url=jdbc:postgresql://localhost:5432/postgres \
+            -Dscalardb.jdbc.username=postgres \
+            -Dscalardb.jdbc.password=postgres
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ledger-finalize-multi-storage-integration-test-reports
+          path: scalardl-cleanup/ledger-finalize-records/build/reports/tests/multiStorageIntegrationTest/
+
   auditor-finalize-integration-test:
     name: Cosmos DB integration test (auditor-finalize-records)
-    needs: ledger-finalize-integration-test
+    needs: ledger-finalize-multi-storage-integration-test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
