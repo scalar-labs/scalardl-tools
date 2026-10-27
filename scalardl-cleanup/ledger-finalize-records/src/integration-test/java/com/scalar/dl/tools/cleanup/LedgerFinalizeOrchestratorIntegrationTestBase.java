@@ -251,23 +251,12 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     for (String table : new String[] {TABLE_1, TABLE_2}) {
       for (int i = 0; i < RECORDS_PER_TABLE; i++) {
         switch (i % 5) {
-          case 0:
-            createCommittedRecord(table, "pk-" + i, i);
-            break;
-          case 1:
-            createPreparedRecord(table, "pk-" + i, i);
-            break;
-          case 2:
-            createDeletedRecord(table, "pk-" + i, i);
-            break;
-          case 3:
-            updateCoordinatorStateToCommitted(createPreparedRecord(table, "pk-" + i, i));
-            break;
-          case 4:
-            updateCoordinatorStateToCommitted(createDeletedRecord(table, "pk-" + i, i));
-            break;
-          default:
-            throw new AssertionError("unreachable");
+          case 0 -> createCommittedRecord(table, "pk-" + i, i);
+          case 1 -> createPreparedRecord(table, "pk-" + i, i);
+          case 2 -> createDeletedRecord(table, "pk-" + i, i);
+          case 3 -> updateCoordinatorStateToCommitted(createPreparedRecord(table, "pk-" + i, i));
+          case 4 -> updateCoordinatorStateToCommitted(createDeletedRecord(table, "pk-" + i, i));
+          default -> throw new AssertionError("unreachable");
         }
       }
     }
