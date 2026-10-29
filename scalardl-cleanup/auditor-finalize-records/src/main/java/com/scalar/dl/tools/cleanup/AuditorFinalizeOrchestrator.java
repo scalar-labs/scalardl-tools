@@ -221,7 +221,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
     FinalizeAssetLockHandler handler =
         new FinalizeAssetLockHandler(stateChecker, lockFinalizer, logicalNamespace);
 
-    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
+    try (ResumableScanner scanner = scannerFactory.create(physicalNamespace, scanCheckpointDir)) {
       ScanResult scanResult =
           scanner.scan(physicalNamespace, AuditorInternalValues.ASSET_LOCK_TABLE_NAME, handler);
 

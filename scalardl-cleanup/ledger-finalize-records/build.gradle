@@ -60,9 +60,31 @@ tasks.register('cosmosIntegrationTest', Test) {
     group 'verification'
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
+    filter {
+        includeTestsMatching 'com.scalar.dl.tools.cleanup.cosmos.*'
+    }
     outputs.upToDateWhen { false }
     shouldRunAfter test
     // Forward scalardb.cosmos.* system properties to the test JVM
+    options {
+        systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)
+    }
+    maxHeapSize '6g'
+    jvmArgs '-XX:MaxDirectMemorySize=4g'
+}
+
+tasks.register('multiStorageIntegrationTest', Test) {
+    useJUnitPlatform()
+    description 'Runs the multi-storage integration tests. Requires a real Cosmos DB instance and a real JDBC database.'
+    group 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    filter {
+        includeTestsMatching 'com.scalar.dl.tools.cleanup.multistorage.*'
+    }
+    outputs.upToDateWhen { false }
+    shouldRunAfter test
+    // Forward scalardb.* system properties to the test JVM
     options {
         systemProperties(System.getProperties().findAll { it.key.toString().startsWith("scalardb") } as Map<String, ? extends Object>)
     }

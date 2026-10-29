@@ -215,7 +215,7 @@ public final class RequestProofCleanupOrchestrator implements AutoCloseable {
         new DeleteRequestProofHandler(
             new RequestProofDeletionChecker(deletableBeforeMs), recordDeleter);
 
-    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
+    try (ResumableScanner scanner = scannerFactory.create(baseNamespace, scanCheckpointDir)) {
       ScanResult scanResult =
           scanner.scan(baseNamespace, AuditorInternalValues.REQUEST_PROOF_TABLE_NAME, handler);
 
