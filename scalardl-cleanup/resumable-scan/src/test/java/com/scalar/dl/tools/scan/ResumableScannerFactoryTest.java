@@ -102,4 +102,21 @@ class ResumableScannerFactoryTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("cassandra");
   }
+
+  @Test
+  void create_namespaceMappedToUnsupportedStorageGiven_shouldThrowIllegalArgumentException() {
+    // Arrange
+    Properties props = multiStorageProperties();
+    props.setProperty(MultiStorageConfig.STORAGES, "cosmos_db,postgres,cassandra_db");
+    props.setProperty(MultiStorageConfig.STORAGES + ".cassandra_db.storage", "cassandra");
+    props.setProperty(MultiStorageConfig.STORAGES + ".cassandra_db.contact_points", "localhost");
+    props.setProperty(
+        MultiStorageConfig.NAMESPACE_MAPPING, "coordinator:postgres,ns_in_cassandra:cassandra_db");
+    ResumableScannerFactory factory = new ResumableScannerFactory(new DatabaseConfig(props));
+
+    // Act Assert
+    assertThatThrownBy(() -> factory.create("ns_in_cassandra", tempDir))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Configured storage: cassandra");
+  }
 }
