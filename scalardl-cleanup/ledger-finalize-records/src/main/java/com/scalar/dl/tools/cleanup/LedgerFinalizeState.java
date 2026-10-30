@@ -8,28 +8,33 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Checkpoint state for {@code ledger-finalize-records}. Stored as {@code state.json}. */
+/**
+ * Checkpoint state for {@code ledger-finalize-records}. Stored as {@code state.json}.
+ *
+ * <p>A table is recorded with the ID of the storage it is in, so that tables with the same name in
+ * different storages are not confused.
+ */
 public final class LedgerFinalizeState {
 
   @JsonProperty("started_at_ms")
   private final long startedAtMs;
 
   @JsonProperty("table_list")
-  private final List<String> tableList;
+  private final List<TargetTable> tableList;
 
   @JsonProperty("completed_tables")
-  private final Set<String> completedTables;
+  private final Set<TargetTable> completedTables;
 
   /** Creates an initial state with no completed tables. */
-  public LedgerFinalizeState(long startedAtMs, List<String> tableList) {
+  public LedgerFinalizeState(long startedAtMs, List<TargetTable> tableList) {
     this(startedAtMs, tableList, null);
   }
 
   @JsonCreator
   public LedgerFinalizeState(
       @JsonProperty("started_at_ms") long startedAtMs,
-      @JsonProperty("table_list") List<String> tableList,
-      @JsonProperty("completed_tables") List<String> completedTables) {
+      @JsonProperty("table_list") List<TargetTable> tableList,
+      @JsonProperty("completed_tables") List<TargetTable> completedTables) {
     this.startedAtMs = startedAtMs;
     this.tableList = tableList != null ? new ArrayList<>(tableList) : new ArrayList<>();
     this.completedTables =
@@ -40,15 +45,22 @@ public final class LedgerFinalizeState {
     return startedAtMs;
   }
 
-  public List<String> getTableList() {
+  public List<TargetTable> getTableList() {
     return Collections.unmodifiableList(tableList);
   }
 
-  public Set<String> getCompletedTables() {
+  public Set<TargetTable> getCompletedTables() {
     return Collections.unmodifiableSet(completedTables);
   }
 
-  public void markTableCompleted(String qualifiedTableName) {
-    completedTables.add(qualifiedTableName);
+  public void markTableCompleted(TargetTable table) {
+    completedTables.add(table);
   }
+
+  /**
+   * A table to finalize, identified by the ID of the storage it is in and its fully qualified name.
+   */
+  public record TargetTable(
+      @JsonProperty("storage_id") String storageId,
+      @JsonProperty("table") String qualifiedTableName) {}
 }

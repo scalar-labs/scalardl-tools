@@ -23,6 +23,7 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.Attribute;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
+import com.scalar.dl.tools.cleanup.LedgerFinalizeState.TargetTable;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import java.nio.file.Path;
@@ -265,14 +266,21 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     Thread.sleep(16_000);
   }
 
-  private List<String> discoverAllTables() throws Exception {
-    List<String> allTables = new ArrayList<>();
+  private List<TargetTable> discoverAllTables() throws Exception {
+    List<TargetTable> allTables = new ArrayList<>();
     for (String namespace : admin.getNamespaceNames()) {
       for (String table : admin.getNamespaceTableNames(namespace)) {
-        allTables.add(namespace + "." + table);
+        allTables.add(targetTableOf(namespace, table));
       }
     }
     return allTables;
+  }
+
+  /** Returns the given table as it is recorded in the checkpoint state. */
+  private TargetTable targetTableOf(String namespace, String table) {
+    return new TargetTable(
+        StorageIds.of(realScannerFactory().resolveDatabaseConfig(namespace)),
+        namespace + "." + table);
   }
 
   @Test
@@ -312,7 +320,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     }
 
     // Persist state with the known start timestamp
-    List<String> allTables = discoverAllTables();
+    List<TargetTable> allTables = discoverAllTables();
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
     LedgerFinalizeState state =
         new LedgerFinalizeState(guaranteeTimestamp, allTables, new ArrayList<>());
@@ -351,7 +359,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // keeps it in window.
     long tL = System.currentTimeMillis() + 1;
 
-    List<String> allTables = discoverAllTables();
+    List<TargetTable> allTables = discoverAllTables();
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
     LedgerFinalizeState state = new LedgerFinalizeState(tL, allTables, new ArrayList<>());
     stateManager.persist(state);
@@ -382,9 +390,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   public void execute_partiallyCompletedStateGiven_shouldResumeAndPreserveTimestamp(
       @TempDir Path checkpointDir) throws Exception {
     // Arrange
-    String qualifiedTable1 = namespaceOf(TABLE_1) + "." + TABLE_1;
-    String qualifiedTable2 = namespaceOf(TABLE_2) + "." + TABLE_2;
-    List<String> allTables = discoverAllTables();
+    TargetTable table1 = targetTableOf(namespaceOf(TABLE_1), TABLE_1);
+    TargetTable table2 = targetTableOf(namespaceOf(TABLE_2), TABLE_2);
+    List<TargetTable> allTables = discoverAllTables();
 
     Thread.sleep(10);
     long fixedTimestamp = System.currentTimeMillis();
@@ -393,8 +401,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     // Persist state with TABLE_1 already completed
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
     LedgerFinalizeState state =
-        new LedgerFinalizeState(
-            fixedTimestamp, allTables, Collections.singletonList(qualifiedTable1));
+        new LedgerFinalizeState(fixedTimestamp, allTables, Collections.singletonList(table1));
     stateManager.persist(state);
 
     // Act
@@ -424,7 +431,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
     LedgerFinalizeState updatedState = stateManager.load();
     assertThat(updatedState).isNotNull();
-    assertThat(updatedState.getCompletedTables()).contains(qualifiedTable1, qualifiedTable2);
+    assertThat(updatedState.getCompletedTables()).contains(table1, table2);
     assertThat(updatedState.getCompletedTables()).containsAll(allTables);
   }
 }

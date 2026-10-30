@@ -1,6 +1,5 @@
 package com.scalar.dl.tools.scan;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.storage.cosmos.CosmosConfig;
 import com.scalar.db.storage.jdbc.JdbcConfig;
@@ -54,9 +53,11 @@ public final class ResumableScannerFactory {
    * Returns the configuration of the storage of the given namespace. With multi-storage, the
    * storage is the one that the namespace is mapped to, or the default storage if the namespace is
    * not mapped. The deprecated table mapping is not considered.
+   *
+   * @param namespace ScalarDB namespace
+   * @return the configuration of the storage of the namespace
    */
-  @VisibleForTesting
-  DatabaseConfig resolveDatabaseConfig(String namespace) {
+  public DatabaseConfig resolveDatabaseConfig(String namespace) {
     if (multiStorageConfig == null) {
       return databaseConfig;
     }

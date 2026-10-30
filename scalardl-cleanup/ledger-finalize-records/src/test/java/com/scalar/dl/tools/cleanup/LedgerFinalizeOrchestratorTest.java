@@ -22,6 +22,7 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
+import com.scalar.dl.tools.cleanup.LedgerFinalizeState.TargetTable;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import com.scalar.dl.tools.scan.ResumableScanner;
@@ -36,6 +37,7 @@ import java.util.Properties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
 @SuppressWarnings("resource")
@@ -49,6 +51,11 @@ class LedgerFinalizeOrchestratorTest {
           .build();
   private static final TableMetadata TRANSACTION_TABLE_METADATA =
       ConsensusCommitUtils.buildTransactionTableMetadata(USER_TABLE_METADATA);
+
+  private static final DatabaseConfig COSMOS_CONFIG =
+      databaseConfig("cosmos", "https://localhost:8081");
+  private static final DatabaseConfig JDBC_CONFIG =
+      databaseConfig("jdbc", "jdbc:postgresql://localhost:5432/postgres");
 
   @TempDir Path tempDir;
 
@@ -64,7 +71,19 @@ class LedgerFinalizeOrchestratorTest {
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
     when(scannerFactory.create(any(), any())).thenReturn(scanner);
+    when(scannerFactory.resolveDatabaseConfig(any())).thenReturn(COSMOS_CONFIG);
     when(admin.getTableMetadata(anyString(), anyString())).thenReturn(TRANSACTION_TABLE_METADATA);
+  }
+
+  private static DatabaseConfig databaseConfig(String storage, String contactPoints) {
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, storage);
+    props.setProperty(DatabaseConfig.CONTACT_POINTS, contactPoints);
+    return new DatabaseConfig(props);
+  }
+
+  private static TargetTable cosmosTable(String qualifiedTableName) {
+    return new TargetTable(StorageIds.of(COSMOS_CONFIG), qualifiedTableName);
   }
 
   private LedgerFinalizeOrchestrator newOrchestrator() {
@@ -162,7 +181,8 @@ class LedgerFinalizeOrchestratorTest {
 
     LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
     assertThat(state).isNotNull();
-    assertThat(state.getCompletedTables()).containsExactlyInAnyOrder("ns1.tbl1", "ns2.tbl2");
+    assertThat(state.getCompletedTables())
+        .containsExactlyInAnyOrder(cosmosTable("ns1.tbl1"), cosmosTable("ns2.tbl2"));
     assertThat(state.getStartedAtMs()).isEqualTo(token.getStartedAtMs());
   }
 
@@ -232,7 +252,8 @@ class LedgerFinalizeOrchestratorTest {
 
     LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
     assertThat(state).isNotNull();
-    assertThat(state.getTableList()).containsExactly("ns1.tbl1", "ns1.tbl2");
+    assertThat(state.getTableList())
+        .containsExactly(cosmosTable("ns1.tbl1"), cosmosTable("ns1.tbl2"));
   }
 
   @Test
@@ -329,7 +350,7 @@ class LedgerFinalizeOrchestratorTest {
     // Only the finished table is marked completed; the failed table is left not-completed.
     LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
     assertThat(state).isNotNull();
-    assertThat(state.getCompletedTables()).containsExactly("ns1.tbl1");
+    assertThat(state.getCompletedTables()).containsExactly(cosmosTable("ns1.tbl1"));
   }
 
   @Test
@@ -341,8 +362,8 @@ class LedgerFinalizeOrchestratorTest {
     stateManager.persist(
         new LedgerFinalizeState(
             startedAtMs,
-            Arrays.asList("ns1.tbl1", "ns2.tbl2"),
-            Collections.singletonList("ns1.tbl1")));
+            Arrays.asList(cosmosTable("ns1.tbl1"), cosmosTable("ns2.tbl2")),
+            Collections.singletonList(cosmosTable("ns1.tbl1"))));
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
 
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
@@ -356,6 +377,41 @@ class LedgerFinalizeOrchestratorTest {
     verify(scanner).scan(eq("ns2"), eq("tbl2"), any());
     // The original start timestamp is carried over across the resume.
     assertThat(CompletionToken.decode(token).getStartedAtMs()).isEqualTo(startedAtMs);
+  }
+
+  @Test
+  void execute_tablesInDifferentStoragesGiven_shouldRecordStorageIdsAndSeparateScanCheckpoints()
+      throws Exception {
+    // Arrange
+    // ns2 is in another storage.
+    when(scannerFactory.resolveDatabaseConfig("ns2")).thenReturn(JDBC_CONFIG);
+    when(admin.getNamespaceNames()).thenReturn(new LinkedHashSet<>(Arrays.asList("ns1", "ns2")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl1")));
+    when(admin.getNamespaceTableNames("ns2"))
+        .thenReturn(new HashSet<>(Collections.singletonList("tbl2")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getTableList())
+        .containsExactly(
+            cosmosTable("ns1.tbl1"), new TargetTable(StorageIds.of(JDBC_CONFIG), "ns2.tbl2"));
+
+    Path stateDir = new LedgerFinalizeStateManager(tempDir).getStateDir();
+    ArgumentCaptor<Path> ns1CheckpointDir = ArgumentCaptor.forClass(Path.class);
+    verify(scannerFactory).create(eq("ns1"), ns1CheckpointDir.capture());
+    assertThat(ns1CheckpointDir.getValue())
+        .isEqualTo(stateDir.resolve(StorageIds.of(COSMOS_CONFIG)));
+    ArgumentCaptor<Path> ns2CheckpointDir = ArgumentCaptor.forClass(Path.class);
+    verify(scannerFactory).create(eq("ns2"), ns2CheckpointDir.capture());
+    assertThat(ns2CheckpointDir.getValue()).isEqualTo(stateDir.resolve(StorageIds.of(JDBC_CONFIG)));
   }
 
   @Test

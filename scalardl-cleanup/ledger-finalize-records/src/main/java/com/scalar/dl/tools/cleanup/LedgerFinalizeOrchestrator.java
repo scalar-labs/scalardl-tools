@@ -12,6 +12,7 @@ import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.db.util.ScalarDbUtils;
+import com.scalar.dl.tools.cleanup.LedgerFinalizeState.TargetTable;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.common.LedgerConfigValidator;
 import com.scalar.dl.tools.common.ScalarDlCleanupError;
@@ -117,12 +118,12 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     long startedAtMs = state.getStartedAtMs();
     RecordStateChecker stateChecker = new RecordStateChecker(startedAtMs);
 
-    for (String qualifiedTable : state.getTableList()) {
-      if (state.getCompletedTables().contains(qualifiedTable)) {
-        logger.info("Skipping already completed table: {}", qualifiedTable);
+    for (TargetTable table : state.getTableList()) {
+      if (state.getCompletedTables().contains(table)) {
+        logger.info("Skipping already completed table: {}", table);
         continue;
       }
-      processTable(stateManager, state, qualifiedTable, stateChecker);
+      processTable(stateManager, state, table, stateChecker);
     }
 
     String completionToken =
@@ -149,19 +150,18 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     }
 
     long startedAtMs = System.currentTimeMillis();
-    List<String> tableNames = discoverTables();
+    List<TargetTable> tables = discoverTables();
     // A loaded Ledger schema always has the asset and asset_metadata tables, both transactional.
-    if (tableNames.size() < MINIMUM_TARGET_TABLE_COUNT) {
-      throw new ScalarDlCleanupException(
-          ScalarDlCleanupError.TOO_FEW_TARGET_TABLES, tableNames.size());
+    if (tables.size() < MINIMUM_TARGET_TABLE_COUNT) {
+      throw new ScalarDlCleanupException(ScalarDlCleanupError.TOO_FEW_TARGET_TABLES, tables.size());
     }
-    state = new LedgerFinalizeState(startedAtMs, tableNames);
+    state = new LedgerFinalizeState(startedAtMs, tables);
     stateManager.persist(state);
     logger.info(
         "Starting a new run at {}. {} target tables were found: {}",
         Instant.ofEpochMilli(startedAtMs),
-        tableNames.size(),
-        tableNames);
+        tables.size(),
+        tables);
     return state;
   }
 
@@ -172,11 +172,12 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
         .orElse(CoordinatorStateAccessor.NAMESPACE);
   }
 
-  private List<String> discoverTables() throws Exception {
+  private List<TargetTable> discoverTables() throws Exception {
     String coordinatorTable =
         ScalarDbUtils.getFullTableName(coordinatorNamespace, CoordinatorStateAccessor.TABLE);
-    List<String> tables = new ArrayList<>();
+    List<TargetTable> tables = new ArrayList<>();
     for (String namespace : admin.getNamespaceNames()) {
+      String storageId = StorageIds.of(scannerFactory.resolveDatabaseConfig(namespace));
       for (String table : admin.getNamespaceTableNames(namespace)) {
         String qualifiedTable = ScalarDbUtils.getFullTableName(namespace, table);
         if (qualifiedTable.equals(coordinatorTable)) {
@@ -186,7 +187,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
           logger.info("Skipping the table because it is not transactional: {}", qualifiedTable);
           continue;
         }
-        tables.add(qualifiedTable);
+        tables.add(new TargetTable(storageId, qualifiedTable));
       }
     }
     return tables;
@@ -213,15 +214,16 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   private void processTable(
       LedgerFinalizeStateManager stateManager,
       LedgerFinalizeState state,
-      String qualifiedTable,
+      TargetTable table,
       RecordStateChecker stateChecker)
       throws Exception {
-    Path scanCheckpointDir = stateManager.getStateDir();
-    String[] parts = qualifiedTable.split("\\.", 2);
+    // Tables with the same name in different storages must not share scan checkpoints.
+    Path scanCheckpointDir = stateManager.getStateDir().resolve(table.storageId());
+    String[] parts = table.qualifiedTableName().split("\\.", 2);
     String namespace = parts[0];
     String tableName = parts[1];
 
-    logger.info("Starting to process the table: {}", qualifiedTable);
+    logger.info("Starting to process the table: {}", table);
 
     FinalizeTransactionRecordHandler handler =
         new FinalizeTransactionRecordHandler(
@@ -232,12 +234,12 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
 
       logger.info(
           "Finished processing the table: {}. {} records were scanned, {} records were finalized.",
-          qualifiedTable,
+          table,
           scanResult.getTotalScanned(),
           handler.getFinalizedCount());
     }
 
-    state.markTableCompleted(qualifiedTable);
+    state.markTableCompleted(table);
     stateManager.persist(state);
   }
 

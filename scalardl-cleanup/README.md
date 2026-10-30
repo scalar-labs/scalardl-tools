@@ -282,6 +282,8 @@ kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
 
 On a resumed `cleanup-coordinator`, the token values are ignored—the deletion boundary saved in the checkpoint is authoritative.
 
+Resume with the same `CLEANUP_VERSION` as the failed run. The checkpoint data is temporary, and its format can change between versions without compatibility. If you change the version, [start over from scratch](#starting-over-from-scratch).
+
 ### Starting over from scratch
 
 To discard the saved progress and start fresh, delete the Job **and** its checkpoint volume, re-create the volume, then re-apply the Job (the matching block above). The Ledger checkpoint volume is shared by both Ledger commands, so resetting it affects `finalize-ledger` and `cleanup-coordinator` together.
