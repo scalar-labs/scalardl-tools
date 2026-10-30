@@ -78,6 +78,7 @@ class LedgerFinalizeStateTest {
 
     // Assert
     assertThat(state.getCompletedTables()).containsExactly(T1);
+    assertThat(state.getCompletedTables()).doesNotContain(sameNameInAnotherStorage);
   }
 
   @Test

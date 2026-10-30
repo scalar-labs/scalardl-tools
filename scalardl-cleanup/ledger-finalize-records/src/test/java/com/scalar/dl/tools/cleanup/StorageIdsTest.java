@@ -15,6 +15,15 @@ class StorageIdsTest {
     return new DatabaseConfig(props);
   }
 
+  private static DatabaseConfig databaseConfig(
+      String storage, String contactPoints, String username) {
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, storage);
+    props.setProperty(DatabaseConfig.CONTACT_POINTS, contactPoints);
+    props.setProperty(DatabaseConfig.USERNAME, username);
+    return new DatabaseConfig(props);
+  }
+
   @Test
   void of_sameConfigurationGiven_shouldReturnSameId() {
     // Arrange
@@ -30,6 +39,17 @@ class StorageIdsTest {
     // Arrange
     DatabaseConfig config1 = databaseConfig("jdbc", "jdbc:postgresql://localhost:5432/db1");
     DatabaseConfig config2 = databaseConfig("jdbc", "jdbc:postgresql://localhost:5432/db2");
+
+    // Act Assert
+    assertThat(StorageIds.of(config1)).isNotEqualTo(StorageIds.of(config2));
+  }
+
+  @Test
+  void of_differentUsernamesGiven_shouldReturnDifferentIds() {
+    // Arrange
+    // Without a database name in the URL, PostgreSQL connects to the database of the username.
+    DatabaseConfig config1 = databaseConfig("jdbc", "jdbc:postgresql://localhost:5432/", "user1");
+    DatabaseConfig config2 = databaseConfig("jdbc", "jdbc:postgresql://localhost:5432/", "user2");
 
     // Act Assert
     assertThat(StorageIds.of(config1)).isNotEqualTo(StorageIds.of(config2));

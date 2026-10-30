@@ -7,10 +7,13 @@ import java.nio.charset.StandardCharsets;
 /**
  * Computes the IDs that identify storages in the checkpoint state.
  *
- * <p>An ID is a hash of the storage type, the contact points and the contact port, which together
- * identify the database that the storage connects to. They are hashed because the ID is used as a
- * directory name, and the contact points can have characters that cannot be used in it. The same
- * database written in different ways gets different IDs, which only makes its tables scanned twice.
+ * <p>An ID is a hash of the storage type, the contact points, the contact port and the username,
+ * which together identify the database that the storage connects to. The username is included
+ * because some databases choose the database to connect to by the username when the contact points
+ * do not name one. These values are hashed because the ID is used as a directory name, and the
+ * contact points can have characters that cannot be used in it. The same database written in
+ * different ways or used by different users gets different IDs, which only makes its tables scanned
+ * twice.
  */
 final class StorageIds {
 
@@ -30,7 +33,9 @@ final class StorageIds {
             + "\n"
             + String.join(",", databaseConfig.getContactPoints())
             + "\n"
-            + databaseConfig.getContactPort();
+            + databaseConfig.getContactPort()
+            + "\n"
+            + databaseConfig.getUsername().orElse("");
     return Hashing.sha256()
         .hashString(connection, StandardCharsets.UTF_8)
         .toString()
