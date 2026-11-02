@@ -17,9 +17,9 @@ The tool provides three commands, split across the two administrative domains (A
 
 | Command | AD | Description |
 |-----------------------|---------|--------------------------------------------------------------------------------------------------------------------------|
-| `finalize-ledger`     | Ledger  | Drives every unfinished record in every transactional table to a terminal state, then prints a **completion token**. Accesses Cosmos DB. |
-| `finalize-auditor`    | Auditor | Releases every unreleased asset lock, deletes the request proofs that are safe to remove, then prints a **completion token**. Accesses Cosmos DB and Auditor. |
-| `cleanup-coordinator` | Ledger  | Deletes the Coordinator state records that are safe to remove. Requires **both** completion tokens. Accesses Cosmos DB. |
+| `finalize-ledger`     | Ledger  | Drives every unfinished record in every transactional table to a terminal state, then prints a **completion token**. Accesses the [configured storages](#2-settings-the-commands-accept). |
+| `finalize-auditor`    | Auditor | Releases every unreleased asset lock, deletes the request proofs that are safe to remove, then prints a **completion token**. Accesses the [configured storages](#2-settings-the-commands-accept) and Auditor. |
+| `cleanup-coordinator` | Ledger  | Deletes the Coordinator state records that are safe to remove. Requires **both** completion tokens. Accesses the [configured storages](#2-settings-the-commands-accept). |
 
 You run the commands in three steps:
 
@@ -42,13 +42,13 @@ flowchart TB
 
 ## Limitations
 
-- The tool supports **Azure Cosmos DB for NoSQL** only. The tool rejects other configurations including `multi-storage`.
+- The tool supports **Azure Cosmos DB for NoSQL**. In the Ledger AD, `finalize-ledger` and `cleanup-coordinator` also accept a `multi-storage` configuration whose storages are Cosmos DB for NoSQL or JDBC databases. See [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance). `finalize-auditor` accepts Cosmos DB for NoSQL only.
 - The tool supports ScalarDL 3.14.0 or later.
-- If another ScalarDB instance shares the Coordinator table in the Ledger AD's Cosmos DB account, all of that instance's transactional tables must reside in that account.
+- If another ScalarDB instance shares the Coordinator table in the Ledger AD's Cosmos DB account, the Ledger AD's configuration must reach all of that instance's transactional tables.
 - [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled) must have never been enabled.
 - [`coordinator.group_commit.enabled`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatorgroup_commitenabled) must have never been enabled.
 
-Sharing the Coordinator table with other ScalarDB instances is itself supported: the ScalarDB instance that an application uses to reach the namespaces a Ledger function writes to shares it, and `finalize-ledger` finalizes every transactional table in the account no matter which instance owns it. What is not supported is a sharing instance configured with `multi-storage`, because it keeps some of its tables outside the account. The tool cannot detect those tables, so they keep their non-terminal records. In such a case, deleting the Coordinator state records makes those non-terminal records unrecoverable.
+Sharing the Coordinator table with other ScalarDB instances is itself supported: the ScalarDB instance that an application uses to reach the namespaces a Ledger function writes to shares it, and `finalize-ledger` finalizes every transactional table that the Ledger AD's configuration reaches, no matter which instance owns it. A sharing instance may keep some of its tables outside the account, for example a ScalarDB Cluster configured with `multi-storage` that keeps tables in PostgreSQL. In that case, configure the Ledger AD with `multi-storage` too, so that the tool reaches those tables. See [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance). The tool cannot detect tables that the configuration does not reach, so those tables keep their non-terminal records. Deleting the Coordinator state records then makes those non-terminal records unrecoverable.
 
 ## Prerequisites
 
@@ -65,6 +65,7 @@ The manifests are in `manifests/`, split into one directory per administrative d
 |----------------------------|-----------------------|---------------------------------------------------------------------|
 | `pvc.yaml`                 | PersistentVolumeClaim | Checkpoint volume, shared by both Ledger commands                  |
 | `configmap.yaml`           | ConfigMap             | Config for the `finalize-ledger` and `cleanup-coordinator` commands |
+| `configmap-multistorage.yaml` | ConfigMap          | Config with multi-storage of Cosmos DB and PostgreSQL, applied in place of `configmap.yaml`. See [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance) |
 | `finalize-ledger.yaml`     | Job                   | Runs `finalize-ledger`                                              |
 | `cleanup-coordinator.yaml` | Job                   | Runs `cleanup-coordinator`                                          |
 
@@ -89,17 +90,36 @@ Configuration falls into two groups: **deploy-time variables** you set in your s
 
 ### 2. Settings the commands accept
 
-Each command reads these properties from the `.properties` file that its AD's ConfigMap supplies. `scalar.db.storage` is preset to `cosmos`. Each property name links to its entry in the ScalarDB or ScalarDL configuration reference, except the `scalar.dl.tools.*` properties, which belong to this tool.
+Each command reads these properties from the `.properties` file that its AD's ConfigMap supplies. `scalar.db.storage` is preset to `cosmos`. In the Ledger AD, you can replace the storage settings with a `multi-storage` configuration instead, as described in [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance). Each property name links to its entry in the ScalarDB or ScalarDL configuration reference, except the `scalar.dl.tools.*` properties, which belong to this tool.
 
 **Ledger AD** – `ledger-ad/configmap.yaml`, read by `finalize-ledger` and `cleanup-coordinator`:
 
 | Property | Description |
 |---|---|
-| [`scalar.db.contact_points`](https://scalardb.scalar-labs.com/docs/latest/configurations/#storage-related-configurations) | Required. The Cosmos DB account URI. |
-| [`scalar.db.password`](https://scalardb.scalar-labs.com/docs/latest/configurations/#storage-related-configurations) | Required. The Cosmos DB key, supplied from the AD's Secret as `${env:SCALAR_DB_PASSWORD}`. |
+| [`scalar.db.contact_points`](https://scalardb.scalar-labs.com/docs/latest/configurations/#storage-related-configurations) | Required. The Cosmos DB account URI. With `multi-storage`, set it per storage instead. |
+| [`scalar.db.password`](https://scalardb.scalar-labs.com/docs/latest/configurations/#storage-related-configurations) | Required. The Cosmos DB key, supplied from the AD's Secret as `${env:SCALAR_DB_PASSWORD}`. With `multi-storage`, set it per storage instead. |
 | [`scalar.db.consensus_commit.coordinator.namespace`](https://scalardb.scalar-labs.com/docs/latest/configurations/#coordinatornamespace) | Optional. Set it only if Ledger overrides the default `coordinator` namespace. |
 | `scalar.dl.tools.scan.cosmos.max_threads` | Optional. The scan parallelism. Defaults to `32`. |
 | `scalar.dl.tools.scan.cosmos.page_size` | Optional. The records fetched per query page. Defaults to `100`. |
+| `scalar.dl.tools.scan.jdbc.page_size` | Optional. The records fetched per query page from a JDBC database. Used only with `multi-storage`. Defaults to `100`. |
+
+#### Sharing the Coordinator table with a multi-storage ScalarDB instance
+
+If a ScalarDB instance that shares the Coordinator table keeps some of its tables in a JDBC database, use a ScalarDB [multi-storage configuration](https://scalardb.scalar-labs.com/docs/latest/multi-storage-transactions/) that reaches both the Ledger's Cosmos DB account and the JDBC database. For Cosmos DB and PostgreSQL, `ledger-ad/configmap-multistorage.yaml` provides such a configuration. Apply it in place of `ledger-ad/configmap.yaml`. For another JDBC database, adapt the JDBC storage's settings in it.
+
+You fill in this configuration yourself from the Ledger's configuration and the configuration of the instance that shares the Coordinator table. The configuration of that instance, such as ScalarDB Cluster, does not necessarily work as is. For example, its storage names, its namespace mapping, and its other properties can differ from what the tool needs. Fill in the configuration as follows:
+
+1. **Cosmos DB storage.** Set `<cosmos-account-uri>` to the Ledger's Cosmos DB account URI. The Cosmos DB storage is the default storage, so the Coordinator table and ScalarDL's namespaces stay in it.
+2. **JDBC storage.** Set `<postgresql-jdbc-url>` and `<postgresql-username>` from the configuration of the instance that shares the Coordinator table. If that instance overrides other settings of the JDBC storage, such as `scalar.db.jdbc.table_metadata.schema`, add them under the `scalar.db.multi_storage.storages.postgresql.` prefix with the same values.
+3. **Namespace mapping.** In `scalar.db.multi_storage.namespace_mapping`, map **every** namespace that the instance keeps in PostgreSQL to the `postgresql` storage, such as `ns1:postgresql,ns2:postgresql`. The tool finds the tables outside the default storage only through this mapping, so it silently skips a namespace missing from it. The namespaces that the instance keeps in the Ledger's Cosmos DB account need no entry, because they belong to the default storage.
+4. **Other properties.** Add the other properties, such as `scalar.db.consensus_commit.coordinator.namespace` and `scalar.dl.tools.*`, at the top level, with the same values as in the Ledger's configuration. They apply to every storage.
+
+The tool rejects the configuration in the following cases:
+
+- A storage is neither Cosmos DB for NoSQL nor a JDBC database.
+- The deprecated `scalar.db.multi_storage.table_mapping` is set. Use `scalar.db.multi_storage.namespace_mapping` instead.
+
+Add the password of the JDBC database to the Secret that step 1 creates, as `SCALAR_DB_JDBC_PASSWORD`. Both Ledger AD Jobs load every key of the Secret as an environment variable.
 
 **Auditor AD** – `auditor-ad/configmap.yaml`, read by `finalize-auditor`:
 
@@ -138,6 +158,8 @@ kubectl -n "${LEDGER_NS:?}" create secret generic scalardl-cleanup-credentials \
   --from-literal=SCALAR_DB_PASSWORD='<cosmos-primary-key>'
 ```
 
+With [multi-storage](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance), also add the password of the JDBC database, for example `--from-literal=SCALAR_DB_JDBC_PASSWORD='<jdbc-password>'`.
+
 **b. Checkpoint volume.**
 
 ```bash
@@ -148,6 +170,12 @@ kubectl -n "${LEDGER_NS:?}" apply -f ledger-ad/pvc.yaml
 
 ```bash
 kubectl -n "${LEDGER_NS:?}" apply -f ledger-ad/configmap.yaml
+```
+
+With [multi-storage](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance), fill in `ledger-ad/configmap-multistorage.yaml` instead, then apply it:
+
+```bash
+kubectl -n "${LEDGER_NS:?}" apply -f ledger-ad/configmap-multistorage.yaml
 ```
 
 **d. Run.** Apply the Job:

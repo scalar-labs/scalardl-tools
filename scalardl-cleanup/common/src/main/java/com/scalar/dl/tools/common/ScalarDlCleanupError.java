@@ -98,6 +98,18 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "",
       "Upgrade the Auditor to a version that implements RecoverAssetLock, then re-run the"
           + " command."),
+  UNSUPPORTED_STORAGE_IN_MULTI_STORAGE(
+      Category.USER_ERROR,
+      "015",
+      "The storage '%s' in the multi-storage configuration is '%s', which is not supported.",
+      "",
+      "Use only Cosmos DB and JDBC databases as the storages in the multi-storage configuration."),
+  MULTI_STORAGE_TABLE_MAPPING_NOT_SUPPORTED(
+      Category.USER_ERROR,
+      "016",
+      "The multi-storage table mapping (scalar.db.multi_storage.table_mapping) is not supported.",
+      "",
+      "Use the namespace mapping (scalar.db.multi_storage.namespace_mapping) instead."),
 
   //
   // Errors for the internal error category
