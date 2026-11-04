@@ -152,6 +152,22 @@ class CoordinatorCleanupOrchestratorTest {
   }
 
   @Test
+  void create_multiStorageWithTableMappingGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.TABLE_MAPPING, "ns2.tbl:other_db");
+
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                CoordinatorCleanupOrchestrator.create(
+                    props, tempDir, createLedgerToken(1000L), createAuditorToken(2000L)))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.MULTI_STORAGE_TABLE_MAPPING_NOT_SUPPORTED.buildCode());
+  }
+
+  @Test
   void create_multiStorageWithCosmosAndJdbcGiven_shouldNotThrow() {
     // Arrange
     Properties props = multiStorageProperties("jdbc");

@@ -37,8 +37,8 @@ public final class StorageValidator {
    * namespace's would be missed.
    *
    * @param databaseConfig the ScalarDB database configuration
-   * @throws ScalarDlCleanupException if the configured storage is not supported
-   * @throws IllegalArgumentException if the multi-storage configuration is invalid
+   * @throws ScalarDlCleanupException if the configured storage is not supported, or if the
+   *     multi-storage configuration is invalid
    */
   public static void validateAllowingMultiStorage(DatabaseConfig databaseConfig) {
     Objects.requireNonNull(databaseConfig, "databaseConfig must not be null");
@@ -47,7 +47,7 @@ public final class StorageValidator {
       return;
     }
 
-    MultiStorageConfig multiStorageConfig = new MultiStorageConfig(databaseConfig);
+    MultiStorageConfig multiStorageConfig = parseMultiStorageConfig(databaseConfig);
     for (Map.Entry<String, Properties> entry :
         multiStorageConfig.getDatabasePropertiesMap().entrySet()) {
       String storage = new DatabaseConfig(entry.getValue()).getStorage();
@@ -62,6 +62,23 @@ public final class StorageValidator {
     if (!tableStorageMap.isEmpty()) {
       throw new ScalarDlCleanupException(
           ScalarDlCleanupError.MULTI_STORAGE_TABLE_MAPPING_NOT_SUPPORTED);
+    }
+  }
+
+  /**
+   * Parses the multi-storage configuration. {@link MultiStorageConfig} throws various runtime
+   * exceptions on a malformed configuration, such as {@link IllegalArgumentException} for an
+   * unknown storage name and {@link ArrayIndexOutOfBoundsException} for a mapping entry without a
+   * colon. They are all configuration errors, so they are reported as a user error.
+   */
+  private static MultiStorageConfig parseMultiStorageConfig(DatabaseConfig databaseConfig) {
+    try {
+      return new MultiStorageConfig(databaseConfig);
+    } catch (RuntimeException e) {
+      throw new ScalarDlCleanupException(
+          ScalarDlCleanupError.INVALID_MULTI_STORAGE_CONFIGURATION,
+          e,
+          e.getMessage() != null ? e.getMessage() : e.toString());
     }
   }
 }

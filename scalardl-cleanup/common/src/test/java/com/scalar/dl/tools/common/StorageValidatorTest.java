@@ -110,6 +110,39 @@ class StorageValidatorTest {
 
   @Test
   void
+      validateAllowingMultiStorage_unknownDefaultStorageGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.DEFAULT_STORAGE, "unknown_db");
+    DatabaseConfig databaseConfig = new DatabaseConfig(props);
+
+    // Act Assert
+    assertThatThrownBy(() -> StorageValidator.validateAllowingMultiStorage(databaseConfig))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.INVALID_MULTI_STORAGE_CONFIGURATION.buildCode())
+        .hasMessageContaining("unknown_db")
+        .hasCauseInstanceOf(IllegalArgumentException.class)
+        .extracting(e -> ((ScalarDlCleanupException) e).getCategory())
+        .isEqualTo(Category.USER_ERROR);
+  }
+
+  @Test
+  void
+      validateAllowingMultiStorage_namespaceMappingWithoutColonGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.NAMESPACE_MAPPING, "ns");
+    DatabaseConfig databaseConfig = new DatabaseConfig(props);
+
+    // Act Assert
+    assertThatThrownBy(() -> StorageValidator.validateAllowingMultiStorage(databaseConfig))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.INVALID_MULTI_STORAGE_CONFIGURATION.buildCode())
+        .hasCauseInstanceOf(ArrayIndexOutOfBoundsException.class);
+  }
+
+  @Test
+  void
       validateAllowingMultiStorage_multiStorageWithTableMappingGiven_shouldThrowScalarDlCleanupException() {
     // Arrange
     Properties props = multiStorageProperties("jdbc");

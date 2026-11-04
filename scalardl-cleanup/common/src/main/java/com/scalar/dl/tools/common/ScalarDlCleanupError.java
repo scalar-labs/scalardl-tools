@@ -110,6 +110,14 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "The multi-storage table mapping (scalar.db.multi_storage.table_mapping) is not supported.",
       "",
       "Use the namespace mapping (scalar.db.multi_storage.namespace_mapping) instead."),
+  INVALID_MULTI_STORAGE_CONFIGURATION(
+      Category.USER_ERROR,
+      "017",
+      "The multi-storage configuration is invalid: %s.",
+      "",
+      "Check that every storage name in the scalar.db.multi_storage.* properties is listed in"
+          + " scalar.db.multi_storage.storages, and that each mapping entry has the form"
+          + " <namespace>:<storage>."),
 
   //
   // Errors for the internal error category
