@@ -19,5 +19,3 @@ jobs:
     with:
       target-ref: ${{ inputs.target-ref || github.ref_name }}
       find-latest-release: ${{ inputs.find-latest-release }}
-    secrets:
-      SLACK_SECURITY_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
