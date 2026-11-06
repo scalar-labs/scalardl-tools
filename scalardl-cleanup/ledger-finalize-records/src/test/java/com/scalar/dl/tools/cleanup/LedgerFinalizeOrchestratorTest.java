@@ -20,9 +20,11 @@ import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.io.DataType;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.storage.multistorage.MultiStorageConfig;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
 import com.scalar.dl.tools.common.CompletionToken;
+import com.scalar.dl.tools.common.ScalarDlCleanupError;
 import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import com.scalar.dl.tools.scan.ResumableScanner;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
@@ -76,6 +78,21 @@ class LedgerFinalizeOrchestratorTest {
         admin, txManager, scannerFactory, tempDir, coordinatorNamespace);
   }
 
+  /**
+   * Returns multi-storage properties with Cosmos DB as the default storage and another storage of
+   * the given type, to which a namespace is mapped.
+   */
+  private static Properties multiStorageProperties(String otherStorage) {
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, MultiStorageConfig.STORAGE_NAME);
+    props.setProperty(MultiStorageConfig.STORAGES, "cosmos_db,other_db");
+    props.setProperty(MultiStorageConfig.STORAGES + ".cosmos_db.storage", "cosmos");
+    props.setProperty(MultiStorageConfig.STORAGES + ".other_db.storage", otherStorage);
+    props.setProperty(MultiStorageConfig.NAMESPACE_MAPPING, "ns:other_db");
+    props.setProperty(MultiStorageConfig.DEFAULT_STORAGE, "cosmos_db");
+    return props;
+  }
+
   @Test
   void create_nonCosmosStorageGiven_shouldThrowScalarDlCleanupException() {
     // Arrange
@@ -107,6 +124,58 @@ class LedgerFinalizeOrchestratorTest {
     // Arrange
     Properties props = new Properties();
     props.setProperty(DatabaseConfig.STORAGE, "cosmos");
+
+    StorageFactory storageFactory = mock(StorageFactory.class);
+    when(storageFactory.getStorageAdmin()).thenReturn(mock(DistributedStorageAdmin.class));
+    TransactionFactory transactionFactory = mock(TransactionFactory.class);
+    when(transactionFactory.getTransactionManager())
+        .thenReturn(mock(DistributedTransactionManager.class));
+
+    try (MockedStatic<StorageFactory> storageFactoryStatic = mockStatic(StorageFactory.class);
+        MockedStatic<TransactionFactory> transactionFactoryStatic =
+            mockStatic(TransactionFactory.class)) {
+      storageFactoryStatic
+          .when(() -> StorageFactory.create(any(Properties.class)))
+          .thenReturn(storageFactory);
+      transactionFactoryStatic
+          .when(() -> TransactionFactory.create(any(Properties.class)))
+          .thenReturn(transactionFactory);
+
+      // Act & Assert
+      assertThatCode(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+          .doesNotThrowAnyException();
+    }
+  }
+
+  @Test
+  void create_multiStorageWithUnsupportedStorageGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("cassandra");
+
+    // Act & Assert
+    assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.UNSUPPORTED_STORAGE_IN_MULTI_STORAGE.buildCode());
+  }
+
+  @Test
+  void create_multiStorageWithTableMappingGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.TABLE_MAPPING, "ns2.tbl:other_db");
+
+    // Act & Assert
+    assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.MULTI_STORAGE_TABLE_MAPPING_NOT_SUPPORTED.buildCode());
+  }
+
+  @Test
+  void create_multiStorageWithCosmosAndJdbcGiven_shouldNotThrow() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
 
     StorageFactory storageFactory = mock(StorageFactory.class);
     when(storageFactory.getStorageAdmin()).thenReturn(mock(DistributedStorageAdmin.class));
