@@ -115,24 +115,23 @@ public abstract class AuditorFinalizeOrchestratorIntegrationTestBase {
       int lockType;
       long lastUpdatedAt;
       switch (i % 4) {
-        case 0:
+        case 0 -> {
           lockType = AuditorInternalValues.LOCK_TYPE_NONE;
           lastUpdatedAt = OLD_TIMESTAMP;
-          break;
-        case 1:
+        }
+        case 1 -> {
           lockType = AuditorInternalValues.LOCK_TYPE_WRITE;
           lastUpdatedAt = OLD_TIMESTAMP;
-          break;
-        case 2:
+        }
+        case 2 -> {
           lockType = AuditorInternalValues.LOCK_TYPE_READ;
           lastUpdatedAt = OLD_TIMESTAMP;
-          break;
-        case 3:
+        }
+        case 3 -> {
           lockType = AuditorInternalValues.LOCK_TYPE_WRITE;
           lastUpdatedAt = FUTURE_TIMESTAMP;
-          break;
-        default:
-          throw new AssertionError("unreachable");
+        }
+        default -> throw new AssertionError("unreachable");
       }
       putLockRecord("asset-" + i, lockType, lastUpdatedAt);
     }

@@ -93,7 +93,7 @@ class CoordinatorCleanupOrchestratorTest {
     storage = mock(DistributedStorage.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
-    when(scannerFactory.create(any())).thenReturn(scanner);
+    when(scannerFactory.create(any(), any())).thenReturn(scanner);
     when(scanner.scan(any(), any(), any())).thenReturn(new ScanResult(0));
   }
 
@@ -195,7 +195,7 @@ class CoordinatorCleanupOrchestratorTest {
     orchestrator.execute();
 
     // Assert
-    verify(scannerFactory, never()).create(any());
+    verify(scannerFactory, never()).create(any(), any());
     verify(scanner, never()).scan(any(), any(), any());
   }
 
@@ -345,6 +345,7 @@ class CoordinatorCleanupOrchestratorTest {
     orchestrator.execute();
 
     // Assert
+    verify(scannerFactory).create(eq(customNamespace), any());
     verify(scanner).scan(eq(customNamespace), eq(CoordinatorStateAccessor.TABLE), any());
   }
 

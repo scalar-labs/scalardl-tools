@@ -63,7 +63,7 @@ class LedgerFinalizeOrchestratorTest {
     txManager = mock(DistributedTransactionManager.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
-    when(scannerFactory.create(any())).thenReturn(scanner);
+    when(scannerFactory.create(any(), any())).thenReturn(scanner);
     when(admin.getTableMetadata(anyString(), anyString())).thenReturn(TRANSACTION_TABLE_METADATA);
   }
 
@@ -152,7 +152,10 @@ class LedgerFinalizeOrchestratorTest {
     assertThat(token.getServerType()).isEqualTo(CompletionToken.ServerType.LEDGER);
     assertThat(token.getStartedAtMs()).isBetween(before, after);
 
-    // Each discovered table is scanned and the scanner is closed per table.
+    // Each discovered table is scanned with a scanner for its namespace, and the scanner is closed
+    // per table.
+    verify(scannerFactory).create(eq("ns1"), any());
+    verify(scannerFactory).create(eq("ns2"), any());
     verify(scanner).scan(eq("ns1"), eq("tbl1"), any());
     verify(scanner).scan(eq("ns2"), eq("tbl2"), any());
     verify(scanner, times(2)).close();

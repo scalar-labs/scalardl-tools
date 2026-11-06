@@ -225,7 +225,8 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
         new DeleteCoordinatorStateHandler(
             new RecordDeletionChecker(deletableBeforeMs), recordDeleter);
 
-    try (ResumableScanner scanner = scannerFactory.create(scanCheckpointDir)) {
+    try (ResumableScanner scanner =
+        scannerFactory.create(coordinatorNamespace, scanCheckpointDir)) {
       ScanResult scanResult =
           scanner.scan(coordinatorNamespace, CoordinatorStateAccessor.TABLE, handler);
 

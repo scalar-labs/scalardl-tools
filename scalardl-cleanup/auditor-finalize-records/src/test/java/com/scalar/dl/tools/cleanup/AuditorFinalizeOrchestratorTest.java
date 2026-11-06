@@ -60,7 +60,7 @@ class AuditorFinalizeOrchestratorTest {
     auditorClient = mock(AuditorClient.class);
     scanner = mock(ResumableScanner.class);
     scannerFactory = mock(ResumableScannerFactory.class);
-    when(scannerFactory.create(any())).thenReturn(scanner);
+    when(scannerFactory.create(any(), any())).thenReturn(scanner);
   }
 
   /** Creates a mock namespace {@link Result} with the given name. */
@@ -158,7 +158,11 @@ class AuditorFinalizeOrchestratorTest {
     orchestrator().execute();
 
     // Assert — default namespace (physical = base) + two registered namespaces, each resolved to
-    // its physical namespace (<base>_<ns>), should be scanned, and nothing else.
+    // its physical namespace (<base>_<ns>), should be scanned, and nothing else. Each scanner is
+    // created for the physical namespace.
+    verify(scannerFactory).create(eq(NAMESPACE), any());
+    verify(scannerFactory).create(eq("auditor_ns1"), any());
+    verify(scannerFactory).create(eq("auditor_ns2"), any());
     verify(scanner).scan(eq(NAMESPACE), eq("asset_lock"), any());
     verify(scanner).scan(eq("auditor_ns1"), eq("asset_lock"), any());
     verify(scanner).scan(eq("auditor_ns2"), eq("asset_lock"), any());
