@@ -1,0 +1,21 @@
+name: Manual Vulnerability Check Trigger
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-ref:
+        description: 'Target ref (branch, tag, release) to scan'
+        required: false
+        type: string
+      find-latest-release:
+        description: 'Flag to find the latest version for specified `target-ref`'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  call-vuln-check:
+    uses: ./.github/workflows/vuln-check.yaml
+    with:
+      target-ref: ${{ inputs.target-ref || github.ref_name }}
+      find-latest-release: ${{ inputs.find-latest-release }}
