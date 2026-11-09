@@ -80,7 +80,7 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     DistributedTransactionManager txManager = null;
     try {
       DatabaseConfig databaseConfig = new DatabaseConfig(props);
-      StorageValidator.validate(databaseConfig);
+      StorageValidator.validateAllowingMultiStorage(databaseConfig);
       LedgerConfigValidator.validate(databaseConfig);
       StorageFactory storageFactory = StorageFactory.create(props);
       admin = storageFactory.getStorageAdmin();

@@ -97,7 +97,7 @@ public final class CoordinatorCleanupOrchestrator implements AutoCloseable {
       @Nullable String ledgerTokenString,
       @Nullable String auditorTokenString) {
     DatabaseConfig dbConfig = new DatabaseConfig(props);
-    StorageValidator.validate(dbConfig);
+    StorageValidator.validateAllowingMultiStorage(dbConfig);
     LedgerConfigValidator.validate(dbConfig);
     DistributedStorage storage = StorageFactory.create(props).getStorage();
     try {

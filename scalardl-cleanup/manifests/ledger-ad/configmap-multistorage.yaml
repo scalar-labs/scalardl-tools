@@ -1,0 +1,38 @@
+# ScalarDL Cleanup — config for the Ledger administrative domain, with multi-storage.
+#
+# Apply this file in place of configmap.yaml when a ScalarDB instance that shares the Coordinator
+# table, such as ScalarDB Cluster, keeps some of its tables in PostgreSQL. It defines the same
+# ConfigMap as configmap.yaml, so the Jobs need no change.
+#
+# Replace the placeholders:
+#   <cosmos-account-uri>   The Ledger's Cosmos DB account URI.
+#   <postgresql-jdbc-url>  The JDBC URL of the PostgreSQL database, such as
+#                          jdbc:postgresql://<host>:5432/<database>.
+#   <postgresql-username>  The PostgreSQL username.
+#   <namespace>            A namespace that the sharing instance keeps in PostgreSQL. Map every such
+#                          namespace, separated by commas, such as ns1:postgresql,ns2:postgresql.
+#                          The tool silently skips a namespace missing from the mapping.
+#
+# The Secret must also have SCALAR_DB_JDBC_PASSWORD, the PostgreSQL password.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scalardl-cleanup-ledger-config
+  labels:
+    app.kubernetes.io/name: scalardl-cleanup
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: scalardl
+data:
+  cleanup-ledger.properties: |
+    scalar.db.storage=multi-storage
+    scalar.db.multi_storage.storages=cosmos,postgresql
+    scalar.db.multi_storage.storages.cosmos.storage=cosmos
+    scalar.db.multi_storage.storages.cosmos.contact_points=<cosmos-account-uri>
+    scalar.db.multi_storage.storages.cosmos.password=${env:SCALAR_DB_PASSWORD}
+    scalar.db.multi_storage.storages.postgresql.storage=jdbc
+    scalar.db.multi_storage.storages.postgresql.contact_points=<postgresql-jdbc-url>
+    scalar.db.multi_storage.storages.postgresql.username=<postgresql-username>
+    scalar.db.multi_storage.storages.postgresql.password=${env:SCALAR_DB_JDBC_PASSWORD}
+    scalar.db.multi_storage.default_storage=cosmos
+    scalar.db.multi_storage.namespace_mapping=<namespace>:postgresql
