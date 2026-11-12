@@ -17,7 +17,6 @@ subprojects {
         slf4jVersion = '2.0.20'
         log4jVersion = '2.26.1'
         jacksonVersion = '2.22.4'
-        scalarDbVersion = '3.19.1'
         scalardlVersion = '3.14.1'
         picoCliVersion = '4.7.7'
         assertjVersion = '3.27.7'
@@ -29,6 +28,7 @@ subprojects {
         spotbugsVersion = '4.10.5'
         spotbugsPluginVersion = '6.5.13'
         googleJavaFormatVersion = '1.35.0'
+        // scalarDbVersion is resolved dynamically from ScalarDL's transitive dependencies
         // azureCosmosVersion is resolved dynamically from ScalarDB's transitive dependencies
     }
 
@@ -43,6 +43,20 @@ subprojects {
                 password = project.findProperty("gprPassword") ?: System.getenv("GPR_PASSWORD")
             }
         }
+    }
+
+    // Resolve ScalarDB version from ScalarDL's transitive dependencies, so that the tools always use
+    // the ScalarDB version that the ScalarDL version is built with
+    ext.scalarDbVersion = {
+        def cfg = configurations.detachedConfiguration(
+            dependencies.create("com.scalar-labs:scalardl-common:$scalardlVersion")
+        )
+        cfg.resolvedConfiguration.resolvedArtifacts
+            .find { it.moduleVersion.id.group == 'com.scalar-labs' && it.moduleVersion.id.name == 'scalardb' }
+            ?.moduleVersion?.id?.version
+    }()
+    if (scalarDbVersion == null) {
+        throw new GradleException("Could not resolve ScalarDB version from ScalarDL $scalardlVersion")
     }
 
     // Resolve azure-cosmos version from ScalarDB's transitive dependencies
