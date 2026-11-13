@@ -1,5 +1,5 @@
 plugins {
-    id("com.diffplug.spotless") version "8.10.4"
+    id("com.diffplug.spotless") version "8.11.0"
 }
 
 subprojects {
@@ -13,19 +13,19 @@ subprojects {
     project.version = project.findProperty('projectVersion') ?: '4.0.0-SNAPSHOT'
 
     ext {
-        guavaVersion = '33.7.2-jre'
+        guavaVersion = '33.8.0-jre'
         slf4jVersion = '2.0.20'
         log4jVersion = '2.26.1'
         jacksonVersion = '2.22.4'
-        scalarDbVersion = '3.19.1'
+        scalarDbVersion = '3.20.0'
         scalardlVersion = '3.14.1'
         picoCliVersion = '4.7.7'
         assertjVersion = '3.27.7'
         junitVersion = '5.14.4'
         junitPlatformVersion = '1.14.4'
         mockitoVersion = '5.24.0'
-        errorproneVersion = '2.51.0'
-        errorpronePluginVersion = '5.1.1'
+        errorproneVersion = '2.52.0'
+        errorpronePluginVersion = '5.2.0'
         spotbugsVersion = '4.10.5'
         spotbugsPluginVersion = '6.5.13'
         googleJavaFormatVersion = '1.35.0'
