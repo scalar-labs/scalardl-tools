@@ -128,6 +128,38 @@ class MultiStorageLedgerFinalizeOrchestratorIntegrationTest
         OTHER_NAMESPACE);
   }
 
+  @Test
+  void execute_namespaceMappingChangedAfterRunStartedGiven_shouldThrowScalarDlCleanupException(
+      @TempDir Path checkpointDir) throws Exception {
+    // Arrange
+    // Complete a run with the original configuration.
+    try (LedgerFinalizeOrchestrator orchestrator =
+        LedgerFinalizeOrchestrator.create(getProperties(), checkpointDir)) {
+      orchestrator.execute();
+    }
+
+    // Re-run it on the same checkpoint data after another namespace is added to the mapping. The
+    // completed run must not emit its token again, because it did not finalize that namespace.
+    String addedNamespace = OTHER_NAMESPACE + "_added";
+    Properties changedProps = getProperties();
+    changedProps.setProperty(
+        MultiStorageConfig.NAMESPACE_MAPPING,
+        OTHER_NAMESPACE
+            + ":"
+            + MultiStorageEnv.JDBC_STORAGE
+            + ","
+            + addedNamespace
+            + ":"
+            + MultiStorageEnv.JDBC_STORAGE);
+
+    // Act Assert
+    assertExecuteFails(
+        changedProps,
+        checkpointDir,
+        ScalarDlCleanupError.STORAGE_CONFIGURATION_CHANGED,
+        addedNamespace);
+  }
+
   /**
    * Asserts that a new run with the given configuration fails with the given error. It creates the
    * orchestrator in the same way as the command, so that the validation runs against the admins
