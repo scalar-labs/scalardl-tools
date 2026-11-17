@@ -34,8 +34,8 @@ final class MultiStorageEnv {
   private static final String DEFAULT_JDBC_USERNAME = "postgres";
   private static final String DEFAULT_JDBC_PASSWORD = "postgres";
 
-  private static final String COSMOS_STORAGE = "cosmos_db";
-  private static final String JDBC_STORAGE = "jdbc_db";
+  static final String COSMOS_STORAGE = "cosmos_db";
+  static final String JDBC_STORAGE = "jdbc_db";
 
   private MultiStorageEnv() {}
 

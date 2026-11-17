@@ -8,6 +8,8 @@ import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.exception.storage.ExecutionException;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.storage.multistorage.MultiStorageAdmin;
+import com.scalar.db.storage.multistorage.MultiStorageConfig;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitConfig;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
@@ -25,6 +27,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,18 +56,23 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
   private final Path checkpointDir;
   private final String coordinatorNamespace;
 
+  /** The validator of the namespace mapping. Null unless the storage is multi-storage. */
+  @Nullable private final NamespaceMappingValidator namespaceMappingValidator;
+
   @VisibleForTesting
   LedgerFinalizeOrchestrator(
       DistributedStorageAdmin admin,
       DistributedTransactionManager txManager,
       ResumableScannerFactory scannerFactory,
       Path checkpointDir,
-      String coordinatorNamespace) {
+      String coordinatorNamespace,
+      @Nullable NamespaceMappingValidator namespaceMappingValidator) {
     this.admin = admin;
     this.txManager = txManager;
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
     this.coordinatorNamespace = coordinatorNamespace;
+    this.namespaceMappingValidator = namespaceMappingValidator;
   }
 
   /**
@@ -91,7 +99,8 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
           txManager,
           scannerFactory,
           checkpointDir,
-          resolveCoordinatorNamespace(databaseConfig));
+          resolveCoordinatorNamespace(databaseConfig),
+          createNamespaceMappingValidator(admin, databaseConfig));
     } catch (Exception e) {
       if (txManager != null) {
         txManager.close();
@@ -149,6 +158,10 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     }
 
     long startedAtMs = System.currentTimeMillis();
+    // This run fixes the target tables, so a wrong namespace mapping must be caught here.
+    if (namespaceMappingValidator != null) {
+      namespaceMappingValidator.validate();
+    }
     List<String> tableNames = discoverTables();
     // A loaded Ledger schema always has the asset and asset_metadata tables, both transactional.
     if (tableNames.size() < MINIMUM_TARGET_TABLE_COUNT) {
@@ -170,6 +183,27 @@ public final class LedgerFinalizeOrchestrator implements AutoCloseable {
     return new ConsensusCommitConfig(dbConfig)
         .getCoordinatorNamespace()
         .orElse(CoordinatorStateAccessor.NAMESPACE);
+  }
+
+  /**
+   * Returns the validator of the namespace mapping, or null if the storage is not multi-storage.
+   *
+   * @throws IllegalStateException if the admin of multi-storage is not a {@link MultiStorageAdmin}
+   */
+  @VisibleForTesting
+  @Nullable
+  static NamespaceMappingValidator createNamespaceMappingValidator(
+      DistributedStorageAdmin admin, DatabaseConfig databaseConfig) {
+    if (!MultiStorageConfig.STORAGE_NAME.equals(databaseConfig.getStorage())) {
+      return null;
+    }
+    // The validation must not be skipped silently, so an unexpected admin is an error.
+    if (!(admin instanceof MultiStorageAdmin multiStorageAdmin)) {
+      throw new IllegalStateException(
+          "Unexpected admin for multi-storage: " + admin.getClass().getName());
+    }
+    return NamespaceMappingValidator.create(
+        multiStorageAdmin, new MultiStorageConfig(databaseConfig));
   }
 
   private List<String> discoverTables() throws Exception {
