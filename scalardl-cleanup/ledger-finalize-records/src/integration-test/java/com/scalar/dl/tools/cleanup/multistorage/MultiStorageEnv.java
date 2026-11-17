@@ -68,6 +68,14 @@ final class MultiStorageEnv {
         jdbcPrefix + "username", System.getProperty(PROP_JDBC_USERNAME, DEFAULT_JDBC_USERNAME));
     properties.setProperty(
         jdbcPrefix + "password", System.getProperty(PROP_JDBC_PASSWORD, DEFAULT_JDBC_PASSWORD));
+    // Keep fewer idle connections than the defaults. The tests keep several storages, admins, and
+    // transaction managers open at the same time, and each of them has its own connection pools,
+    // so the default minimum idle connections (20, 5, and 5) would add up to more connections
+    // than PostgreSQL accepts by default. The pools still grow on demand because the maximum
+    // sizes are not changed.
+    properties.setProperty(jdbcPrefix + "jdbc.connection_pool.min_idle", "5");
+    properties.setProperty(jdbcPrefix + "jdbc.table_metadata.connection_pool.min_idle", "1");
+    properties.setProperty(jdbcPrefix + "jdbc.admin.connection_pool.min_idle", "1");
 
     properties.setProperty(
         MultiStorageConfig.NAMESPACE_MAPPING, namespaceInJdbcStorage + ":" + JDBC_STORAGE);
