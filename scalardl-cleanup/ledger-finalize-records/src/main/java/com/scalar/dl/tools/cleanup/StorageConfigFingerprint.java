@@ -26,9 +26,11 @@ import java.util.stream.Collectors;
  * their contact points, where their table metadata is, the namespace mapping, the default storage,
  * and the Coordinator namespace. It does not have credentials, so it can be kept in the checkpoint
  * data as plain text, and it does not have the settings that do not change where the tables are,
- * such as the connection pool settings. The values are normalized, so that equivalent
- * configurations have the same fingerprint, for example regardless of the order of the namespace
- * mapping entries or whether the default location of the table metadata is set explicitly.
+ * such as the connection pool settings. Note that the username is not included either, although it
+ * can decide the database if the JDBC URL does not specify one, for example with PostgreSQL. The
+ * values are normalized, so that equivalent configurations have the same fingerprint, for example
+ * regardless of the order of the namespace mapping entries or whether the default location of the
+ * table metadata is set explicitly.
  */
 final class StorageConfigFingerprint {
 

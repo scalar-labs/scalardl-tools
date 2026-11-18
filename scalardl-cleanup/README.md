@@ -323,7 +323,14 @@ kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
 
 On a resumed `cleanup-coordinator`, the token values are ignored—the deletion boundary saved in the checkpoint is authoritative.
 
-`finalize-ledger` fixes its target tables when it starts a new run, and it keeps the storage configuration that the run started with in the checkpoint. Therefore, if you change the storage configuration after `finalize-ledger` has started, for example to fix the namespace mapping or to switch from `ledger-ad/configmap.yaml` to `ledger-ad/configmap-multistorage.yaml`, a resumed `finalize-ledger` fails, even if the previous run has completed. The error message lists the changed settings. Revert the change to resume the run, or [start over from scratch](#starting-over-from-scratch) to run it with the new configuration. The storage configuration consists of the storage types, their contact points, where their table metadata is, the namespace mapping, the default storage, and the Coordinator namespace. Other settings, such as the passwords, can change between runs. The checkpoint keeps the storage configuration as plain text, so if a contact point includes credentials, for example a JDBC URL with a password parameter, they remain in the checkpoint. `finalize-ledger` also fails if the checkpoint was created by an older version of the tool, which did not keep the storage configuration. In that case, start over from scratch.
+`finalize-ledger` fixes its target tables when it starts a new run, and it keeps the storage configuration that the run started with in the checkpoint. Therefore, if you change the storage configuration after `finalize-ledger` has started, for example to fix the namespace mapping or to switch from `ledger-ad/configmap.yaml` to `ledger-ad/configmap-multistorage.yaml`, a resumed `finalize-ledger` fails, even if the previous run has completed. The error message lists the changed settings. Revert the change to resume the run, or [start over from scratch](#starting-over-from-scratch) to run it with the new configuration.
+
+Note the following about the storage configuration:
+
+- It consists of the storage types, their contact points, where their table metadata is, the namespace mapping, the default storage, and the Coordinator namespace. Other settings, such as the passwords, can change between runs.
+- It does not include the usernames. However, if a JDBC URL does not specify the database, for example `jdbc:postgresql://db:5432/`, the database can depend on the username, so do not change the username in the middle of a run.
+- The checkpoint keeps it as plain text. If a contact point includes credentials, for example a JDBC URL with a password parameter, they remain in the checkpoint.
+- A checkpoint created by an older version of the tool does not have it, so `finalize-ledger` fails. In that case, start over from scratch.
 
 ### Starting over from scratch
 
