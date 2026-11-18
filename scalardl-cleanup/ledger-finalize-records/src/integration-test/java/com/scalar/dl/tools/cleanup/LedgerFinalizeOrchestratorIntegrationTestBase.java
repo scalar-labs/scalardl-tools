@@ -289,7 +289,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             checkpointDir,
             CoordinatorStateAccessor.NAMESPACE,
             LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
-                storageAdmin, databaseConfig));
+                storageAdmin, databaseConfig),
+            StorageConfigFingerprint.create(databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -317,7 +318,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     List<String> allTables = discoverAllTables();
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
     LedgerFinalizeState state =
-        new LedgerFinalizeState(guaranteeTimestamp, allTables, new ArrayList<>());
+        new LedgerFinalizeState(
+            guaranteeTimestamp, allTables, StorageConfigFingerprint.create(databaseConfig));
     stateManager.persist(state);
 
     // Act
@@ -329,7 +331,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             checkpointDir,
             CoordinatorStateAccessor.NAMESPACE,
             LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
-                storageAdmin, databaseConfig));
+                storageAdmin, databaseConfig),
+            StorageConfigFingerprint.create(databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -357,7 +360,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
     List<String> allTables = discoverAllTables();
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
-    LedgerFinalizeState state = new LedgerFinalizeState(tL, allTables, new ArrayList<>());
+    LedgerFinalizeState state =
+        new LedgerFinalizeState(tL, allTables, StorageConfigFingerprint.create(databaseConfig));
     stateManager.persist(state);
 
     // Act
@@ -369,7 +373,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             checkpointDir,
             CoordinatorStateAccessor.NAMESPACE,
             LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
-                storageAdmin, databaseConfig));
+                storageAdmin, databaseConfig),
+            StorageConfigFingerprint.create(databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert: a false from recoverRecord must not abort the table; the sweep completes normally.
@@ -400,7 +405,10 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(checkpointDir);
     LedgerFinalizeState state =
         new LedgerFinalizeState(
-            fixedTimestamp, allTables, Collections.singletonList(qualifiedTable1));
+            fixedTimestamp,
+            allTables,
+            Collections.singletonList(qualifiedTable1),
+            StorageConfigFingerprint.create(databaseConfig));
     stateManager.persist(state);
 
     // Act
@@ -412,7 +420,8 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             checkpointDir,
             CoordinatorStateAccessor.NAMESPACE,
             LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
-                storageAdmin, databaseConfig));
+                storageAdmin, databaseConfig),
+            StorageConfigFingerprint.create(databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert

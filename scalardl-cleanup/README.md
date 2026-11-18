@@ -130,6 +130,8 @@ In addition, `finalize-ledger` fails in the following cases when it starts a new
 
 These checks cover only the storages in the configuration. If the instance that shares the Coordinator table keeps tables in several databases, add **every** such database to `scalar.db.multi_storage.storages` and map its namespaces. The tool cannot detect a database missing from the configuration. When `finalize-ledger` starts a new run, it logs the target tables that it found. Check that the list has all the tables you expect before you run `cleanup-coordinator`.
 
+If you fix the configuration after `finalize-ledger` has started, you must start it over from scratch. See [Re-running after a failure](#re-running-after-a-failure).
+
 Add the password of the JDBC database to the Secret that step 1 creates, as `SCALAR_DB_JDBC_PASSWORD`. Both Ledger AD Jobs load every key of the Secret as an environment variable.
 
 **Auditor AD** – `auditor-ad/configmap.yaml`, read by `finalize-auditor`:
@@ -320,6 +322,15 @@ kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
 ```
 
 On a resumed `cleanup-coordinator`, the token values are ignored—the deletion boundary saved in the checkpoint is authoritative.
+
+`finalize-ledger` fixes its target tables when it starts a new run, and it keeps the storage configuration that the run started with in the checkpoint. Therefore, if you change the storage configuration after `finalize-ledger` has started, for example to fix the namespace mapping or to switch from `ledger-ad/configmap.yaml` to `ledger-ad/configmap-multistorage.yaml`, a resumed `finalize-ledger` fails, even if the previous run has completed. The error message lists the changed settings. Revert the change to resume the run, or [start over from scratch](#starting-over-from-scratch) to run it with the new configuration.
+
+Note the following about the storage configuration:
+
+- It consists of the storage types, their contact points, where their table metadata is, the namespace mapping, the default storage, and the Coordinator namespace. Other settings, such as the passwords, can change between runs.
+- It does not include the usernames. However, if a JDBC URL does not specify the database, for example `jdbc:postgresql://db:5432/`, the database can depend on the username, so do not change the username in the middle of a run.
+- The checkpoint keeps it as plain text. If a contact point includes credentials, for example a JDBC URL with a password parameter, they remain in the checkpoint.
+- A checkpoint created by an older version of the tool does not have it, so `finalize-ledger` fails. In that case, start over from scratch.
 
 ### Starting over from scratch
 

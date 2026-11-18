@@ -165,6 +165,22 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "Map every namespace that has tables in that storage to it with"
           + " scalar.db.multi_storage.namespace_mapping, or remove the storage from"
           + " scalar.db.multi_storage.storages if it has no tables to finalize."),
+  STORAGE_CONFIGURATION_CHANGED(
+      Category.USER_ERROR,
+      "023",
+      "The storage configuration differs from the one that the checkpoint data was created with."
+          + " Changes: %s.",
+      "",
+      "Revert the storage configuration to the one that the run started with, or start over from"
+          + " scratch by deleting the checkpoint data. The target tables are fixed when the run"
+          + " starts, so a run cannot continue with another storage configuration."),
+  STORAGE_CONFIGURATION_NOT_IN_CHECKPOINT(
+      Category.USER_ERROR,
+      "024",
+      "The checkpoint data does not have the storage configuration that the run started with. It"
+          + " was created by an older version of the tool.",
+      "",
+      "Start over from scratch by deleting the checkpoint data."),
 
   //
   // Errors for the internal error category
