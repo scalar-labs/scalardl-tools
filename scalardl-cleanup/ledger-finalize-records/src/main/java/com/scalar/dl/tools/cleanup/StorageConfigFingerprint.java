@@ -33,7 +33,9 @@ import java.util.stream.Collectors;
 final class StorageConfigFingerprint {
 
   private static final String MULTI_STORAGE_PREFIX = "multi_storage.";
+  private static final String CONTACT_POINTS = "contact_points";
   private static final String NONE = "(none)";
+  private static final String MASKED_VALUE = "******";
 
   private StorageConfigFingerprint() {}
 
@@ -87,7 +89,7 @@ final class StorageConfigFingerprint {
     if (MultiStorageConfig.STORAGE_NAME.equals(storage)) {
       return;
     }
-    fingerprint.put(prefix + "contact_points", String.join(",", databaseConfig.getContactPoints()));
+    fingerprint.put(prefix + CONTACT_POINTS, String.join(",", databaseConfig.getContactPoints()));
     // The admins use the system namespace if the location of the table metadata is not set.
     Properties props = databaseConfig.getProperties();
     if (CosmosConfig.STORAGE_NAME.equals(storage)) {
@@ -110,7 +112,9 @@ final class StorageConfigFingerprint {
   /**
    * Describes the differences between two fingerprints, such as {@code
    * multi_storage.namespace_mapping: 'ns1:postgresql' -> 'ns1:postgresql,ns2:postgresql'}. A key
-   * that only one of them has is shown with {@code (none)} on the other side.
+   * that only one of them has is shown with {@code (none)} on the other side. The values of the
+   * contact points are masked, such as {@code contact_points: ****** -> ******}, because a JDBC URL
+   * can include credentials in its parameters.
    *
    * @param expected the fingerprint that the run started with
    * @param actual the fingerprint of the current configuration
@@ -124,13 +128,22 @@ final class StorageConfigFingerprint {
       String expectedValue = expected.get(key);
       String actualValue = actual.get(key);
       if (!Objects.equals(expectedValue, actualValue)) {
-        differences.add(key + ": " + quote(expectedValue) + " -> " + quote(actualValue));
+        boolean masked = key.endsWith(CONTACT_POINTS);
+        differences.add(
+            key
+                + ": "
+                + describeValue(expectedValue, masked)
+                + " -> "
+                + describeValue(actualValue, masked));
       }
     }
     return String.join(", ", differences);
   }
 
-  private static String quote(String value) {
-    return value == null ? NONE : "'" + value + "'";
+  private static String describeValue(String value, boolean masked) {
+    if (value == null) {
+      return NONE;
+    }
+    return masked ? MASKED_VALUE : "'" + value + "'";
   }
 }

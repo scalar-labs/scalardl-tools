@@ -606,8 +606,8 @@ class LedgerFinalizeOrchestratorTest {
     assertThatThrownBy(orchestrator::execute)
         .isInstanceOf(ScalarDlCleanupException.class)
         .hasMessageContaining(ScalarDlCleanupError.STORAGE_CONFIGURATION_CHANGED.buildCode())
-        .hasMessageContaining(
-            "contact_points: 'https://other.example.com' -> 'https://example.com'");
+        .hasMessageContaining("contact_points: ****** -> ******")
+        .hasMessageNotContaining("example.com");
 
     verify(scanner, never()).scan(anyString(), anyString(), any());
     LedgerFinalizeState state = stateManager.load();

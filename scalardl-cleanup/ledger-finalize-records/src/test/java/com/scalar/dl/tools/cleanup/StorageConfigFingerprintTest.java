@@ -165,8 +165,34 @@ class StorageConfigFingerprintTest {
     // Assert
     assertThat(differences)
         .contains("storage: 'cosmos' -> 'multi-storage'")
-        .contains("contact_points: '" + COSMOS_URI + "' -> (none)")
+        .contains("contact_points: ****** -> (none)")
+        .contains("multi_storage.storages.postgresql.contact_points: (none) -> ******")
         .contains("multi_storage.namespace_mapping: (none) -> 'ns1:postgresql,ns2:postgresql'")
-        .doesNotContain("consensus_commit.coordinator.namespace");
+        .doesNotContain("consensus_commit.coordinator.namespace")
+        .doesNotContain(COSMOS_URI)
+        .doesNotContain(JDBC_URL);
+  }
+
+  @Test
+  void describeDifferences_changedContactPointsGiven_shouldMaskTheirValues() {
+    // Arrange
+    Properties props = multiStorageProperties();
+    props.setProperty(
+        MultiStorageConfig.STORAGES + ".postgresql.contact_points",
+        "jdbc:postgresql://db1:5432/postgres?user=postgres&password=old-secret");
+    Properties changedProps = multiStorageProperties();
+    changedProps.setProperty(
+        MultiStorageConfig.STORAGES + ".postgresql.contact_points",
+        "jdbc:postgresql://db2:5432/postgres?user=postgres&password=new-secret");
+
+    // Act
+    String differences =
+        StorageConfigFingerprint.describeDifferences(
+            fingerprintOf(props), fingerprintOf(changedProps));
+
+    // Assert
+    assertThat(differences)
+        .isEqualTo("multi_storage.storages.postgresql.contact_points: ****** -> ******");
+    assertThat(differences).doesNotContain("secret").doesNotContain("db1").doesNotContain("db2");
   }
 }
