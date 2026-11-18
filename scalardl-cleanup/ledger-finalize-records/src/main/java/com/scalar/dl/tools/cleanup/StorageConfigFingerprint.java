@@ -89,7 +89,13 @@ final class StorageConfigFingerprint {
     if (MultiStorageConfig.STORAGE_NAME.equals(storage)) {
       return;
     }
-    fingerprint.put(prefix + CONTACT_POINTS, String.join(",", databaseConfig.getContactPoints()));
+    // The contact points are escaped before they are joined, so that, for example, a single
+    // contact point "a,b" (written as "a\,b") and two contact points "a" and "b" differ.
+    fingerprint.put(
+        prefix + CONTACT_POINTS,
+        databaseConfig.getContactPoints().stream()
+            .map(c -> c.replace("\\", "\\\\").replace(",", "\\,"))
+            .collect(Collectors.joining(",")));
     // The admins use the system namespace if the location of the table metadata is not set.
     Properties props = databaseConfig.getProperties();
     if (CosmosConfig.STORAGE_NAME.equals(storage)) {

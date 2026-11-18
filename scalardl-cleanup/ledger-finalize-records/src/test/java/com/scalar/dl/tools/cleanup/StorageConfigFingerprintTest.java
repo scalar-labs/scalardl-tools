@@ -141,6 +141,33 @@ class StorageConfigFingerprintTest {
   }
 
   @Test
+  void create_escapedCommaInContactPointGiven_shouldDifferFromSeparateContactPoints() {
+    // Arrange
+    Properties props = multiStorageProperties();
+    props.setProperty(
+        MultiStorageConfig.STORAGES + ".postgresql.contact_points",
+        "jdbc:mysql://h1:3306\\,h2:3306/db");
+    Properties unescapedProps = multiStorageProperties();
+    unescapedProps.setProperty(
+        MultiStorageConfig.STORAGES + ".postgresql.contact_points",
+        "jdbc:mysql://h1:3306,h2:3306/db");
+
+    // Act
+    Map<String, String> fingerprint = fingerprintOf(props);
+    Map<String, String> unescapedFingerprint = fingerprintOf(unescapedProps);
+
+    // Assert
+    assertThat(fingerprint)
+        .containsEntry(
+            "multi_storage.storages.postgresql.contact_points",
+            "jdbc:mysql://h1:3306\\,h2:3306/db");
+    assertThat(unescapedFingerprint)
+        .containsEntry(
+            "multi_storage.storages.postgresql.contact_points", "jdbc:mysql://h1:3306,h2:3306/db");
+    assertThat(fingerprint).isNotEqualTo(unescapedFingerprint);
+  }
+
+  @Test
   void describeDifferences_changedAddedAndRemovedKeysGiven_shouldDescribeThemInKeyOrder() {
     // Arrange
     Map<String, String> expected = ImmutableMap.of("a", "1", "b", "2", "c", "3");
