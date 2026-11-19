@@ -37,6 +37,9 @@ spec:
             - finalize-auditor
             - --properties=/etc/scalardl-cleanup/cleanup-auditor.properties
             - --checkpoint-dir=/scalardl/checkpoint
+            # Uncomment to release the asset locks and print the completion token without deleting
+            # any request proofs.
+            # - --skip-request-proof-cleanup
           envFrom:
             - secretRef:
                 name: scalardl-cleanup-credentials
