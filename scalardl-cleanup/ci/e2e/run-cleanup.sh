@@ -42,12 +42,13 @@ run_finalize_ledger() {
 }
 
 # Run finalize-auditor (Auditor AD). Sets auditor_token. Recovering a stranded lock can wait out the
-# lock's valid period, hence the longer timeout.
-# Usage: run_finalize_auditor
+# lock's valid period, hence the longer timeout. The manifest defaults to the one in the working copy;
+# a scenario passes its own to run the command with different arguments.
+# Usage: run_finalize_auditor [manifest]
 run_finalize_auditor() {
-  local out
+  local out manifest="${1:-$work/auditor-ad/finalize-auditor.yaml}"
   setup_auditor_ad
-  apply_job "$AUDITOR_NS" scalardl-finalize-auditor "$work/auditor-ad/finalize-auditor.yaml"
+  apply_job "$AUDITOR_NS" scalardl-finalize-auditor "$manifest"
   wait_for_job "$AUDITOR_NS" scalardl-finalize-auditor 900
   out=$(read_job_output_json "$AUDITOR_NS" scalardl-finalize-auditor)
   echo "finalize-auditor output: $out"

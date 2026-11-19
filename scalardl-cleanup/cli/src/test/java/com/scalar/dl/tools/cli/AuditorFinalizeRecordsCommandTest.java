@@ -169,4 +169,89 @@ public class AuditorFinalizeRecordsCommandTest {
     assertThat(json.get("error_message").asText()).isEqualTo("cleanup failed");
     assertThat(out.toString(StandardCharsets.UTF_8)).doesNotContain("completion_token");
   }
+
+  @Test
+  void call_whenSkipRequestProofCleanupSpecified_shouldNotRunCleanupAndPrintToken()
+      throws Exception {
+    // Arrange
+    AuditorFinalizeOrchestrator finalizer = mock(AuditorFinalizeOrchestrator.class);
+    when(finalizer.execute()).thenReturn("auditor-token");
+    AtomicBoolean cleanupCreated = new AtomicBoolean(false);
+    AuditorFinalizeRecordsCommand command =
+        new AuditorFinalizeRecordsCommand() {
+          @Override
+          AuditorFinalizeOrchestrator createFinalizeOrchestrator(
+              Properties props, Path checkpointDir) {
+            return finalizer;
+          }
+
+          @Override
+          RequestProofCleanupOrchestrator createRequestProofCleanupOrchestrator(
+              Properties props, Path checkpointDir, String auditorToken) {
+            cleanupCreated.set(true);
+            return mock(RequestProofCleanupOrchestrator.class);
+          }
+        };
+
+    // Act
+    int code =
+        new CommandLine(command)
+            .execute(
+                "--properties",
+                propertiesFile(),
+                "--checkpoint-dir",
+                tempDir.toString(),
+                "--skip-request-proof-cleanup");
+
+    // Assert
+    assertThat(code).isZero();
+    assertThat(cleanupCreated.get()).isFalse();
+    verify(finalizer).execute();
+    verify(finalizer).close();
+    JsonNode json = captured();
+    assertThat(json.get("output").get("completion_token").asText()).isEqualTo("auditor-token");
+  }
+
+  @Test
+  void call_whenSkipRequestProofCleanupSpecifiedAndFinalizeFails_shouldNotPrintTokenAndReturnOne()
+      throws Exception {
+    // Arrange
+    AuditorFinalizeOrchestrator finalizer = mock(AuditorFinalizeOrchestrator.class);
+    when(finalizer.execute()).thenThrow(new RuntimeException("finalize failed"));
+    AtomicBoolean cleanupCreated = new AtomicBoolean(false);
+    AuditorFinalizeRecordsCommand command =
+        new AuditorFinalizeRecordsCommand() {
+          @Override
+          AuditorFinalizeOrchestrator createFinalizeOrchestrator(
+              Properties props, Path checkpointDir) {
+            return finalizer;
+          }
+
+          @Override
+          RequestProofCleanupOrchestrator createRequestProofCleanupOrchestrator(
+              Properties props, Path checkpointDir, String auditorToken) {
+            cleanupCreated.set(true);
+            return mock(RequestProofCleanupOrchestrator.class);
+          }
+        };
+
+    // Act
+    int code =
+        new CommandLine(command)
+            .execute(
+                "--properties",
+                propertiesFile(),
+                "--checkpoint-dir",
+                tempDir.toString(),
+                "--skip-request-proof-cleanup");
+
+    // Assert
+    assertThat(code).isEqualTo(1);
+    assertThat(cleanupCreated.get()).isFalse();
+    verify(finalizer).close();
+    JsonNode json = captured();
+    assertThat(json.get("status_code").asText()).isEqualTo("INTERNAL_ERROR");
+    assertThat(json.get("error_message").asText()).isEqualTo("finalize failed");
+    assertThat(out.toString(StandardCharsets.UTF_8)).doesNotContain("completion_token");
+  }
 }
