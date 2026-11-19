@@ -118,6 +118,53 @@ public enum ScalarDlCleanupError implements ScalarDlToolsError {
       "Check that every storage name in the scalar.db.multi_storage.* properties is listed in"
           + " scalar.db.multi_storage.storages, and that each mapping entry has the form"
           + " <namespace>:<storage>."),
+  MULTI_STORAGE_DEFAULT_STORAGE_NOT_COSMOS(
+      Category.USER_ERROR,
+      "018",
+      "The default storage '%s' in the multi-storage configuration is '%s', but it must be Cosmos"
+          + " DB.",
+      "",
+      "Set scalar.db.multi_storage.default_storage to the storage of the Ledger's Cosmos DB"
+          + " account, and map the namespaces in the other storages with"
+          + " scalar.db.multi_storage.namespace_mapping."),
+  MULTI_STORAGE_COORDINATOR_NAMESPACE_NOT_IN_DEFAULT_STORAGE(
+      Category.USER_ERROR,
+      "019",
+      "The Coordinator namespace '%s' is mapped to the storage '%s', which is not the default"
+          + " storage.",
+      "",
+      "Remove the Coordinator namespace from scalar.db.multi_storage.namespace_mapping. The"
+          + " Coordinator table must be in the Ledger's Cosmos DB account, which is the default"
+          + " storage."),
+  MULTI_STORAGE_MAPPED_NAMESPACE_NOT_FOUND(
+      Category.USER_ERROR,
+      "020",
+      "The namespace '%s' is mapped to the storage '%s' but was not found in the metadata of that"
+          + " storage.",
+      "",
+      "Check scalar.db.multi_storage.namespace_mapping for a misspelled namespace, a leftover"
+          + " placeholder, or a namespace mapped to the wrong storage. A namespace that has no"
+          + " tables is not in the metadata either, so remove it from the mapping. For a JDBC"
+          + " storage, also check that its settings, such as"
+          + " scalar.db.jdbc.table_metadata.schema, match the ones of the instance that owns the"
+          + " namespace."),
+  MULTI_STORAGE_UNREACHABLE_NAMESPACES_FOUND(
+      Category.USER_ERROR,
+      "021",
+      "The storage '%s' has transactional tables in the namespaces %s, but the namespace mapping"
+          + " resolves those namespaces to another storage.",
+      "",
+      "Fix scalar.db.multi_storage.namespace_mapping so that every namespace resolves to the"
+          + " storage that has its transactional tables. A namespace without an entry resolves to"
+          + " the default storage. Otherwise, the records in those tables are not finalized."),
+  MULTI_STORAGE_STORAGE_WITHOUT_MAPPED_NAMESPACE(
+      Category.USER_ERROR,
+      "022",
+      "No namespace is mapped to the storage '%s' in the multi-storage configuration.",
+      "",
+      "Map every namespace that has tables in that storage to it with"
+          + " scalar.db.multi_storage.namespace_mapping, or remove the storage from"
+          + " scalar.db.multi_storage.storages if it has no tables to finalize."),
 
   //
   // Errors for the internal error category

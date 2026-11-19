@@ -41,7 +41,7 @@ import org.junit.jupiter.api.io.TempDir;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
 
-  private static final String NAMESPACE = "it_ledger_orch";
+  protected static final String NAMESPACE = "it_ledger_orch";
 
   /**
    * Namespace of the tables that are not ScalarDL's, such as the tables of ScalarDB Cluster that
@@ -287,7 +287,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             txManager,
             realScannerFactory(),
             checkpointDir,
-            CoordinatorStateAccessor.NAMESPACE);
+            CoordinatorStateAccessor.NAMESPACE,
+            LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
+                storageAdmin, databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -325,7 +327,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             txManager,
             realScannerFactory(),
             checkpointDir,
-            CoordinatorStateAccessor.NAMESPACE);
+            CoordinatorStateAccessor.NAMESPACE,
+            LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
+                storageAdmin, databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert
@@ -363,7 +367,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             txManager,
             realScannerFactory(),
             checkpointDir,
-            CoordinatorStateAccessor.NAMESPACE);
+            CoordinatorStateAccessor.NAMESPACE,
+            LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
+                storageAdmin, databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert: a false from recoverRecord must not abort the table; the sweep completes normally.
@@ -404,7 +410,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             txManager,
             realScannerFactory(),
             checkpointDir,
-            CoordinatorStateAccessor.NAMESPACE);
+            CoordinatorStateAccessor.NAMESPACE,
+            LedgerFinalizeOrchestrator.createNamespaceMappingValidator(
+                storageAdmin, databaseConfig));
     String completionToken = orchestrator.execute();
 
     // Assert
