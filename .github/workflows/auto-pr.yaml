@@ -1,0 +1,21 @@
+name: Auto-PR
+
+on:
+  pull_request:
+    branches:
+      - master
+      - "[0-9]+"
+      - "[0-9]+.[0-9]+"
+    types:
+      - closed
+
+jobs:
+  if_merged:
+    uses: scalar-labs/actions/.github/workflows/auto-pr-reusable.yaml@main
+    secrets: inherit
+    with:
+      project_base_name: "ScalarDL"
+      # This repository has no separate support branch (e.g., "3"): master plays
+      # that role, so "ScalarDL X.Y.0" projects map to master instead of "X".
+      # Set this to false once a support branch is cut from master.
+      support_branch_is_default_branch: true
