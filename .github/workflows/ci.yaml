@@ -48,7 +48,8 @@ jobs:
             :ledger-finalize-records:check \
             :auditor-finalize-records:check \
             :request-proof-cleanup:check \
-            :cli:check
+            :cli:check \
+            :fixtures:check
 
       - name: Upload test reports
         if: always()
@@ -63,6 +64,7 @@ jobs:
             scalardl-cleanup/auditor-finalize-records/build/reports/tests/test/
             scalardl-cleanup/request-proof-cleanup/build/reports/tests/test/
             scalardl-cleanup/cli/build/reports/tests/test/
+            scalardl-cleanup/fixtures/build/reports/tests/test/
 
   jdbc-integration-test:
     name: JDBC integration test (resumable-scan, PostgreSQL)

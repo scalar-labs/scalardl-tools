@@ -11,7 +11,7 @@
 #   SCALARDL_OLD_VERSION                 the version that leaves the garbage behind
 #   COSMOS_URI / COSMOS_KEY              the schema-loader Jobs are rendered with these
 #   CLIENT / RECORD_COUNT / RUNNER_TEMP  populate.sh and db-records.sh need these
-#   SCALARDB_SQL_CLI / SCALARDB_VERSION  db-records.sh drives these against the account
+#   FIXTURES                             db-records.sh writes the non-terminal records with it
 #
 # Usage:
 #   ./setup-fixture.sh
@@ -26,8 +26,7 @@ source "$HERE/db-records.sh"
 
 # Check everything up front: the checkpoint reset below destroys state, so a missing variable should
 # stop us before that rather than halfway through.
-require_vars SCALARDL_OLD_VERSION COSMOS_URI COSMOS_KEY CLIENT RECORD_COUNT RUNNER_TEMP \
-  SCALARDB_SQL_CLI SCALARDB_VERSION
+require_vars SCALARDL_OLD_VERSION COSMOS_URI COSMOS_KEY CLIENT RECORD_COUNT RUNNER_TEMP FIXTURES
 
 # The metadata describes what this fixture populated, so the previous one's must not survive it.
 rm -f "$RUNNER_TEMP/populated-assets.json"
@@ -47,7 +46,7 @@ echo "==> populate data"
 
 echo "==> leave transaction records non-terminal"
 load_ad_credentials
-db_records_sql_init
+db_records_init
 db_records_reset_schema
 db_records_populate "$RECORD_COUNT"
 prepared_at=$SECONDS

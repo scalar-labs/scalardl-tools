@@ -1,0 +1,49 @@
+import com.github.spotbugs.snom.Confidence
+import com.github.spotbugs.snom.Effort
+
+// Test fixtures shared by the integration tests and the E2E. Nothing in the cleanup tool depends on
+// this module, so it never ends up in the distribution or the container image.
+plugins {
+    id 'java-library'
+    id 'application'
+    id 'net.ltgt.errorprone' version "${errorpronePluginVersion}"
+    id "com.github.spotbugs" version "${spotbugsPluginVersion}"
+}
+
+dependencies {
+    api "com.scalar-labs:scalardb:${scalarDbVersion}"
+    implementation "info.picocli:picocli:${picoCliVersion}"
+
+    errorprone "com.google.errorprone:error_prone_core:${errorproneVersion}"
+    spotbugs "com.github.spotbugs:spotbugs:${spotbugsVersion}"
+    compileOnly "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
+    testCompileOnly "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
+}
+
+application {
+    mainClass = 'com.scalar.dl.tools.cleanup.fixtures.FixtureMain'
+    applicationName = 'fixtures'
+}
+
+spotless {
+    java {
+        target 'src/*/java/**/*.java'
+        importOrder()
+        removeUnusedImports()
+        googleJavaFormat(googleJavaFormatVersion)
+    }
+}
+
+spotbugs {
+    ignoreFailures = false
+    showStackTraces = true
+    showProgress = true
+    effort = Effort.valueOf('DEFAULT')
+    reportLevel = Confidence.valueOf('DEFAULT')
+    maxHeapSize = '1g'
+    extraArgs = ['-nested:false']
+    jvmArgs = ['-Duser.language=en']
+}
+
+spotbugsMain { reports.create('html') { required = true } }
+spotbugsTest { reports.create('html') { required = true } }
