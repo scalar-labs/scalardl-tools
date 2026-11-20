@@ -10,12 +10,9 @@ import com.scalar.db.api.DistributedTransactionAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.Get;
 import com.scalar.db.api.Insert;
-import com.scalar.db.api.Put;
 import com.scalar.db.api.Result;
 import com.scalar.db.api.TableMetadata;
 import com.scalar.db.api.TransactionState;
-import com.scalar.db.api.TwoPhaseCommitTransaction;
-import com.scalar.db.api.TwoPhaseCommitTransactionManager;
 import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.io.DataType;
 import com.scalar.db.io.Key;
@@ -23,6 +20,7 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
 import com.scalar.db.transaction.consensuscommit.Attribute;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
+import com.scalar.dl.tools.cleanup.fixtures.NonTerminalRecordWriter;
 import com.scalar.dl.tools.common.CompletionToken;
 import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import java.nio.file.Path;
@@ -64,7 +62,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   private DistributedStorageAdmin storageAdmin;
   private DistributedTransactionManager txManager;
   private DistributedStorage storage;
-  private TwoPhaseCommitTransactionManager twoPhaseCommitTxManager;
+  private NonTerminalRecordWriter nonTerminalRecordWriter;
 
   protected abstract Properties getProperties();
 
@@ -79,8 +77,7 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
     TransactionFactory factory = TransactionFactory.create(props);
     admin = factory.getTransactionAdmin();
     txManager = factory.getTransactionManager();
-    twoPhaseCommitTxManager = factory.getTwoPhaseCommitTransactionManager();
-    assertThat(twoPhaseCommitTxManager).isNotNull();
+    nonTerminalRecordWriter = new NonTerminalRecordWriter(storage, storageAdmin);
 
     admin.createCoordinatorTables(true);
     admin.createNamespace(NAMESPACE);
@@ -106,7 +103,6 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
       storageAdmin.close();
       txManager.close();
       storage.close();
-      twoPhaseCommitTxManager.close();
     }
   }
 
@@ -146,8 +142,9 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
   }
 
   private String createPreparedRecord(String table, String pk, int ck) throws Exception {
-    TwoPhaseCommitTransaction tx = twoPhaseCommitTxManager.start();
-    tx.insert(
+    String txId = NonTerminalRecordWriter.newTransactionId();
+    nonTerminalRecordWriter.writePreparedInsert(
+        txId,
         Insert.newBuilder()
             .namespace(namespaceOf(table))
             .table(table)
@@ -155,42 +152,26 @@ public abstract class LedgerFinalizeOrchestratorIntegrationTestBase {
             .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
             .textValue(VALUE_COLUMN, "prepared-" + ck)
             .build());
-    tx.prepare();
-    return tx.getId();
+    return txId;
   }
 
   private String createDeletedRecord(String table, String pk, int ck) throws Exception {
     createCommittedRecord(table, pk, ck);
 
-    TwoPhaseCommitTransaction tx = twoPhaseCommitTxManager.start();
-    tx.get(
-        Get.newBuilder()
-            .namespace(namespaceOf(table))
-            .table(table)
-            .partitionKey(Key.ofText(PARTITION_KEY, pk))
-            .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
-            .build());
-    tx.delete(
+    String txId = NonTerminalRecordWriter.newTransactionId();
+    nonTerminalRecordWriter.writePreparedDelete(
+        txId,
         Delete.newBuilder()
             .namespace(namespaceOf(table))
             .table(table)
             .partitionKey(Key.ofText(PARTITION_KEY, pk))
             .clusteringKey(Key.ofInt(CLUSTERING_KEY, ck))
             .build());
-    tx.prepare();
-    return tx.getId();
+    return txId;
   }
 
   private void updateCoordinatorStateToCommitted(String txId) throws Exception {
-    Put put =
-        Put.newBuilder()
-            .namespace(CoordinatorStateAccessor.NAMESPACE)
-            .table(CoordinatorStateAccessor.TABLE)
-            .partitionKey(Key.ofText(Attribute.ID, txId))
-            .intValue(Attribute.STATE, TransactionState.COMMITTED.get())
-            .bigIntValue(Attribute.CREATED_AT, System.currentTimeMillis())
-            .build();
-    storage.put(put);
+    nonTerminalRecordWriter.putCoordinatorState(txId, TransactionState.COMMITTED);
   }
 
   private void assertRecordAbsent(String table, String pk, int ck) throws Exception {
