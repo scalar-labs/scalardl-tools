@@ -94,4 +94,36 @@ class RecordStateCheckerTest {
     assertThatThrownBy(() -> checker.needsFinalization(result))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void isNonTerminal_preparedGiven_shouldReturnTrue() {
+    // Act & Assert
+    assertThat(RecordStateChecker.isNonTerminal(createResult(TransactionState.PREPARED, 5000L)))
+        .isTrue();
+  }
+
+  @Test
+  void isNonTerminal_deletedGiven_shouldReturnTrue() {
+    // Act & Assert
+    assertThat(RecordStateChecker.isNonTerminal(createResult(TransactionState.DELETED, 5000L)))
+        .isTrue();
+  }
+
+  @Test
+  void isNonTerminal_committedGiven_shouldReturnFalse() {
+    // Act & Assert
+    assertThat(RecordStateChecker.isNonTerminal(createCommitted())).isFalse();
+  }
+
+  @Test
+  void isNonTerminal_recordWithoutStateGiven_shouldReturnFalse() {
+    // Arrange
+    // A record that no transaction has written has a null tx_state.
+    Result result = mock(Result.class);
+    when(result.getColumns()).thenReturn(Collections.emptyMap());
+    when(result.isNull(Attribute.STATE)).thenReturn(true);
+
+    // Act & Assert
+    assertThat(RecordStateChecker.isNonTerminal(result)).isFalse();
+  }
 }

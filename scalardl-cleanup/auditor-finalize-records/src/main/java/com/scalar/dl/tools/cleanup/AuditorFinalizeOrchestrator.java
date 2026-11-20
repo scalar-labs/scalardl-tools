@@ -3,11 +3,7 @@ package com.scalar.dl.tools.cleanup;
 import com.google.common.annotations.VisibleForTesting;
 import com.scalar.db.api.DistributedStorage;
 import com.scalar.db.api.DistributedStorageAdmin;
-import com.scalar.db.api.Result;
-import com.scalar.db.api.Scan;
-import com.scalar.db.api.Scanner;
 import com.scalar.db.config.DatabaseConfig;
-import com.scalar.db.io.Key;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.client.service.AuditorClient;
 import com.scalar.dl.tools.common.AuditorInternalValues;
@@ -19,11 +15,8 @@ import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +41,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
   private final ResumableScannerFactory scannerFactory;
   private final Path checkpointDir;
   private final String baseNamespace;
+  private final AuditorNamespaceDiscovery namespaceDiscovery;
 
   @VisibleForTesting
   AuditorFinalizeOrchestrator(
@@ -63,6 +57,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
     this.scannerFactory = scannerFactory;
     this.checkpointDir = checkpointDir;
     this.baseNamespace = baseNamespace;
+    this.namespaceDiscovery = new AuditorNamespaceDiscovery(admin, storage, baseNamespace);
   }
 
   /**
@@ -153,7 +148,7 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
     }
 
     long startedAtMs = System.currentTimeMillis() - AuditorInternalValues.LOCK_VALID_PERIOD_MS;
-    List<String> namespaces = discoverLogicalNamespaces();
+    List<String> namespaces = namespaceDiscovery.discoverLogicalNamespaces();
     state = new AuditorFinalizeState(startedAtMs, namespaces);
     stateManager.persist(state);
     logger.info(
@@ -162,42 +157,6 @@ public final class AuditorFinalizeOrchestrator implements AutoCloseable {
         namespaces.size(),
         namespaces);
     return state;
-  }
-
-  /**
-   * Discovers the logical namespaces to sweep: the implicit {@code default} namespace plus every
-   * namespace registered in the {@code <base>.namespace} registry table, or only the default
-   * namespace if that table does not exist.
-   */
-  private List<String> discoverLogicalNamespaces() throws Exception {
-    Set<String> namespaces = new LinkedHashSet<>();
-    namespaces.add(AuditorInternalValues.DEFAULT_LOGICAL_NAMESPACE);
-
-    if (admin.tableExists(baseNamespace, AuditorInternalValues.NAMESPACE_TABLE_NAME)) {
-      logger.info("Namespace registry table found; scanning for registered namespaces.");
-      Scan scan =
-          Scan.newBuilder()
-              .namespace(baseNamespace)
-              .table(AuditorInternalValues.NAMESPACE_TABLE_NAME)
-              .partitionKey(
-                  Key.ofInt(
-                      AuditorInternalValues.NAMESPACE_TABLE_PARTITION_ID_COLUMN_NAME,
-                      AuditorInternalValues.NAMESPACE_TABLE_DEFAULT_PARTITION_ID))
-              .build();
-      try (Scanner scanner = storage.scan(scan)) {
-        for (Result result : scanner) {
-          String registered =
-              result.getText(AuditorInternalValues.NAMESPACE_TABLE_NAME_COLUMN_NAME);
-          if (namespaces.add(registered)) {
-            logger.info("Discovered registered namespace: {}", registered);
-          }
-        }
-      }
-    } else {
-      logger.info("Namespace registry table not found; sweeping the default namespace only.");
-    }
-
-    return new ArrayList<>(namespaces);
   }
 
   /**
