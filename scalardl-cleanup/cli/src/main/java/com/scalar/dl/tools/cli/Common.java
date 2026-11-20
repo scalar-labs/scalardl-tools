@@ -20,6 +20,7 @@ public final class Common {
   static final String ERROR_MESSAGE_KEY = "error_message";
   static final String COMPLETION_TOKEN_KEY = "completion_token";
   static final String OK_STATUS = "OK";
+  static final String VERIFICATION_FAILED_STATUS = "VERIFICATION_FAILED";
 
   private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -49,6 +50,19 @@ public final class Common {
     ObjectNode json = mapper.createObjectNode();
     json.put(STATUS_CODE_KEY, resolveCategory(e).name());
     json.put(ERROR_MESSAGE_KEY, e.getMessage() != null ? e.getMessage() : e.toString());
+    printJson(json);
+  }
+
+  /**
+   * Prints the result of a verify command that found something that still needs finalization, as
+   * {@code {"status_code":"VERIFICATION_FAILED","error_message":<message>}}.
+   *
+   * @param message what was found and what to do about it
+   */
+  public static void printVerificationFailure(String message) {
+    ObjectNode json = mapper.createObjectNode();
+    json.put(STATUS_CODE_KEY, VERIFICATION_FAILED_STATUS);
+    json.put(ERROR_MESSAGE_KEY, message);
     printJson(json);
   }
 

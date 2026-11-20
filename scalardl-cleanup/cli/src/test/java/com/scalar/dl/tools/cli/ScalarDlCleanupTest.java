@@ -170,6 +170,17 @@ public class ScalarDlCleanupTest {
     assertThat(out.toString(StandardCharsets.UTF_8)).contains(expectedVersion);
   }
 
+  @Test
+  void usage_shouldListVerifyCommands() {
+    // Act
+    String usage = ScalarDlCleanup.createCommandLine().getUsageMessage();
+
+    // Assert
+    assertThat(usage)
+        .contains("verify-ledger-finalization")
+        .contains("verify-auditor-finalization");
+  }
+
   /** A log4j2 appender that records the formatted message of every {@code ERROR} event. */
   private static final class CapturingAppender extends AbstractAppender {
 

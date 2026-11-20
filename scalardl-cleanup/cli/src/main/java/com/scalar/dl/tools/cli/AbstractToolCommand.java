@@ -5,41 +5,25 @@ import com.scalar.dl.tools.common.ScalarDlCleanupException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
-import java.util.concurrent.Callable;
+import picocli.CommandLine.Option;
 
 /**
- * Base class for the coordinator state deletion tool subcommands. It loads the {@code --properties}
- * file and resolves the {@code --checkpoint-dir}, delegates to {@link #execute(Properties, Path)},
- * and translates any failure into the standard error JSON and a non-zero exit code.
+ * Base class for the coordinator state deletion tool subcommands, which keep their progress in a
+ * checkpoint directory. It resolves the {@code --checkpoint-dir} and delegates to {@link
+ * #execute(Properties, Path)}.
  */
-public abstract class AbstractToolCommand extends CommonOptions implements Callable<Integer> {
+public abstract class AbstractToolCommand extends AbstractCommand {
 
-  /** Exit code returned on success. */
-  public static final int SUCCESS_EXIT_CODE = 0;
-
-  /** Exit code returned on any failure. */
-  public static final int FAILURE_EXIT_CODE = 1;
+  @Option(
+      names = {"--checkpoint-dir"},
+      required = true,
+      paramLabel = "CHECKPOINT_DIR",
+      description = "Directory to persist resumable-scan state.")
+  protected String checkpointDir;
 
   @Override
-  public final Integer call() {
-    try {
-      Properties props = loadConfiguration();
-      Path checkpoint = resolveCheckpointDirectory();
-      return execute(props, checkpoint);
-    } catch (Exception e) {
-      Common.printError(e);
-      logStackTrace(e);
-      return FAILURE_EXIT_CODE;
-    }
-  }
-
-  private Properties loadConfiguration() {
-    try {
-      return loadProperties();
-    } catch (Exception e) {
-      throw new ScalarDlCleanupException(
-          ScalarDlCleanupError.CONFIGURATION_LOAD_FAILED, e, properties);
-    }
+  final Integer run(Properties props) throws Exception {
+    return execute(props, resolveCheckpointDirectory());
   }
 
   private Path resolveCheckpointDirectory() {

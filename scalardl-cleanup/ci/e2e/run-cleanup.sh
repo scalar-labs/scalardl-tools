@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# The three operator-facing ScalarDL Cleanup commands, each run as a Kubernetes Job from
+# The operator-facing ScalarDL Cleanup commands, each run as a Kubernetes Job from
 # scalardl-cleanup/manifests. Source it:
 #
 #   source ci/e2e/run-cleanup.sh
@@ -64,4 +64,36 @@ run_cleanup_coordinator() {
   wait_for_job "$LEDGER_NS" scalardl-cleanup-coordinator 600
   cleanup_coordinator_output=$(read_job_output_json "$LEDGER_NS" scalardl-cleanup-coordinator)
   echo "cleanup-coordinator output: $cleanup_coordinator_output"
+}
+
+# Run a verify command, whose Job is expected to complete (passed) or to fail (failed). Sets
+# verify_output to the command's JSON and verify_pod_count to the number of Pods the Job started.
+# Usage: run_verify_job <namespace> <job> <manifest> <passed|failed>
+run_verify_job() {
+  local ns="$1" job="$2" manifest="$3" expected="$4"
+  if [ "$expected" = passed ]; then
+    apply_job "$ns" "$job" "$manifest"
+    wait_for_job "$ns" "$job" 600
+    verify_output=$(read_job_output_json "$ns" "$job")
+  else
+    verify_output=$(run_job_expect_failure "$ns" "$job" "$manifest")
+  fi
+  verify_pod_count=$(kubectl -n "$ns" get pod -l "job-name=$job" --no-headers | wc -l | tr -d ' ')
+  echo "$job output: $verify_output (pods: $verify_pod_count)"
+}
+
+# Run verify-ledger-finalization (Ledger AD). Sets verify_output and verify_pod_count.
+# Usage: run_verify_ledger_finalization <passed|failed>
+run_verify_ledger_finalization() {
+  setup_ledger_ad
+  run_verify_job "$LEDGER_NS" scalardl-verify-ledger-finalization \
+    "$work/ledger-ad/verify-ledger-finalization.yaml" "$1"
+}
+
+# Run verify-auditor-finalization (Auditor AD). Sets verify_output and verify_pod_count.
+# Usage: run_verify_auditor_finalization <passed|failed>
+run_verify_auditor_finalization() {
+  setup_auditor_ad
+  run_verify_job "$AUDITOR_NS" scalardl-verify-auditor-finalization \
+    "$work/auditor-ad/verify-auditor-finalization.yaml" "$1"
 }
