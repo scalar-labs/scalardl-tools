@@ -654,6 +654,47 @@ class JdbcResumableScannerTest {
   }
 
   @Test
+  void scan_withoutCheckpointAfterHandlerThrew_shouldDeliverRecordsFromFirstRecordAgain()
+      throws Exception {
+    // Arrange
+    Result first = singleKeyRecord("a");
+    Result second = singleKeyRecord("b");
+    Result third = singleKeyRecord("c");
+    Result fourth = singleKeyRecord("d");
+    enqueuePages(Arrays.asList(first, second), Arrays.asList(third, fourth));
+    when(storageAdmin.getTableMetadata(NAMESPACE, TABLE)).thenReturn(SINGLE_KEY_METADATA);
+    Exception failure = new Exception("handler failure");
+    List<Result> delivered = new ArrayList<>();
+
+    try (JdbcResumableScanner scanner =
+        new JdbcResumableScanner(storage, storageAdmin, new NoOpCheckpointManager(), 2)) {
+      assertThatThrownBy(
+              () ->
+                  scanner.scan(
+                      NAMESPACE,
+                      TABLE,
+                      r -> {
+                        if (r == third) {
+                          throw failure;
+                        }
+                      }))
+          .isSameAs(failure);
+      pages.clear();
+      issuedScans.clear();
+      enqueuePages(Arrays.asList(first, second), Arrays.asList(third, fourth));
+
+      // Act
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, delivered::add);
+
+      // Assert
+      assertThat(result.getTotalScanned()).isEqualTo(4);
+    }
+    assertThat(delivered).containsExactly(first, second, third, fourth);
+    assertThat(issuedScans.get(0).getConjunctions()).isEmpty();
+    assertThat(checkpointDir).doesNotExist();
+  }
+
+  @Test
   void scan_shouldCloseScannerBeforeHandlingRecords() throws Exception {
     // Arrange
     Result r = compositeRecord("p1", 9, "a");

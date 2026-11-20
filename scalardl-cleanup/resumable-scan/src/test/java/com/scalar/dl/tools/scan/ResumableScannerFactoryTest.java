@@ -119,4 +119,35 @@ class ResumableScannerFactoryTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Configured storage: cassandra");
   }
+
+  @Test
+  void create_withoutCheckpointDirAndUnsupportedStorageGiven_shouldThrowSameException() {
+    // Arrange
+    Properties props = new Properties();
+    props.setProperty(DatabaseConfig.STORAGE, "cassandra");
+    ResumableScannerFactory factory = new ResumableScannerFactory(new DatabaseConfig(props));
+
+    // Act Assert
+    assertThatThrownBy(() -> factory.create("ns"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "This tool only supports Cosmos DB and JDBC databases. Configured storage: cassandra");
+  }
+
+  @Test
+  void create_withoutCheckpointDirAndNamespaceMappedToUnsupportedStorageGiven_shouldThrow() {
+    // Arrange
+    Properties props = multiStorageProperties();
+    props.setProperty(MultiStorageConfig.STORAGES, "cosmos_db,postgres,cassandra_db");
+    props.setProperty(MultiStorageConfig.STORAGES + ".cassandra_db.storage", "cassandra");
+    props.setProperty(MultiStorageConfig.STORAGES + ".cassandra_db.contact_points", "localhost");
+    props.setProperty(
+        MultiStorageConfig.NAMESPACE_MAPPING, "coordinator:postgres,ns_in_cassandra:cassandra_db");
+    ResumableScannerFactory factory = new ResumableScannerFactory(new DatabaseConfig(props));
+
+    // Act Assert
+    assertThatThrownBy(() -> factory.create("ns_in_cassandra"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Configured storage: cassandra");
+  }
 }

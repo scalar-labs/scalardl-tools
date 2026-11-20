@@ -72,6 +72,32 @@ public final class CosmosResumableScanner implements ResumableScanner {
     }
   }
 
+  /**
+   * Creates a scanner that takes no checkpoint.
+   *
+   * <p>The scanner saves no progress and does not resume: every scan starts from the beginning of
+   * the table, even after a failed scan. It is for read-only uses that must look at every record on
+   * every run.
+   */
+  public CosmosResumableScanner(DatabaseConfig databaseConfig) {
+    this(
+        databaseConfig,
+        new CosmosResumableScannerConfig(databaseConfig),
+        CosmosUtils.buildCosmosClient(new CosmosConfig(databaseConfig)));
+  }
+
+  private CosmosResumableScanner(
+      DatabaseConfig databaseConfig,
+      CosmosResumableScannerConfig config,
+      CosmosClient cosmosClient) {
+    this(
+        cosmosClient,
+        new NoOpCheckpointManager(),
+        createStorageAdmin(databaseConfig, cosmosClient),
+        config.getMaxWorkerThreads(),
+        config.getMaxItemCount());
+  }
+
   @VisibleForTesting
   CosmosResumableScanner(
       CosmosClient cosmosClient,
@@ -84,6 +110,16 @@ public final class CosmosResumableScanner implements ResumableScanner {
     this.storageAdmin = storageAdmin;
     this.maxWorkerThreads = maxWorkerThreads;
     this.maxItemCount = maxItemCount;
+  }
+
+  private static DistributedStorageAdmin createStorageAdmin(
+      DatabaseConfig databaseConfig, CosmosClient cosmosClient) {
+    try {
+      return StorageFactory.create(databaseConfig.getProperties()).getStorageAdmin();
+    } catch (Exception e) {
+      cosmosClient.close();
+      throw new RuntimeException("Failed to create DistributedStorageAdmin", e);
+    }
   }
 
   private static void shutdownExecutorIfExists(ExecutorService executor) {

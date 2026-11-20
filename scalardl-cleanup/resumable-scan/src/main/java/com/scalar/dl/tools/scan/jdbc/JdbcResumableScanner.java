@@ -112,6 +112,32 @@ public final class JdbcResumableScanner implements ResumableScanner {
     this.pageSize = config.getPageSize();
   }
 
+  /**
+   * Creates a scanner that takes no checkpoint.
+   *
+   * <p>The scanner saves no progress and does not resume: every scan starts from the beginning of
+   * the table, even after a failed scan. It is for read-only uses that must look at every record on
+   * every run.
+   */
+  public JdbcResumableScanner(DatabaseConfig databaseConfig) {
+    this(
+        new JdbcResumableScannerConfig(databaseConfig).getPageSize(),
+        StorageFactory.create(databaseConfig.getProperties()));
+  }
+
+  private JdbcResumableScanner(int pageSize, StorageFactory storageFactory) {
+    this(pageSize, storageFactory, storageFactory.getStorage());
+  }
+
+  private JdbcResumableScanner(
+      int pageSize, StorageFactory storageFactory, DistributedStorage storage) {
+    this(
+        storage,
+        createStorageAdmin(storageFactory, storage),
+        new NoOpCheckpointManager(),
+        pageSize);
+  }
+
   @VisibleForTesting
   JdbcResumableScanner(
       DistributedStorage storage,
@@ -122,6 +148,16 @@ public final class JdbcResumableScanner implements ResumableScanner {
     this.storageAdmin = storageAdmin;
     this.checkpointManager = checkpointManager;
     this.pageSize = pageSize;
+  }
+
+  private static DistributedStorageAdmin createStorageAdmin(
+      StorageFactory storageFactory, DistributedStorage storage) {
+    try {
+      return storageFactory.getStorageAdmin();
+    } catch (Exception e) {
+      storage.close();
+      throw new RuntimeException("Failed to create DistributedStorageAdmin", e);
+    }
   }
 
   /** Returns the primary key column names: partition key columns, then clustering key columns. */

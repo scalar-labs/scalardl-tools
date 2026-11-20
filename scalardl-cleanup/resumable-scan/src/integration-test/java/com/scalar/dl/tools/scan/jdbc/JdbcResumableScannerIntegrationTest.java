@@ -19,6 +19,8 @@ import com.scalar.db.io.Key;
 import com.scalar.db.io.TextColumn;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.dl.tools.scan.RecordHandler;
+import com.scalar.dl.tools.scan.ResumableScanner;
+import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -471,5 +473,52 @@ class JdbcResumableScannerIntegrationTest {
       assertThatThrownBy(() -> scanner.scan(NAMESPACE, TABLE, r -> {}))
           .isInstanceOf(IllegalStateException.class);
     }
+  }
+
+  @Test
+  void scan_withoutCheckpoint_shouldDeliverEveryRecordExactlyOnce() throws Exception {
+    // Arrange
+    List<String> scannedRecordIds = new ArrayList<>();
+
+    try (ResumableScanner scanner = new ResumableScannerFactory(databaseConfig).create(NAMESPACE)) {
+      // Act
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, r -> scannedRecordIds.add(recordId(r)));
+
+      // Assert
+      assertThat(scanner).isInstanceOf(JdbcResumableScanner.class);
+      assertThat(result.getTotalScanned()).isEqualTo(TEST_RECORD_COUNT);
+    }
+    assertThat(scannedRecordIds).isEqualTo(expectedRecordIdsInOrder());
+  }
+
+  @Test
+  void scan_withoutCheckpointAfterFailedScan_shouldDeliverAllRecordsFromStart() throws Exception {
+    // Arrange
+    ResumableScannerFactory factory = new ResumableScannerFactory(databaseConfig);
+    List<String> firstScannedRecordIds = new ArrayList<>();
+    try (ResumableScanner scanner = factory.create(NAMESPACE)) {
+      assertThatThrownBy(
+              () ->
+                  scanner.scan(
+                      NAMESPACE,
+                      TABLE,
+                      interruptingHandlerAfter(
+                          firstScannedRecordIds,
+                          TEST_RECORD_COUNT / 2,
+                          JdbcResumableScannerIntegrationTest::recordId)))
+          .hasMessage("Simulated interruption");
+    }
+    assertThat(firstScannedRecordIds).hasSize(TEST_RECORD_COUNT / 2);
+    List<String> secondScannedRecordIds = new ArrayList<>();
+
+    try (ResumableScanner scanner = factory.create(NAMESPACE)) {
+      // Act
+      ScanResult result =
+          scanner.scan(NAMESPACE, TABLE, r -> secondScannedRecordIds.add(recordId(r)));
+
+      // Assert
+      assertThat(result.getTotalScanned()).isEqualTo(TEST_RECORD_COUNT);
+    }
+    assertThat(secondScannedRecordIds).isEqualTo(expectedRecordIdsInOrder());
   }
 }

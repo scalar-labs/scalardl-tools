@@ -51,6 +51,32 @@ public final class ResumableScannerFactory {
   }
 
   /**
+   * Creates a new {@link ResumableScanner} that takes no checkpoint, for the tables in the given
+   * namespace.
+   *
+   * <p>The scanner saves no progress and does not resume: every scan starts from the beginning of
+   * the table, even after a failed scan. It is for read-only uses that must look at every record on
+   * every run. Such uses still get the parallel scanning and paging of the scanner, but not the
+   * resume.
+   *
+   * @param namespace ScalarDB namespace of the tables to scan
+   * @return a new scanner for the storage of the namespace
+   * @throws IllegalArgumentException if the storage of the namespace is not supported
+   */
+  public ResumableScanner create(String namespace) {
+    DatabaseConfig config = resolveDatabaseConfig(namespace);
+    String storage = config.getStorage();
+    if (CosmosConfig.STORAGE_NAME.equals(storage)) {
+      return new CosmosResumableScanner(config);
+    }
+    if (JdbcConfig.STORAGE_NAME.equals(storage)) {
+      return new JdbcResumableScanner(config);
+    }
+    throw new IllegalArgumentException(
+        "This tool only supports Cosmos DB and JDBC databases. Configured storage: " + storage);
+  }
+
+  /**
    * Returns the configuration of the storage of the given namespace. With multi-storage, the
    * storage is the one that the namespace is mapped to, or the default storage if the namespace is
    * not mapped. The deprecated table mapping is not considered.
