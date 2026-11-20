@@ -9,9 +9,11 @@
 #   <postgresql-jdbc-url>  The JDBC URL of the PostgreSQL database, such as
 #                          jdbc:postgresql://<host>:5432/<database>.
 #   <postgresql-username>  The PostgreSQL username.
-#   <namespace>            A namespace that the sharing instance keeps in PostgreSQL. Map every such
-#                          namespace, separated by commas, such as ns1:postgresql,ns2:postgresql.
-#                          The tool silently skips a namespace missing from the mapping.
+#   <namespace>            A namespace in which the sharing instance has tables in PostgreSQL. Map
+#                          every such namespace, separated by commas, such as
+#                          ns1:postgresql,ns2:postgresql. finalize-ledger fails if a mapped
+#                          namespace has no tables in PostgreSQL, or if a namespace with
+#                          transactional tables in PostgreSQL is not mapped.
 #
 # The Secret must also have SCALAR_DB_JDBC_PASSWORD, the PostgreSQL password.
 

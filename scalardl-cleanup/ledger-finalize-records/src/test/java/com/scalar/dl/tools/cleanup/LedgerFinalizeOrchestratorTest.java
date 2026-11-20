@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -13,6 +15,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.common.collect.ImmutableMap;
 import com.scalar.db.api.DistributedStorageAdmin;
 import com.scalar.db.api.DistributedTransactionManager;
 import com.scalar.db.api.TableMetadata;
@@ -20,6 +23,7 @@ import com.scalar.db.config.DatabaseConfig;
 import com.scalar.db.io.DataType;
 import com.scalar.db.service.StorageFactory;
 import com.scalar.db.service.TransactionFactory;
+import com.scalar.db.storage.multistorage.MultiStorageAdmin;
 import com.scalar.db.storage.multistorage.MultiStorageConfig;
 import com.scalar.db.transaction.consensuscommit.ConsensusCommitUtils;
 import com.scalar.db.transaction.consensuscommit.CoordinatorStateAccessor;
@@ -34,10 +38,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Properties;
+import javax.annotation.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 
 @SuppressWarnings("resource")
@@ -51,6 +58,8 @@ class LedgerFinalizeOrchestratorTest {
           .build();
   private static final TableMetadata TRANSACTION_TABLE_METADATA =
       ConsensusCommitUtils.buildTransactionTableMetadata(USER_TABLE_METADATA);
+  private static final Map<String, String> STORAGE_CONFIG =
+      ImmutableMap.of("storage", "cosmos", "contact_points", "https://example.com");
 
   @TempDir Path tempDir;
 
@@ -74,8 +83,19 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   private LedgerFinalizeOrchestrator newOrchestrator(String coordinatorNamespace) {
+    return newOrchestrator(coordinatorNamespace, null);
+  }
+
+  private LedgerFinalizeOrchestrator newOrchestrator(
+      String coordinatorNamespace, @Nullable NamespaceMappingValidator namespaceMappingValidator) {
     return new LedgerFinalizeOrchestrator(
-        admin, txManager, scannerFactory, tempDir, coordinatorNamespace);
+        admin,
+        txManager,
+        scannerFactory,
+        tempDir,
+        coordinatorNamespace,
+        namespaceMappingValidator,
+        STORAGE_CONFIG);
   }
 
   /**
@@ -173,12 +193,67 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
+  void create_multiStorageWithJdbcDefaultStorageGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.DEFAULT_STORAGE, "other_db");
+
+    // Act & Assert
+    assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.MULTI_STORAGE_DEFAULT_STORAGE_NOT_COSMOS.buildCode());
+  }
+
+  @Test
+  void create_multiStorageWithJdbcTransactionManagerGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(DatabaseConfig.TRANSACTION_MANAGER, "jdbc");
+
+    // Act & Assert
+    assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.UNSUPPORTED_TRANSACTION_MANAGER.buildCode());
+  }
+
+  @Test
+  void create_multiStorageWithNonMultiStorageAdminGiven_shouldThrowAndCloseResources() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+
+    DistributedStorageAdmin storageAdmin = mock(DistributedStorageAdmin.class);
+    StorageFactory storageFactory = mock(StorageFactory.class);
+    when(storageFactory.getStorageAdmin()).thenReturn(storageAdmin);
+    DistributedTransactionManager transactionManager = mock(DistributedTransactionManager.class);
+    TransactionFactory transactionFactory = mock(TransactionFactory.class);
+    when(transactionFactory.getTransactionManager()).thenReturn(transactionManager);
+
+    try (MockedStatic<StorageFactory> storageFactoryStatic = mockStatic(StorageFactory.class);
+        MockedStatic<TransactionFactory> transactionFactoryStatic =
+            mockStatic(TransactionFactory.class)) {
+      storageFactoryStatic
+          .when(() -> StorageFactory.create(any(Properties.class)))
+          .thenReturn(storageFactory);
+      transactionFactoryStatic
+          .when(() -> TransactionFactory.create(any(Properties.class)))
+          .thenReturn(transactionFactory);
+
+      // Act & Assert
+      assertThatThrownBy(() -> LedgerFinalizeOrchestrator.create(props, tempDir))
+          .isInstanceOf(IllegalStateException.class);
+      verify(storageAdmin).close();
+      verify(transactionManager).close();
+    }
+  }
+
+  @Test
   void create_multiStorageWithCosmosAndJdbcGiven_shouldNotThrow() {
     // Arrange
     Properties props = multiStorageProperties("jdbc");
 
     StorageFactory storageFactory = mock(StorageFactory.class);
-    when(storageFactory.getStorageAdmin()).thenReturn(mock(DistributedStorageAdmin.class));
+    when(storageFactory.getStorageAdmin()).thenReturn(mock(MultiStorageAdmin.class));
     TransactionFactory transactionFactory = mock(TransactionFactory.class);
     when(transactionFactory.getTransactionManager())
         .thenReturn(mock(DistributedTransactionManager.class));
@@ -356,6 +431,72 @@ class LedgerFinalizeOrchestratorTest {
   }
 
   @Test
+  void execute_initialRunWithNamespaceMappingValidatorGiven_shouldValidateBeforeDiscovery()
+      throws Exception {
+    // Arrange
+    NamespaceMappingValidator validator = mock(NamespaceMappingValidator.class);
+    when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Arrays.asList("tbl1", "tbl2")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
+
+    LedgerFinalizeOrchestrator orchestrator =
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, validator);
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    InOrder inOrder = inOrder(validator, admin);
+    inOrder.verify(validator).validate();
+    inOrder.verify(admin).getNamespaceNames();
+  }
+
+  @Test
+  void execute_namespaceMappingValidationFailureGiven_shouldThrowWithoutPersistingState()
+      throws Exception {
+    // Arrange
+    NamespaceMappingValidator validator = mock(NamespaceMappingValidator.class);
+    doThrow(
+            new ScalarDlCleanupException(
+                ScalarDlCleanupError.MULTI_STORAGE_MAPPED_NAMESPACE_NOT_FOUND, "ns", "other_db"))
+        .when(validator)
+        .validate();
+
+    LedgerFinalizeOrchestrator orchestrator =
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, validator);
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.MULTI_STORAGE_MAPPED_NAMESPACE_NOT_FOUND.buildCode());
+
+    verify(admin, never()).getNamespaceNames();
+    verify(scanner, never()).scan(anyString(), anyString(), any());
+    assertThat(new LedgerFinalizeStateManager(tempDir).load()).isNull();
+  }
+
+  @Test
+  void execute_resumedStateWithNamespaceMappingValidatorGiven_shouldNotValidate() throws Exception {
+    // Arrange
+    NamespaceMappingValidator validator = mock(NamespaceMappingValidator.class);
+    new LedgerFinalizeStateManager(tempDir)
+        .persist(
+            new LedgerFinalizeState(1000L, Arrays.asList("ns1.tbl1", "ns2.tbl2"), STORAGE_CONFIG));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
+
+    LedgerFinalizeOrchestrator orchestrator =
+        newOrchestrator(CoordinatorStateAccessor.NAMESPACE, validator);
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    verify(validator, never()).validate();
+  }
+
+  @Test
   void execute_scanFailureGiven_shouldPropagateException() throws Exception {
     // Arrange
     when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
@@ -411,7 +552,8 @@ class LedgerFinalizeOrchestratorTest {
         new LedgerFinalizeState(
             startedAtMs,
             Arrays.asList("ns1.tbl1", "ns2.tbl2"),
-            Collections.singletonList("ns1.tbl1")));
+            Collections.singletonList("ns1.tbl1"),
+            STORAGE_CONFIG));
     when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(5));
 
     LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
@@ -425,6 +567,97 @@ class LedgerFinalizeOrchestratorTest {
     verify(scanner).scan(eq("ns2"), eq("tbl2"), any());
     // The original start timestamp is carried over across the resume.
     assertThat(CompletionToken.decode(token).getStartedAtMs()).isEqualTo(startedAtMs);
+  }
+
+  @Test
+  void execute_initialRunGiven_shouldPersistStorageConfig() throws Exception {
+    // Arrange
+    when(admin.getNamespaceNames()).thenReturn(new HashSet<>(Collections.singletonList("ns1")));
+    when(admin.getNamespaceTableNames("ns1"))
+        .thenReturn(new HashSet<>(Arrays.asList("tbl1", "tbl2")));
+    when(scanner.scan(anyString(), anyString(), any())).thenReturn(new ScanResult(10));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act
+    orchestrator.execute();
+
+    // Assert
+    LedgerFinalizeState state = new LedgerFinalizeStateManager(tempDir).load();
+    assertThat(state).isNotNull();
+    assertThat(state.getStorageConfig()).isEqualTo(STORAGE_CONFIG);
+  }
+
+  @Test
+  void execute_resumedStateWithAnotherStorageConfigGiven_shouldThrowWithoutScanning()
+      throws Exception {
+    // Arrange
+    LedgerFinalizeStateManager stateManager = new LedgerFinalizeStateManager(tempDir);
+    stateManager.persist(
+        new LedgerFinalizeState(
+            1000L,
+            Arrays.asList("ns1.tbl1", "ns2.tbl2"),
+            Collections.singletonList("ns1.tbl1"),
+            ImmutableMap.of("storage", "cosmos", "contact_points", "https://other.example.com")));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.STORAGE_CONFIGURATION_CHANGED.buildCode())
+        .hasMessageContaining("contact_points: ****** -> ******")
+        .hasMessageNotContaining("example.com");
+
+    verify(scanner, never()).scan(anyString(), anyString(), any());
+    LedgerFinalizeState state = stateManager.load();
+    assertThat(state).isNotNull();
+    assertThat(state.getCompletedTables()).containsExactly("ns1.tbl1");
+  }
+
+  @Test
+  void execute_completedStateWithAnotherStorageConfigGiven_shouldThrowWithoutEmittingToken() {
+    // Arrange
+    // The previous run has completed, but the namespace mapping was fixed afterward, so the tables
+    // that the fixed mapping would find might not have been finalized.
+    new LedgerFinalizeStateManager(tempDir)
+        .persist(
+            new LedgerFinalizeState(
+                1000L,
+                Arrays.asList("ns1.tbl1", "ns2.tbl2"),
+                Arrays.asList("ns1.tbl1", "ns2.tbl2"),
+                ImmutableMap.<String, String>builder()
+                    .putAll(STORAGE_CONFIG)
+                    .put("multi_storage.namespace_mapping", "ns1:postgresql")
+                    .build()));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(ScalarDlCleanupError.STORAGE_CONFIGURATION_CHANGED.buildCode())
+        .hasMessageContaining("multi_storage.namespace_mapping: 'ns1:postgresql' -> (none)");
+  }
+
+  @Test
+  void execute_resumedStateWithoutStorageConfigGiven_shouldThrowWithoutScanning() throws Exception {
+    // Arrange
+    // A state that an older version of the tool created does not have the storage configuration.
+    new LedgerFinalizeStateManager(tempDir)
+        .persist(
+            new LedgerFinalizeState(
+                1000L, Arrays.asList("ns1.tbl1", "ns2.tbl2"), Collections.emptyList(), null));
+
+    LedgerFinalizeOrchestrator orchestrator = newOrchestrator();
+
+    // Act & Assert
+    assertThatThrownBy(orchestrator::execute)
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.STORAGE_CONFIGURATION_NOT_IN_CHECKPOINT.buildCode());
+
+    verify(scanner, never()).scan(anyString(), anyString(), any());
   }
 
   @Test

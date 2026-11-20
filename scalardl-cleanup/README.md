@@ -109,15 +109,28 @@ If a ScalarDB instance that shares the Coordinator table keeps some of its table
 
 You fill in this configuration yourself from the Ledger's configuration and the configuration of the instance that shares the Coordinator table. The configuration of that instance, such as ScalarDB Cluster, does not necessarily work as is. For example, its storage names, its namespace mapping, and its other properties can differ from what the tool needs. Fill in the configuration as follows:
 
-1. **Cosmos DB storage.** Set `<cosmos-account-uri>` to the Ledger's Cosmos DB account URI. The Cosmos DB storage is the default storage, so the Coordinator table and ScalarDL's namespaces stay in it.
+1. **Cosmos DB storage.** Set `<cosmos-account-uri>` to the Ledger's Cosmos DB account URI. The Cosmos DB storage must be the default storage, so that the Coordinator table and ScalarDL's namespaces stay in it.
 2. **JDBC storage.** Set `<postgresql-jdbc-url>` and `<postgresql-username>` from the configuration of the instance that shares the Coordinator table. If that instance overrides other settings of the JDBC storage, such as `scalar.db.jdbc.table_metadata.schema`, add them under the `scalar.db.multi_storage.storages.postgresql.` prefix with the same values.
-3. **Namespace mapping.** In `scalar.db.multi_storage.namespace_mapping`, map **every** namespace that the instance keeps in PostgreSQL to the `postgresql` storage, such as `ns1:postgresql,ns2:postgresql`. The tool finds the tables outside the default storage only through this mapping, so it silently skips a namespace missing from it. The namespaces that the instance keeps in the Ledger's Cosmos DB account need no entry, because they belong to the default storage.
+3. **Namespace mapping.** In `scalar.db.multi_storage.namespace_mapping`, map **every** namespace in which the instance has tables in PostgreSQL to the `postgresql` storage, such as `ns1:postgresql,ns2:postgresql`. Do not map a namespace that has no tables. The tool finds the tables outside the default storage only through this mapping, so a namespace missing from it would be skipped. To prevent that, `finalize-ledger` checks the mapping against the storages when it starts a new run and fails if the mapping is wrong, as described below. The namespaces that the instance keeps in the Ledger's Cosmos DB account need no entry, because they belong to the default storage.
 4. **Other properties.** Add the other properties, such as `scalar.db.consensus_commit.coordinator.namespace` and `scalar.dl.tools.*`, at the top level, with the same values as in the Ledger's configuration. They apply to every storage.
 
 The tool rejects the configuration in the following cases:
 
 - A storage is neither Cosmos DB for NoSQL nor a JDBC database.
 - The deprecated `scalar.db.multi_storage.table_mapping` is set. Use `scalar.db.multi_storage.namespace_mapping` instead.
+- The default storage is not Cosmos DB for NoSQL.
+- The Coordinator namespace is mapped to a storage other than the default storage.
+- A storage other than the default storage has no namespace mapped to it.
+
+In addition, `finalize-ledger` fails in the following cases when it starts a new run:
+
+- A namespace in the mapping is not found in the storage that it is mapped to, for example, because of a misspelled namespace or a leftover `<namespace>` placeholder. A namespace that has no tables is not found either, so remove it from the mapping. For a JDBC storage, this also happens if its settings, such as `scalar.db.jdbc.table_metadata.schema`, differ from the ones of the instance that owns the namespace.
+- A storage other than the default storage has transactional tables in a namespace that is not mapped to it.
+- A storage, including the default storage, has transactional tables in a namespace that is mapped to another storage.
+
+These checks cover only the storages in the configuration. If the instance that shares the Coordinator table keeps tables in several databases, add **every** such database to `scalar.db.multi_storage.storages` and map its namespaces. The tool cannot detect a database missing from the configuration. When `finalize-ledger` starts a new run, it logs the target tables that it found. Check that the list has all the tables you expect before you run `cleanup-coordinator`.
+
+If you fix the configuration after `finalize-ledger` has started, you must start it over from scratch. See [Re-running after a failure](#re-running-after-a-failure).
 
 Add the password of the JDBC database to the Secret that step 1 creates, as `SCALAR_DB_JDBC_PASSWORD`. Both Ledger AD Jobs load every key of the Secret as an environment variable.
 
@@ -309,6 +322,15 @@ kubectl -n "${LEDGER_NS:?}" delete job/scalardl-cleanup-coordinator
 ```
 
 On a resumed `cleanup-coordinator`, the token values are ignored—the deletion boundary saved in the checkpoint is authoritative.
+
+`finalize-ledger` fixes its target tables when it starts a new run, and it keeps the storage configuration that the run started with in the checkpoint. Therefore, if you change the storage configuration after `finalize-ledger` has started, for example to fix the namespace mapping or to switch from `ledger-ad/configmap.yaml` to `ledger-ad/configmap-multistorage.yaml`, a resumed `finalize-ledger` fails, even if the previous run has completed. The error message lists the changed settings. Revert the change to resume the run, or [start over from scratch](#starting-over-from-scratch) to run it with the new configuration.
+
+Note the following about the storage configuration:
+
+- It consists of the storage types, their contact points, where their table metadata is, the namespace mapping, the default storage, and the Coordinator namespace. Other settings, such as the passwords, can change between runs.
+- It does not include the usernames. However, if a JDBC URL does not specify the database, for example `jdbc:postgresql://db:5432/`, the database can depend on the username, so do not change the username in the middle of a run.
+- The checkpoint keeps it as plain text. If a contact point includes credentials, for example a JDBC URL with a password parameter, they remain in the checkpoint.
+- A checkpoint created by an older version of the tool does not have it, so `finalize-ledger` fails. In that case, start over from scratch.
 
 ### Starting over from scratch
 
