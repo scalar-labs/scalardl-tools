@@ -21,16 +21,10 @@ public class CommonOptions {
       description = "A configuration file in properties format.")
   protected String properties;
 
-  @Option(
-      names = {"--checkpoint-dir"},
-      required = true,
-      paramLabel = "CHECKPOINT_DIR",
-      description = "Directory to persist resumable-scan state.")
-  protected String checkpointDir;
-
-  // The finalize/cleanup commands are heavyweight, state-mutating operations that an operator
-  // cannot cheaply re-run, so by default a failure surfaces the full stack trace immediately rather
-  // than forcing an opt-in re-run just to obtain it; --no-stacktrace opts out of that output.
+  // The commands scan whole tables, and the finalize/cleanup commands also mutate state, so an
+  // operator cannot cheaply re-run them. By default a failure therefore surfaces the full stack
+  // trace immediately rather than forcing an opt-in re-run just to obtain it; --no-stacktrace opts
+  // out of that output.
   @Option(
       names = {"--no-stacktrace"},
       description = "Do not output the Java stack trace to stderr on failure.")

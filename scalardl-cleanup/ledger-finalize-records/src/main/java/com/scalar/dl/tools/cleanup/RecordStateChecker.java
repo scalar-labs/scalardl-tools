@@ -18,11 +18,18 @@ public final class RecordStateChecker {
    * prepared before the guarantee timestamp.
    */
   public boolean needsFinalization(Result result) {
-    TransactionResult txResult = new TransactionResult(result);
-    TransactionState state = txResult.getState();
-    if (state != TransactionState.PREPARED && state != TransactionState.DELETED) {
+    if (!isNonTerminal(result)) {
       return false;
     }
-    return txResult.getPreparedAt() < guaranteeTimestamp;
+    return new TransactionResult(result).getPreparedAt() < guaranteeTimestamp;
+  }
+
+  /**
+   * Returns {@code true} if the record is in a non-terminal state (PREPARED or DELETED), regardless
+   * of when it was prepared.
+   */
+  static boolean isNonTerminal(Result result) {
+    TransactionState state = new TransactionResult(result).getState();
+    return state == TransactionState.PREPARED || state == TransactionState.DELETED;
   }
 }

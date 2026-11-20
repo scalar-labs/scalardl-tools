@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -214,6 +215,49 @@ class CosmosResumableScannerTest {
           .isInstanceOf(RuntimeException.class)
           .hasMessage("worker error");
     }
+  }
+
+  @Test
+  void scan_withoutCheckpointAfterHandlerThrew_shouldDeliverRecordsFromFirstRecordAgain()
+      throws Exception {
+    // Arrange
+    FeedRange feedRange = createMockFeedRange("full");
+    when(cosmosContainer.getFeedRanges()).thenReturn(Collections.singletonList(feedRange));
+    List<FeedResponse<Record>> pages =
+        Arrays.asList(
+            CosmosMockHelper.createMockPage(CosmosMockHelper.createMockRecords(2), "token-1"),
+            CosmosMockHelper.createMockPage(CosmosMockHelper.createMockRecords(2), null));
+    // A scan resumed from a continuation token would deliver no record
+    CosmosPagedIterable<Record> iterable =
+        CosmosMockHelper.createMockPagedIterableWithResume(pages, Collections.emptyList());
+    when(cosmosContainer.queryItems(anyString(), any(), eq(Record.class))).thenReturn(iterable);
+    AtomicInteger firstScanCount = new AtomicInteger();
+    AtomicInteger secondScanCount = new AtomicInteger();
+
+    try (CosmosResumableScanner scanner =
+        new CosmosResumableScanner(
+            cosmosClient, new NoOpCheckpointManager(), storageAdmin, 32, 100)) {
+      // The handler fails on the third record, after the first page has been handled
+      assertThatThrownBy(
+              () ->
+                  scanner.scan(
+                      NAMESPACE,
+                      TABLE,
+                      r -> {
+                        if (firstScanCount.incrementAndGet() == 3) {
+                          throw new RuntimeException("handler failure");
+                        }
+                      }))
+          .hasMessage("handler failure");
+
+      // Act
+      ScanResult result = scanner.scan(NAMESPACE, TABLE, r -> secondScanCount.incrementAndGet());
+
+      // Assert
+      assertThat(result.getTotalScanned()).isEqualTo(4);
+    }
+    assertThat(secondScanCount.get()).isEqualTo(4);
+    verify(iterable, never()).iterableByPage(anyString(), anyInt());
   }
 
   @Test

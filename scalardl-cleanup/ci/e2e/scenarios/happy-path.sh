@@ -24,6 +24,23 @@ E2E="$HERE/.."
 source "$E2E/run-cleanup.sh"
 source "$E2E/db-records.sh"
 
+# Abort unless the verify command that just ran found something: a verdict, not a failure to reach
+# one, and reported by a single Pod, since a retry cannot change it.
+# Usage: assert_verification_failed <command>
+assert_verification_failed() {
+  [ "$(printf '%s' "$verify_output" | jq -r '.status_code')" = "VERIFICATION_FAILED" ] \
+    || { echo "::error::$1 did not report VERIFICATION_FAILED"; exit 1; }
+  [ "$verify_pod_count" -eq 1 ] \
+    || { echo "::error::$1 ran $verify_pod_count Pods (expected 1: no retry on a verdict)"; exit 1; }
+}
+
+# Abort unless the verify command that just ran found nothing.
+# Usage: assert_verification_passed <command>
+assert_verification_passed() {
+  [ "$(printf '%s' "$verify_output" | jq -r '.status_code')" = "OK" ] \
+    || { echo "::error::$1 did not report OK"; exit 1; }
+}
+
 require_vars RUNNER_TEMP RECORD_COUNT SCALARDL_NEW_VERSION
 
 echo "== Rebuild the fixture =="
@@ -42,7 +59,14 @@ echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
 [ "$db_unsettled" -eq "$((2 * RECORD_COUNT))" ] \
   || { echo "::error::$DB_NS.$DB_TABLE holds $db_unsettled non-terminal records (expected $((2 * RECORD_COUNT)))"; exit 1; }
 
+# The verify command has to see them too, before finalize-ledger and not after.
+run_verify_ledger_finalization failed
+assert_verification_failed verify-ledger-finalization
+
 run_finalize_ledger
+
+run_verify_ledger_finalization passed
+assert_verification_passed verify-ledger-finalization
 
 db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
 [ "$db_unsettled" -eq 0 ] \
@@ -50,8 +74,15 @@ db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_N
 # Terminal is not enough: each record has to have gone the way aborting its transaction takes it.
 db_records_verify finalized "$RECORD_COUNT"
 
+# The stranded WRITE locks are still held, so the verify command has to find one.
+run_verify_auditor_finalization failed
+assert_verification_failed verify-auditor-finalization
+
 rp_before=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
 run_finalize_auditor
+
+run_verify_auditor_finalization passed
+assert_verification_passed verify-auditor-finalization
 rp_after=$(count_cosmos_records "$auditor_uri" "$auditor_key" auditor request_proof)
 echo "request_proof rows: before=$rp_before after=$rp_after"
 [ "$rp_after" -eq 0 ] || { echo "::error::finalize-auditor left $rp_after request_proof rows (expected 0)"; exit 1; }

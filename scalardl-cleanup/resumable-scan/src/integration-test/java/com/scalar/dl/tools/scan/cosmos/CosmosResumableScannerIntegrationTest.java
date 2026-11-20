@@ -22,6 +22,8 @@ import com.scalar.db.service.StorageFactory;
 import com.scalar.db.storage.cosmos.CosmosConfig;
 import com.scalar.db.storage.cosmos.CosmosUtils;
 import com.scalar.dl.tools.scan.RecordHandler;
+import com.scalar.dl.tools.scan.ResumableScanner;
+import com.scalar.dl.tools.scan.ResumableScannerFactory;
 import com.scalar.dl.tools.scan.ScanResult;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
@@ -482,5 +484,67 @@ class CosmosResumableScannerIntegrationTest {
     // The resumed scan skips already-checkpointed pages, so it processes fewer records than the
     // full count.
     assertThat(secondScannedRecordIds.size()).isLessThan(TEST_RECORD_COUNT);
+  }
+
+  @Test
+  void scan_withoutCheckpoint_shouldDeliverEveryRecordExactlyOnce() throws Exception {
+    // Arrange
+    Set<String> scannedRecordIds = ConcurrentHashMap.newKeySet();
+    AtomicLong count = new AtomicLong();
+
+    try (ResumableScanner scanner = new ResumableScannerFactory(databaseConfig).create(NAMESPACE)) {
+      // Act
+      ScanResult result =
+          scanner.scan(
+              NAMESPACE,
+              TABLE,
+              r -> {
+                scannedRecordIds.add(recordId(r));
+                count.incrementAndGet();
+              });
+
+      // Assert
+      assertThat(scanner).isInstanceOf(CosmosResumableScanner.class);
+      assertThat(result.getTotalScanned()).isEqualTo(TEST_RECORD_COUNT);
+    }
+    // As many deliveries as records, and all of them distinct
+    assertThat(count.get()).isEqualTo(TEST_RECORD_COUNT);
+    assertThat(scannedRecordIds).hasSize(TEST_RECORD_COUNT);
+  }
+
+  @Test
+  void scan_withoutCheckpointAfterFailedScan_shouldDeliverAllRecordsFromStart() throws Exception {
+    // Arrange
+    ResumableScannerFactory factory = new ResumableScannerFactory(databaseConfig);
+    Set<String> firstScannedRecordIds = ConcurrentHashMap.newKeySet();
+    try (ResumableScanner scanner = factory.create(NAMESPACE)) {
+      assertThatThrownBy(
+              () ->
+                  scanner.scan(
+                      NAMESPACE,
+                      TABLE,
+                      interruptingHandlerAfter(firstScannedRecordIds, TEST_RECORD_COUNT / 2)))
+          .hasMessage("Simulated interruption");
+    }
+    Set<String> secondScannedRecordIds = ConcurrentHashMap.newKeySet();
+    AtomicLong secondCount = new AtomicLong();
+
+    try (ResumableScanner scanner = factory.create(NAMESPACE)) {
+      // Act
+      ScanResult result =
+          scanner.scan(
+              NAMESPACE,
+              TABLE,
+              r -> {
+                secondScannedRecordIds.add(recordId(r));
+                secondCount.incrementAndGet();
+              });
+
+      // Assert
+      assertThat(result.getTotalScanned()).isEqualTo(TEST_RECORD_COUNT);
+    }
+    // The second scan alone covers every record, including those handled before the failure
+    assertThat(secondCount.get()).isEqualTo(TEST_RECORD_COUNT);
+    assertThat(secondScannedRecordIds).hasSize(TEST_RECORD_COUNT);
   }
 }

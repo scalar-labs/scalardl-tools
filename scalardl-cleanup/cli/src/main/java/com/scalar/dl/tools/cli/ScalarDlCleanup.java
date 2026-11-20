@@ -22,6 +22,8 @@ import picocli.CommandLine.Spec;
       LedgerFinalizeRecordsCommand.class,
       AuditorFinalizeRecordsCommand.class,
       CoordinatorStateCleanupCommand.class,
+      LedgerVerifyFinalizationCommand.class,
+      AuditorVerifyFinalizationCommand.class,
       HelpCommand.class,
     },
     description =
@@ -53,7 +55,7 @@ public class ScalarDlCleanup implements Runnable {
               // legitimate "output": null success. Route the parse failure to the JSON channel as a
               // USER_ERROR instead.
               Common.printError(new ScalarDlCleanupException(ex.getMessage(), Category.USER_ERROR));
-              return AbstractToolCommand.FAILURE_EXIT_CODE;
+              return AbstractCommand.FAILURE_EXIT_CODE;
             });
   }
 

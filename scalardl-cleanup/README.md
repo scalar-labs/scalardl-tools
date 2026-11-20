@@ -40,9 +40,16 @@ flowchart TB
   A2 -->|"Auditor token"| L3
 ```
 
+The tool also provides two read-only commands that check the result of the finalize commands. They are not part of the three steps. For when and how to run them, see [Verifying the finalization](#verifying-the-finalization).
+
+| Command | AD | Description |
+|-------------------------------|---------|--------------------------------------------------------------------------------------------------------------|
+| `verify-ledger-finalization`  | Ledger  | Checks that no record in any transactional table is still unfinished. Accesses the [configured storages](#2-settings-the-commands-accept). |
+| `verify-auditor-finalization` | Auditor | Checks that no asset lock is still held for writing. Accesses the [configured storages](#2-settings-the-commands-accept), but not Auditor. |
+
 ## Limitations
 
-- The tool supports **Azure Cosmos DB for NoSQL**. In the Ledger AD, `finalize-ledger` and `cleanup-coordinator` also accept a `multi-storage` configuration whose storages are Cosmos DB for NoSQL or JDBC databases. See [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance). `finalize-auditor` accepts Cosmos DB for NoSQL only.
+- The tool supports **Azure Cosmos DB for NoSQL**. In the Ledger AD, `finalize-ledger` and `cleanup-coordinator` also accept a `multi-storage` configuration whose storages are Cosmos DB for NoSQL or JDBC databases. See [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance). `finalize-auditor` accepts Cosmos DB for NoSQL only. `verify-ledger-finalization` accepts the same configurations as `finalize-ledger`, and `verify-auditor-finalization` accepts Cosmos DB for NoSQL only.
 - The tool supports ScalarDL 3.14.0 or later.
 - If another ScalarDB instance shares the Coordinator table in the Ledger AD's Cosmos DB account, the Ledger AD's configuration must reach all of that instance's transactional tables.
 - [`tx_state_management.enabled`](https://scalardl.scalar-labs.com/docs/latest/configurations/#tx_state_managementenabled) must have never been enabled.
@@ -68,6 +75,7 @@ The manifests are in `manifests/`, split into one directory per administrative d
 | `configmap-multistorage.yaml` | ConfigMap          | Config with multi-storage of Cosmos DB and PostgreSQL, applied in place of `configmap.yaml`. See [Sharing the Coordinator table with a multi-storage ScalarDB instance](#sharing-the-coordinator-table-with-a-multi-storage-scalardb-instance) |
 | `finalize-ledger.yaml`     | Job                   | Runs `finalize-ledger`                                              |
 | `cleanup-coordinator.yaml` | Job                   | Runs `cleanup-coordinator`                                          |
+| `verify-ledger-finalization.yaml` | Job            | Runs `verify-ledger-finalization`. Uses the same ConfigMap and Secret as `finalize-ledger`, and no checkpoint volume |
 
 **`auditor-ad/`** (Auditor AD)
 
@@ -76,6 +84,7 @@ The manifests are in `manifests/`, split into one directory per administrative d
 | `pvc.yaml`              | PersistentVolumeClaim | Checkpoint volume |
 | `configmap.yaml`        | ConfigMap             | Config for the `finalize-auditor` command |
 | `finalize-auditor.yaml` | Job                   | Runs `finalize-auditor`                   |
+| `verify-auditor-finalization.yaml` | Job        | Runs `verify-auditor-finalization`. Uses the same ConfigMap and Secret as `finalize-auditor`, and no checkpoint volume |
 
 ## What you can configure
 
@@ -300,9 +309,64 @@ Confirm that the command reported `OK` in the log of its succeeded Pod. This com
 
 If the command fails, it prints an error message in place of that result, and the Job retries it up to three times (`backoffLimit: 3` in the manifest), starting a new Pod each time. If none of those attempts succeeds, the Job fails. Deploying the Job again without deleting the checkpoint volume resumes the deletion from the same checkpoint data. To start the processing over from the beginning instead, see [Re-running after a failure](#re-running-after-a-failure).
 
+## Verifying the finalization
+
+`verify-ledger-finalization` and `verify-auditor-finalization` check that the finalize commands left nothing behind. Run them when you need to confirm that directly, instead of relying on the finalize commands having completed.
+
+| Command | What it scans | What it reports |
+|-------------------------------|------------------------------------------------------------------|--------------------------------------------------------|
+| `verify-ledger-finalization`  | The same transactional tables as `finalize-ledger`               | A record whose transaction state is prepared or deleted |
+| `verify-auditor-finalization` | The asset lock table of every namespace, as `finalize-auditor` does | An asset lock held for writing. It does not report an asset lock held for reading |
+
+Both commands only read the database. They change no record, emit no completion token, and need none.
+
+**Stop the clients before you run them.** Unlike the finalize commands, the verify commands have no time boundary: they report every such record or lock, no matter how recent it is. While Ledger and Auditor are serving traffic, a transaction in progress leaves exactly those records and locks for a moment, so the commands can report it.
+
+The commands keep no checkpoint. Every run finds the targets again and scans all of them from the beginning, including a run that follows a failed or interrupted one. Each command reads the same configuration as the finalize command of its AD, so the Job uses the ConfigMap and the Secret that you created for that finalize command. `verify-ledger-finalization` makes the same checks on the configuration as `finalize-ledger` does when it starts a new run, and it makes them on every run. `verify-auditor-finalization` does not read the settings for communicating with Auditor.
+
+**Run.** Delete the Job of a previous run, if any, then apply the Job of the AD. The deletion is required: the Job has a fixed name, so applying it again while a finished Job remains starts nothing, and the log still shows the result of the previous run.
+
+```bash
+kubectl -n "${LEDGER_NS:?}" delete job/scalardl-verify-ledger-finalization --ignore-not-found
+: "${CLEANUP_VERSION:?}" && envsubst < ledger-ad/verify-ledger-finalization.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
+```
+
+```bash
+kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-verify-auditor-finalization --ignore-not-found
+: "${CLEANUP_VERSION:?}" && envsubst < auditor-ad/verify-auditor-finalization.yaml | kubectl -n "${AUDITOR_NS:?}" apply -f -
+```
+
+Wait for the Job to finish, then read the result from the log of its Pod. Before you rely on the result, check that the Job started when you applied it, for example with `kubectl get job/<job-name> -o jsonpath='{.status.startTime}'`. The exit code of the command and the `status_code` of the JSON line that it prints tell the three outcomes apart:
+
+| Outcome | Exit code | `status_code` | Job |
+|---------------------------------------------------------------|---|------------------------------------|--------------------------------------|
+| Everything was scanned and nothing was found                  | 0 | `OK`                               | Completes                            |
+| A record or a lock that still needs finalization was found    | 2 | `VERIFICATION_FAILED`              | Fails at once, without a retry       |
+| The command could not reach a verdict, for example because of a wrong setting or a database error | 1 | `USER_ERROR` or `INTERNAL_ERROR` | Retries up to three times, then fails |
+
+```json
+{"status_code":"OK","output":null}
+```
+
+```json
+{"status_code":"VERIFICATION_FAILED","error_message":"<what was found>"}
+```
+
+When a command finds a record or a lock, it logs where that record or lock is at the `WARN` level and stops without scanning the rest, so the log shows only the first ones that it found.
+
+The Job fails without a retry on exit code 2 through `podFailurePolicy` in the manifest, which requires Kubernetes 1.26 or later. An older cluster ignores that setting and retries the Job up to three times. The result is the same, but each retry scans from the beginning again.
+
+To run a command again, repeat the commands above.
+
+### If a verify command finds something
+
+Applying the finalize Job again is not enough. The finalize command resumes from its checkpoint, finds every target already completed, and finishes without doing anything. It also keeps the time boundary of its first run, so anything written after that boundary stays out of its scope.
+
+Instead, with the clients still stopped, [start the finalize command over from scratch](#starting-over-from-scratch), then run the verify command again. Starting over discards the completion token of the previous run, and the new run prints a different one.
+
 ## Re-running after a failure
 
-Each Job records progress on its checkpoint volume, which is a separate object and is kept when the Job is deleted. Deleting and re-applying a failed Job therefore **resumes where it stopped**. Re-export the same variables the original step used, then delete and re-apply the failed command's Job:
+Each Job of the three cleanup commands records progress on its checkpoint volume, which is a separate object and is kept when the Job is deleted. Deleting and re-applying a failed Job therefore **resumes where it stopped**. Re-export the same variables the original step used, then delete and re-apply the failed command's Job:
 
 **`finalize-ledger` (Ledger AD)**
 
@@ -364,6 +428,7 @@ After all three commands have succeeded, remove the objects you created. Do not 
 
 ```bash
 kubectl -n "${LEDGER_NS:?}" delete job/scalardl-finalize-ledger job/scalardl-cleanup-coordinator
+kubectl -n "${LEDGER_NS:?}" delete job/scalardl-verify-ledger-finalization --ignore-not-found  # only if you ran it
 kubectl -n "${LEDGER_NS:?}" delete configmap/scalardl-cleanup-ledger-config
 kubectl -n "${LEDGER_NS:?}" delete secret/scalardl-cleanup-credentials
 kubectl -n "${LEDGER_NS:?}" delete pvc/scalardl-cleanup-checkpoint
@@ -373,6 +438,7 @@ kubectl -n "${LEDGER_NS:?}" delete pvc/scalardl-cleanup-checkpoint
 
 ```bash
 kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-finalize-auditor
+kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-verify-auditor-finalization --ignore-not-found  # only if you ran it
 kubectl -n "${AUDITOR_NS:?}" delete configmap/scalardl-cleanup-auditor-config
 kubectl -n "${AUDITOR_NS:?}" delete secret/scalardl-cleanup-credentials
 kubectl -n "${AUDITOR_NS:?}" delete secret/scalardl-cleanup-cert --ignore-not-found  # only if you enabled TLS
