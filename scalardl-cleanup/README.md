@@ -324,17 +324,19 @@ Both commands only read the database. They change no record, emit no completion 
 
 The commands keep no checkpoint. Every run finds the targets again and scans all of them from the beginning, including a run that follows a failed or interrupted one. Each command reads the same configuration as the finalize command of its AD, so the Job uses the ConfigMap and the Secret that you created for that finalize command. `verify-ledger-finalization` makes the same checks on the configuration as `finalize-ledger` does when it starts a new run, and it makes them on every run. `verify-auditor-finalization` does not read the settings for communicating with Auditor.
 
-**Run.** Apply the Job of the AD:
+**Run.** Delete the Job of a previous run, if any, then apply the Job of the AD. The deletion is required: the Job has a fixed name, so applying it again while a finished Job remains starts nothing, and the log still shows the result of the previous run.
 
 ```bash
+kubectl -n "${LEDGER_NS:?}" delete job/scalardl-verify-ledger-finalization --ignore-not-found
 : "${CLEANUP_VERSION:?}" && envsubst < ledger-ad/verify-ledger-finalization.yaml | kubectl -n "${LEDGER_NS:?}" apply -f -
 ```
 
 ```bash
+kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-verify-auditor-finalization --ignore-not-found
 : "${CLEANUP_VERSION:?}" && envsubst < auditor-ad/verify-auditor-finalization.yaml | kubectl -n "${AUDITOR_NS:?}" apply -f -
 ```
 
-Wait for the Job to finish, then read the result from the log of its Pod. The exit code of the command and the `status_code` of the JSON line that it prints tell the three outcomes apart:
+Wait for the Job to finish, then read the result from the log of its Pod. Before you rely on the result, check that the Job started when you applied it, for example with `kubectl get job/<job-name> -o jsonpath='{.status.startTime}'`. The exit code of the command and the `status_code` of the JSON line that it prints tell the three outcomes apart:
 
 | Outcome | Exit code | `status_code` | Job |
 |---------------------------------------------------------------|---|------------------------------------|--------------------------------------|
@@ -354,15 +356,7 @@ When a command finds a record or a lock, it logs where that record or lock is at
 
 The Job fails without a retry on exit code 2 through `podFailurePolicy` in the manifest, which requires Kubernetes 1.26 or later. An older cluster ignores that setting and retries the Job up to three times. The result is the same, but each retry scans from the beginning again.
 
-To run a command again, delete its Job and apply it again:
-
-```bash
-kubectl -n "${LEDGER_NS:?}" delete job/scalardl-verify-ledger-finalization
-```
-
-```bash
-kubectl -n "${AUDITOR_NS:?}" delete job/scalardl-verify-auditor-finalization
-```
+To run a command again, repeat the commands above.
 
 ### If a verify command finds something
 

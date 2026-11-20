@@ -120,6 +120,23 @@ public class LedgerVerifyFinalizationCommandTest {
   }
 
   @Test
+  void call_whenOrchestratorReturnsNoVerdict_shouldPrintInternalErrorAndReturnOne()
+      throws Exception {
+    // Arrange
+    LedgerVerifyOrchestrator orchestrator = mock(LedgerVerifyOrchestrator.class);
+    when(orchestrator.execute()).thenReturn(null);
+
+    // Act
+    int code = new CommandLine(commandWith(orchestrator)).execute("--properties", propertiesFile());
+
+    // Assert
+    assertThat(code).isEqualTo(1);
+    assertThat(outputLines()).hasSize(1);
+    assertThat(captured().get("status_code").asText()).isEqualTo("INTERNAL_ERROR");
+    verify(orchestrator).close();
+  }
+
+  @Test
   void call_whenOrchestratorThrowsCleanupException_shouldPrintErrorAndReturnOne() throws Exception {
     // Arrange
     LedgerVerifyOrchestrator orchestrator = mock(LedgerVerifyOrchestrator.class);

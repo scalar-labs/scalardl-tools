@@ -25,6 +25,10 @@ public abstract class AbstractVerifyCommand extends AbstractCommand {
       Common.printVerificationFailure(failureMessage());
       return VERIFICATION_FAILED_EXIT_CODE;
     }
+    // Only an explicit pass may succeed, so that anything else can never be read as one.
+    if (result != VerificationResult.PASSED) {
+      throw new IllegalStateException("Unexpected verification result: " + result);
+    }
     Common.printOutput(null);
     return SUCCESS_EXIT_CODE;
   }

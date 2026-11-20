@@ -99,4 +99,20 @@ class TransactionalTableDiscoveryTest {
         .isInstanceOf(ScalarDlCleanupException.class)
         .hasMessage(ScalarDlCleanupError.TOO_FEW_TARGET_TABLES.buildMessage(1));
   }
+
+  @Test
+  void discover_listedTableWithoutMetadataGiven_shouldThrowIllegalStateException()
+      throws Exception {
+    // Arrange
+    when(admin.getNamespaceNames()).thenReturn(new LinkedHashSet<>(Arrays.asList("ns1")));
+    givenTables("ns1", "asset", "asset_metadata", "dropped");
+    when(admin.getTableMetadata("ns1", "dropped")).thenReturn(null);
+    TransactionalTableDiscovery discovery =
+        new TransactionalTableDiscovery(admin, CoordinatorStateAccessor.NAMESPACE);
+
+    // Act Assert
+    assertThatThrownBy(discovery::discover)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("ns1.dropped");
+  }
 }
