@@ -3,6 +3,10 @@
 # Scenario: every command in run-cleanup.sh, in the documented apply order, against a cluster
 # holding committed data, stranded Auditor locks, and transaction records left non-terminal.
 #
+# Runs under either storage configuration (E2E_STORAGE, common.sh). With multi-storage the
+# non-terminal records are in a second table too, in PostgreSQL, and the Ledger AD's commands get
+# the shipped multi-storage ConfigMap; everything checked below is then checked for both tables.
+#
 # New traffic runs once the finalize commands have taken their completion tokens, because that is
 # the normal way to run the tool: the servers keep serving. The tokens fix the deletable-before
 # boundary, so the cleanup that follows has to leave that transaction state alone.
@@ -10,6 +14,7 @@
 # Required environment:
 #   CLEANUP_VERSION           tag of the scalardl-cleanup image
 #   COSMOSDB_SHELL            path to the Azure Cosmos DB Shell binary, used to count rows in Cosmos
+#   E2E_STORAGE               optional: cosmos (default) or multi-storage
 #   RECORD_COUNT              records generated per category
 #   RUNNER_TEMP               scratch directory for the rendered manifests and the populated-assets
 #                             metadata
@@ -24,23 +29,6 @@ E2E="$HERE/.."
 source "$E2E/run-cleanup.sh"
 source "$E2E/db-records.sh"
 
-# Abort unless the verify command that just ran found something: a verdict, not a failure to reach
-# one, and reported by a single Pod, since a retry cannot change it.
-# Usage: assert_verification_failed <command>
-assert_verification_failed() {
-  [ "$(printf '%s' "$verify_output" | jq -r '.status_code')" = "VERIFICATION_FAILED" ] \
-    || { echo "::error::$1 did not report VERIFICATION_FAILED"; exit 1; }
-  [ "$verify_pod_count" -eq 1 ] \
-    || { echo "::error::$1 ran $verify_pod_count Pods (expected 1: no retry on a verdict)"; exit 1; }
-}
-
-# Abort unless the verify command that just ran found nothing.
-# Usage: assert_verification_passed <command>
-assert_verification_passed() {
-  [ "$(printf '%s' "$verify_output" | jq -r '.status_code')" = "OK" ] \
-    || { echo "::error::$1 did not report OK"; exit 1; }
-}
-
 require_vars RUNNER_TEMP RECORD_COUNT SCALARDL_NEW_VERSION
 
 echo "== Rebuild the fixture =="
@@ -54,10 +42,7 @@ echo "== Run the finalize commands and check what they reclaimed =="
 init_cleanup_commands
 
 # Verify the non-terminal records are there first, or the zero afterwards proves nothing.
-db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
-echo "$DB_NS.$DB_TABLE non-terminal records: $db_unsettled"
-[ "$db_unsettled" -eq "$((2 * RECORD_COUNT))" ] \
-  || { echo "::error::$DB_NS.$DB_TABLE holds $db_unsettled non-terminal records (expected $((2 * RECORD_COUNT)))"; exit 1; }
+db_records_assert_unsettled "$((2 * RECORD_COUNT))"
 
 # The verify command has to see them too, before finalize-ledger and not after.
 run_verify_ledger_finalization failed
@@ -68,9 +53,7 @@ run_finalize_ledger
 run_verify_ledger_finalization passed
 assert_verification_passed verify-ledger-finalization
 
-db_unsettled=$(count_cosmos_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE")
-[ "$db_unsettled" -eq 0 ] \
-  || { echo "::error::finalize-ledger left $db_unsettled non-terminal records in $DB_NS.$DB_TABLE"; exit 1; }
+db_records_assert_unsettled 0
 # Terminal is not enough: each record has to have gone the way aborting its transaction takes it.
 db_records_verify finalized "$RECORD_COUNT"
 
@@ -106,11 +89,11 @@ run_cleanup_coordinator "$ledger_token" "$auditor_token"
 
 cs_after=$(count_cosmos_records "$ledger_uri" "$ledger_key" coordinator state)
 # Settled before the deletable-before boundary: the committed put transactions, and the one the
-# fixture committed.
-deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS))
+# fixture committed for each of its tables.
+deletable=$((RECORD_COUNT + DB_SETTLED_COORDINATOR_ROWS * ${#DB_NAMESPACES[@]}))
 # Written after it: finalize-ledger's aborts, finalize-auditor's of the stranded nonces, and the
 # new traffic's commits.
-surviving=$((DB_ABORTED_COORDINATOR_ROWS + 2 * RECORD_COUNT + RECORD_COUNT))
+surviving=$((DB_ABORTED_COORDINATOR_ROWS * ${#DB_NAMESPACES[@]} + 2 * RECORD_COUNT + RECORD_COUNT))
 echo "coordinator.state rows: before=$cs_before after=$cs_after (expected deleted=$deletable)"
 [ "$((cs_before - cs_after))" -eq "$deletable" ] \
   || { echo "::error::cleanup-coordinator deleted $((cs_before - cs_after)) coordinator.state rows (expected $deletable)"; exit 1; }
@@ -126,10 +109,10 @@ echo "request_proof rows: before=$rp_before_cleanup after=$rp_after_cleanup"
 
 # Nothing may still be pointing at the Coordinator records that were just deleted. The scalar ones
 # are a sanity check only: setup-fixture.sh leaves nothing non-terminal in the Ledger's own tables.
-assert_no_unsettled_records "$ledger_uri" "$ledger_key" "$DB_NS" "$DB_TABLE"
+db_records_assert_unsettled 0
 assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset
 assert_no_unsettled_records "$ledger_uri" "$ledger_key" scalar asset_metadata
-echo "no non-terminal records in the fixture's table or the Ledger's own"
+echo "no non-terminal records in the fixture's tables or the Ledger's own"
 
 # Verified again: the deletion must not have disturbed them.
 db_records_verify finalized "$RECORD_COUNT"

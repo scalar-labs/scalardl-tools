@@ -1,6 +1,9 @@
 name: E2E
 
 # End-to-end test for ScalarDL Cleanup against a real Cosmos DB. Runs scenarios in ci/e2e/scenarios.
+# The multi-storage scenarios also use a PostgreSQL deployed into the minikube cluster, next to the
+# Ledger: there the fixture keeps a second table, as a ScalarDB instance sharing the Coordinator
+# table would.
 #
 # CI-only. Requires repository secrets: COSMOS_URI, COSMOS_KEY, CR_PAT.
 
@@ -175,6 +178,33 @@ jobs:
         if: ${{ !cancelled() && steps.skip_request_proof_cleanup.outcome == 'failure' }}
         run: ./ci/e2e/collect-diagnostics.sh 'scenario - skip request proof cleanup'
 
+      - name: Run scenario - happy path with multi-storage
+        id: happy_path_multi_storage
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          E2E_STORAGE: multi-storage
+        run: ./ci/e2e/scenarios/happy-path.sh
+
+      - name: Collect diagnostics - happy path with multi-storage
+        if: ${{ !cancelled() && steps.happy_path_multi_storage.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - happy path with multi-storage'
+
+      - name: Run scenario - multi-storage configuration
+        id: multi_storage_config
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' }}
+        env:
+          COSMOS_URI: ${{ secrets.COSMOS_URI }}
+          COSMOS_KEY: ${{ secrets.COSMOS_KEY }}
+          RECORD_COUNT: 1
+        run: ./ci/e2e/scenarios/multi-storage-config.sh
+
+      - name: Collect diagnostics - multi-storage configuration
+        if: ${{ !cancelled() && steps.multi_storage_config.outcome == 'failure' }}
+        run: ./ci/e2e/collect-diagnostics.sh 'scenario - multi-storage configuration'
+
+      # Only the Cosmos DB table: the PostgreSQL one goes with its namespace in the teardown below.
       - name: Drop the fixture's ScalarDB records
         if: always()
         run: |
