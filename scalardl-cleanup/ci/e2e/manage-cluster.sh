@@ -5,7 +5,8 @@
 # credentials, and a Cosmos account.
 #
 # Modes:
-#   deploy          load the ScalarDB schema, deploy Ledger + Auditor, wait until healthy
+#   deploy          load the ScalarDB schema, deploy Ledger + Auditor and the PostgreSQL of the
+#                   multi-storage scenarios, wait until healthy
 #   stop-ledger     scale the Ledger to 0 and wait for its pod to be deleted
 #   change-version  switch Ledger + Auditor to the SCALARDL_VERSION images, bring the Ledger back
 #                   up (it may have been scaled to 0 to strand locks), and wait until both are
@@ -37,8 +38,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Namespaces, the Auditor TLS SAN, CERTS_DIR, and the kubectl helpers (require_vars,
-# wait_for_job, diag_and_die) live here so every script in ci/e2e sees the same values.
+# Namespaces, the Auditor TLS SAN, CERTS_DIR, the PostgreSQL settings, and the kubectl helpers
+# (require_vars, wait_for_job, diag_and_die) live here so every script in ci/e2e sees the same
+# values.
 source "$HERE/common.sh"
 
 SCALARDL_VERSION_EXPLICIT="${SCALARDL_VERSION:+yes}"   # "yes" if set and non-empty, else ""
@@ -58,7 +60,8 @@ export HMAC_CIPHER_KEY="e2e-hmac-cipher-key-disposable-0123456789abcdef"
 # rewrite unrelated shell-style tokens (e.g. a literal $@ in a container command).
 SUBST_VARS='${LEDGER_NS} ${AUDITOR_NS} ${LEDGER_IMAGE} ${AUDITOR_IMAGE} ${SL_IMAGE} '
 SUBST_VARS+='${COSMOS_URI} ${COSMOS_KEY} ${SERVERS_HMAC_SECRET} ${HMAC_CIPHER_KEY} '
-SUBST_VARS+='${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS}'
+SUBST_VARS+='${SL_JOB_SUFFIX} ${SL_LEDGER_ARGS} ${SL_AUDITOR_ARGS} '
+SUBST_VARS+='${POSTGRES_USER} ${POSTGRES_PASSWORD} ${POSTGRES_DB} ${POSTGRES_PORT}'
 
 # Substitute the placeholders above into one of the manifests next to this script.
 # Usage: render <manifest-filename>
@@ -221,6 +224,10 @@ deploy_all() {
       --dry-run=client -o yaml | kubectl apply -f -
   done
 
+  # Before the schema load, so that its image is pulled while the schema-loader Jobs run.
+  echo "==> deploy PostgreSQL"
+  render postgres.yaml | kubectl apply -f -
+
   load_schema
 
   echo "==> create Auditor TLS cert + secret"
@@ -237,6 +244,7 @@ deploy_all() {
   echo "==> wait for deployments to become available"
   wait_for_deploy "$LEDGER_NS"  scalardl-ledger  300
   wait_for_deploy "$AUDITOR_NS" scalardl-auditor 300
+  wait_for_deploy "$LEDGER_NS"  postgres         300
 
   grpc_health_checks
 }

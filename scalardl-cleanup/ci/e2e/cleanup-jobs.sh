@@ -20,6 +20,13 @@
 #   load_ad_credentials                 -> ledger_uri / ledger_key / auditor_uri / auditor_key
 #                                          (and ledger_props / auditor_props, their source files)
 #   setup_ledger_ad / setup_auditor_ad  take no arguments; both of the above must be set by then
+#
+# setup_ledger_ad applies the storage configuration $E2E_STORAGE names (common.sh). A scenario that
+# switches configurations between commands sets $ledger_ad_config before each one instead:
+#   cosmos                  manifests/ledger-ad/configmap.yaml
+#   multi-storage           manifests/ledger-ad/configmap-multistorage.yaml
+#   multi-storage-unmapped  the same, with the <namespace> placeholder of its namespace mapping
+#                           left as it ships: the mistake the manifest's own comment warns about
 
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$E2E_DIR/common.sh"
@@ -57,10 +64,14 @@ load_ad_credentials() {
 
 # Upsert an AD's credentials Secret. The Jobs pull it in with envFrom, so it has to exist before they
 # run. `create --dry-run=client | apply` is the upsert: a plain `create` fails once it exists.
-# Usage: upsert_credentials_secret <namespace> <cosmos-key>
+# Usage: upsert_credentials_secret <namespace> <cosmos-key> [<key>=<value>...]
 upsert_credentials_secret() {
-  kubectl -n "$1" create secret generic scalardl-cleanup-credentials \
-    --from-literal=SCALAR_DB_PASSWORD="$2" \
+  local ns="$1" cosmos_key="$2" literals=() kv
+  shift 2
+  for kv in "$@"; do literals+=("--from-literal=$kv"); done
+  kubectl -n "$ns" create secret generic scalardl-cleanup-credentials \
+    --from-literal=SCALAR_DB_PASSWORD="$cosmos_key" \
+    ${literals[@]+"${literals[@]}"} \
     --dry-run=client -o yaml | kubectl apply -f -
 }
 
@@ -78,18 +89,70 @@ append_extra_properties() {
   fi
 }
 
+# Abort if a rendered ConfigMap still has a placeholder in its properties, other than the ones the
+# caller left on purpose. A leftover would otherwise reach the tool as a setting, and the Job's
+# failure would say nothing about the rendering. Comment lines are skipped: the manifests' headers
+# explain the placeholders by name.
+# Usage: assert_placeholders_replaced <rendered-configmap> [allowed-placeholder...]
+assert_placeholders_replaced() {
+  local file="$1" leftover p
+  shift
+  leftover=$(sed -n '/^data:/,$p' "$file" | grep -v '^[[:space:]]*#' \
+    | grep -oE '<[a-z][a-z-]*>' | sort -u || true)
+  for p in "$@"; do
+    leftover=$(printf '%s\n' "$leftover" | grep -vxF -- "$p" || true)
+  done
+  if [ -n "$leftover" ]; then
+    echo "::error::$file still has placeholders:" $leftover >&2
+    return 1
+  fi
+}
+
+# Render the Ledger AD's ConfigMap for the given storage configuration into the working copy.
+# Usage: render_ledger_configmap <cosmos|multi-storage|multi-storage-unmapped>
+render_ledger_configmap() {
+  local config="$1" rendered="$work/ledger-ad/configmap.yaml" namespace allowed=""
+  case "$config" in
+    cosmos)
+      sed "s|<cosmos-account-uri>|$ledger_uri|" "$MANIFESTS/ledger-ad/configmap.yaml" > "$rendered"
+      ;;
+    multi-storage|multi-storage-unmapped)
+      namespace="$POSTGRES_NAMESPACE"
+      if [ "$config" = multi-storage-unmapped ]; then
+        namespace='<namespace>'
+        allowed='<namespace>'
+      fi
+      # The Jobs run in the PostgreSQL's own namespace, so the Service name is enough. It must stay
+      # the same for a whole scenario: the checkpoint records the contact points, and a run that
+      # resumes with other ones is rejected as a changed storage configuration.
+      sed \
+        -e "s|<cosmos-account-uri>|$ledger_uri|" \
+        -e "s|<postgresql-jdbc-url>|jdbc:postgresql://$POSTGRES_SERVICE:$POSTGRES_PORT/$POSTGRES_DB|" \
+        -e "s|<postgresql-username>|$POSTGRES_USER|" \
+        -e "s|<namespace>|$namespace|" \
+        "$MANIFESTS/ledger-ad/configmap-multistorage.yaml" > "$rendered"
+      ;;
+    *)
+      echo "::error::unknown Ledger AD configuration '$config'" >&2
+      return 1
+      ;;
+  esac
+  assert_placeholders_replaced "$rendered" $allowed
+}
+
 # Prepare the Ledger AD for its Jobs.
 # Usage: setup_ledger_ad
 setup_ledger_ad() {
-  # Create the credentials Secret.
-  upsert_credentials_secret "$LEDGER_NS" "$ledger_key"
+  # Create the credentials Secret. The PostgreSQL password is the multi-storage configuration's; a
+  # Job running with Cosmos DB only gets it as an environment variable it never reads.
+  upsert_credentials_secret "$LEDGER_NS" "$ledger_key" \
+    SCALAR_DB_JDBC_PASSWORD="$POSTGRES_PASSWORD"
 
   # Create the checkpoint volume.
   kubectl -n "$LEDGER_NS" apply -f "$work/ledger-ad/pvc.yaml"
 
-  # Apply the ConfigMap, substituting contact_points first.
-  sed "s|<cosmos-account-uri>|$ledger_uri|" \
-    "$MANIFESTS/ledger-ad/configmap.yaml" > "$work/ledger-ad/configmap.yaml"
+  # Apply the ConfigMap, substituting its placeholders first.
+  render_ledger_configmap "${ledger_ad_config:-$E2E_STORAGE}"
   append_extra_properties "$work/ledger-ad/configmap.yaml"
   kubectl -n "$LEDGER_NS" apply -f "$work/ledger-ad/configmap.yaml"
 }

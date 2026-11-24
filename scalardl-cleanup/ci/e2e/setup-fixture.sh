@@ -5,7 +5,9 @@
 # scenario that wants them upgraded runs `manage-cluster.sh change-version` itself.
 #
 # Three kinds of garbage, one per populate step below: Coordinator state the old server never
-# purged, ScalarDB records left non-terminal, and Auditor asset locks it never released.
+# purged, ScalarDB records left non-terminal, and Auditor asset locks it never released. With
+# E2E_STORAGE=multi-storage the non-terminal records are in two tables, the second in PostgreSQL;
+# db-records.sh has the details.
 #
 # Required environment:
 #   SCALARDL_OLD_VERSION                 the version that leaves the garbage behind

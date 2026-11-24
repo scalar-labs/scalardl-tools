@@ -10,8 +10,9 @@
 #   RUNNER_TEMP      scratch directory for the rendered manifests
 # and a kubectl context with the ledger-e2e / auditor-e2e namespaces deployed.
 #
-# A function fails if its command cannot be carried out, but never judges the result: whether what
-# a command reclaimed is what the test expects is the scenario's call.
+# A run_* function fails if its command cannot be carried out, but never judges the result: whether
+# what a command reclaimed is what the test expects is the scenario's call, which the assert_*
+# functions are there for.
 
 E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$E2E_DIR/cleanup-jobs.sh"
@@ -39,6 +40,19 @@ run_finalize_ledger() {
   out=$(read_job_output_json "$LEDGER_NS" scalardl-finalize-ledger)
   echo "finalize-ledger output: $out"
   ledger_token=$(extract_completion_token finalize-ledger "$out")
+}
+
+# Run finalize-ledger (Ledger AD) expecting it to fail. Sets finalize_ledger_error to the error JSON.
+# An earlier run's Pods go first and are waited for: they carry the same job-name label, so a failed
+# one among them could otherwise be the one the output is read from. The checkpoint volume stays.
+# Usage: run_finalize_ledger_expect_failure
+run_finalize_ledger_expect_failure() {
+  setup_ledger_ad
+  kubectl -n "$LEDGER_NS" delete job/scalardl-finalize-ledger \
+    --ignore-not-found --cascade=foreground --timeout=120s
+  finalize_ledger_error=$(run_job_expect_failure "$LEDGER_NS" scalardl-finalize-ledger \
+    "$work/ledger-ad/finalize-ledger.yaml")
+  echo "finalize-ledger output: $finalize_ledger_error"
 }
 
 # Run finalize-auditor (Auditor AD). Sets auditor_token. Recovering a stranded lock can wait out the
@@ -96,4 +110,21 @@ run_verify_auditor_finalization() {
   setup_auditor_ad
   run_verify_job "$AUDITOR_NS" scalardl-verify-auditor-finalization \
     "$work/auditor-ad/verify-auditor-finalization.yaml" "$1"
+}
+
+# Abort unless the verify command that just ran found something: a verdict, not a failure to reach
+# one, and reported by a single Pod, since a retry cannot change it.
+# Usage: assert_verification_failed <command>
+assert_verification_failed() {
+  [ "$(printf '%s' "$verify_output" | jq -r '.status_code')" = "VERIFICATION_FAILED" ] \
+    || { echo "::error::$1 did not report VERIFICATION_FAILED"; exit 1; }
+  [ "$verify_pod_count" -eq 1 ] \
+    || { echo "::error::$1 ran $verify_pod_count Pods (expected 1: no retry on a verdict)"; exit 1; }
+}
+
+# Abort unless the verify command that just ran found nothing.
+# Usage: assert_verification_passed <command>
+assert_verification_passed() {
+  [ "$(printf '%s' "$verify_output" | jq -r '.status_code')" = "OK" ] \
+    || { echo "::error::$1 did not report OK"; exit 1; }
 }

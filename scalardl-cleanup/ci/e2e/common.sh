@@ -16,6 +16,32 @@ export AUDITOR_NS="auditor-e2e"
 export AUDITOR_TLS_SAN="auditor.e2e.scalar-labs.com"
 CERTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/certs"
 
+# The PostgreSQL that manage-cluster.sh deploys into the Ledger's namespace, for the multi-storage
+# scenarios. Exported because postgres.yaml and fixture-multistorage.properties refer to them. The
+# password is a disposable test value for this ephemeral cluster only.
+export POSTGRES_SERVICE="postgres"
+export POSTGRES_PORT="5432"
+# Local end of the port-forward the fixtures CLI, on the runner, reaches it through. Not 5432, which
+# a PostgreSQL on the runner itself would hold.
+export POSTGRES_LOCAL_PORT="15432"
+export POSTGRES_USER="postgres"
+export POSTGRES_PASSWORD="e2e-postgres-disposable"
+export POSTGRES_DB="postgres"
+# The namespace the fixture keeps its table in there. ScalarDB makes it a PostgreSQL schema.
+export POSTGRES_NAMESPACE="e2e_pg"
+
+# Which storage configuration a scenario runs the Ledger AD's commands with:
+#   cosmos         the Ledger's Cosmos DB account only (manifests/ledger-ad/configmap.yaml)
+#   multi-storage  that account plus the PostgreSQL above, where the fixture then keeps a second
+#                  table (manifests/ledger-ad/configmap-multistorage.yaml)
+# It holds for a whole scenario. The servers use Cosmos DB only either way.
+: "${E2E_STORAGE:=cosmos}"
+case "$E2E_STORAGE" in
+  cosmos|multi-storage) ;;
+  *) echo "ERROR: E2E_STORAGE must be cosmos or multi-storage, not '$E2E_STORAGE'" >&2; exit 1 ;;
+esac
+export E2E_STORAGE
+
 # Abort unless every named environment variable is set and non-empty.
 # Usage: require_vars <var>...
 require_vars() {

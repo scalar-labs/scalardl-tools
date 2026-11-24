@@ -1,0 +1,85 @@
+# PostgreSQL — deployed into ${LEDGER_NS}.
+#
+# Stands in for the JDBC database of a ScalarDB instance that shares the Coordinator table with the
+# Ledger and keeps some of its tables outside the Ledger's Cosmos DB account. The Ledger itself
+# never connects to it: only the fixtures CLI, which plays that instance, and the cleanup Jobs of
+# the multi-storage scenarios do.
+#
+# envsubst variables (see manage-cluster.sh; the values come from common.sh):
+#   ${LEDGER_NS}          k8s namespace for the ledger
+#   ${POSTGRES_USER}      superuser the fixtures CLI and the cleanup Jobs connect as
+#   ${POSTGRES_PASSWORD}  its password. A disposable test value for this ephemeral cluster only
+#   ${POSTGRES_DB}        database that holds the fixture's tables
+#   ${POSTGRES_PORT}      port of the Service
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ${LEDGER_NS}
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: postgres
+          # The same image as the integration tests in ci.yaml.
+          image: postgres:17-alpine
+          env:
+            - name: POSTGRES_USER
+              value: ${POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              value: ${POSTGRES_PASSWORD}
+            - name: POSTGRES_DB
+              value: ${POSTGRES_DB}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              # -h makes it a TCP check: the socket check passes during the image's init phase,
+              # before the server accepts connections from other Pods.
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        # Nothing here has to outlive the Pod: every scenario rebuilds the fixture.
+        - name: data
+          emptyDir: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ${LEDGER_NS}
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      protocol: TCP
+      port: ${POSTGRES_PORT}
+      targetPort: 5432
