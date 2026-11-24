@@ -32,6 +32,7 @@ dependencies {
 
     integrationTestImplementation sourceSets.main.output
     integrationTestImplementation sourceSets.test.output
+    integrationTestImplementation project(':fixtures')
 }
 
 spotless {
