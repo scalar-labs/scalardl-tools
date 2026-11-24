@@ -18,7 +18,7 @@ The tool provides three commands, split across the two administrative domains (A
 | Command | AD | Description |
 |-----------------------|---------|--------------------------------------------------------------------------------------------------------------------------|
 | `finalize-ledger`     | Ledger  | Drives every unfinished record in every transactional table to a terminal state, then prints a **completion token**. Accesses the [configured storages](#2-settings-the-commands-accept). |
-| `finalize-auditor`    | Auditor | Releases every unreleased asset lock, deletes the request proofs that are safe to remove, then prints a **completion token**. Accesses the [configured storages](#2-settings-the-commands-accept) and Auditor. |
+| `finalize-auditor`    | Auditor | Releases every unreleased asset lock, deletes the request proofs that are safe to remove (unless you skip that step), then prints a **completion token**. Accesses the [configured storages](#2-settings-the-commands-accept) and Auditor. |
 | `cleanup-coordinator` | Ledger  | Deletes the Coordinator state records that are safe to remove. Requires **both** completion tokens. Accesses the [configured storages](#2-settings-the-commands-accept). |
 
 You run the commands in three steps:
@@ -257,6 +257,10 @@ kubectl -n "${AUDITOR_NS:?}" patch secret scalardl-cleanup-credentials --type me
 Wait for the Job to complete, then read the completion token from the log of its succeeded Pod. The command prints its result as one JSON line, in the same shape as the one that `finalize-ledger` prints in step 1.
 
 Hand the token in `completion_token`—the **Auditor token**—to the Ledger operator.
+
+**Optional – Skipping the request proof deletion.** To release the asset locks and print the completion token without deleting any request proofs, uncomment `--skip-request-proof-cleanup` in the `args` of `auditor-ad/finalize-auditor.yaml` before you apply the Job. The command then leaves every request proof in place.
+
+If you later deploy the Job again without that option and without deleting the checkpoint volume, the command prints the same completion token and deletes the request proofs. It deletes only the ones registered before the first run started, the same ones that the first run would have deleted without the option.
 
 If the command fails, it prints an error message in place of that result, and the Job retries it up to three times (`backoffLimit: 3` in the manifest), starting a new Pod each time. If none of those attempts succeeds, the Job fails. Deploying the Job again without deleting the checkpoint volume resumes the processing from the same checkpoint data. To start the processing over from the beginning instead, see [Re-running after a failure](#re-running-after-a-failure).
 
