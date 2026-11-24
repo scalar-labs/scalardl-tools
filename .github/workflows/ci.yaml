@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
+      - "[0-9]+"
+      - "[0-9]+.[0-9]+"
     paths:
       - 'scalardl-cleanup/**'
       - '.github/workflows/ci.yaml'
