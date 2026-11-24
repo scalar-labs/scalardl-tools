@@ -168,6 +168,40 @@ class CoordinatorCleanupOrchestratorTest {
   }
 
   @Test
+  void create_multiStorageWithJdbcDefaultStorageGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.DEFAULT_STORAGE, "other_db");
+
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                CoordinatorCleanupOrchestrator.create(
+                    props, tempDir, createLedgerToken(1000L), createAuditorToken(2000L)))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.MULTI_STORAGE_DEFAULT_STORAGE_NOT_COSMOS.buildCode());
+  }
+
+  @Test
+  void
+      create_multiStorageWithCoordinatorNamespaceInJdbcGiven_shouldThrowScalarDlCleanupException() {
+    // Arrange
+    Properties props = multiStorageProperties("jdbc");
+    props.setProperty(MultiStorageConfig.NAMESPACE_MAPPING, "coordinator:other_db");
+
+    // Act & Assert
+    assertThatThrownBy(
+            () ->
+                CoordinatorCleanupOrchestrator.create(
+                    props, tempDir, createLedgerToken(1000L), createAuditorToken(2000L)))
+        .isInstanceOf(ScalarDlCleanupException.class)
+        .hasMessageContaining(
+            ScalarDlCleanupError.MULTI_STORAGE_COORDINATOR_NAMESPACE_NOT_IN_DEFAULT_STORAGE
+                .buildCode());
+  }
+
+  @Test
   void create_multiStorageWithCosmosAndJdbcGiven_shouldNotThrow() {
     // Arrange
     Properties props = multiStorageProperties("jdbc");
