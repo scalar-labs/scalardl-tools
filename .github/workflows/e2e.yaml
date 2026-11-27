@@ -15,8 +15,8 @@ on:
         description: 'OLD ScalarDL version that populates data'
         default: '3.13.0'
       new_version:
-        description: 'NEW ScalarDL server version the tool coordinates with'
-        default: '3.14.0-SNAPSHOT'
+        description: 'NEW ScalarDL server version the tool coordinates with (default: the ScalarDL version the tool builds against)'
+        default: ''
 
 defaults:
   run:
@@ -32,7 +32,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SCALARDL_OLD_VERSION: ${{ github.event.inputs.old_version || '3.13.0' }}
-      SCALARDL_NEW_VERSION: ${{ github.event.inputs.new_version || '3.14.0-SNAPSHOT' }}
       GHCR_USER: ${{ github.repository_owner }}
       # Records generated per category (committed / stranded write / stranded read).
       RECORD_COUNT: 5
@@ -70,6 +69,21 @@ jobs:
           GPR_USERNAME: ${{ github.repository_owner }}
           GPR_PASSWORD: ${{ secrets.CR_PAT }}
         run: ./gradlew :cli:docker -PdockerVersion="$CLEANUP_VERSION"
+
+      - name: Resolve the new ScalarDL version
+        # Unless given as an input, read it from the build, so the servers the tool coordinates with
+        # cannot drift from the ScalarDL version the tool builds against.
+        env:
+          NEW_VERSION_INPUT: ${{ github.event.inputs.new_version }}
+        run: |
+          set -euo pipefail
+          v="$NEW_VERSION_INPUT"
+          if [ -z "$v" ]; then
+            v=$(./gradlew :cli:properties -q | awk '$1 == "scalardlVersion:" { print $2 }')
+            [ -n "$v" ] || { echo "::error::could not read scalardlVersion from the build"; exit 1; }
+          fi
+          echo "New ScalarDL version: $v"
+          echo "SCALARDL_NEW_VERSION=$v" >> "$GITHUB_ENV"
 
       - name: Install Azure Cosmos DB Shell
         # Used by the scenarios to count rows directly in Cosmos for their reclamation checks.
